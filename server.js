@@ -20,7 +20,7 @@ const getLocalIpAddress = () => {
 };
 
 const ipAddress = getLocalIpAddress();
-console.log(`Servidor WebSocket activo en ws://${ipAddress}:${process.env.SERVER_PORT}`);
+console.log(`Servidor WebSocket activo en ws://${ipAddress}:${5000}`);
 
 
 let db;
@@ -294,7 +294,10 @@ wss.on('connection', (ws) => {
 });
 
 const whatsappClient = new Client({
-  authStrategy: new LocalAuth()
+  authStrategy: new LocalAuth(),
+  puppeteer: {
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  }
 });
 
 whatsappClient.on('qr', qr => {
