@@ -5,7 +5,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const os = require('os');
 
-const wss = new WebSocket.Server({ port: process.env.SERVER_PORT });
+const wss = new WebSocket.Server({ port: 5000 });
 const locationData = [];
 const getLocalIpAddress = () => {
   const interfaces = os.networkInterfaces();
@@ -26,10 +26,10 @@ console.log(`Servidor WebSocket activo en ws://${ipAddress}:${process.env.SERVER
 let db;
 (async () => {
   db = await mysql.createConnection({
-    host: process.env.DB_HOST_DB,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    host: '161.132.45.25',
+    user: 'root',
+    password: '74237028',
+    database: 'alzsafe_db'
   });
   console.log('✅ Conectado a la base de datos');
 })();
