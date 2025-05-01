@@ -200,6 +200,15 @@ whatsappClient.initialize();
 //Enviar mensaje de WhatsApp cada minuto
 const enviarMensajeWhatsApp = async (telefono, mensaje) => {
   try {
+    if (!telefono) {
+      console.log('⚠️ No se proporcionó un número de teléfono.');
+      return;
+    }
+    if (isNaN(telefono) || /\s/.test(telefono)) {
+      console.log('⚠️ El número de teléfono no es válido o contiene espacios.');
+      return;
+    }
+
     const phone = `51${parseInt(telefono)}`;
     const chatId = `${phone}@c.us`;
     await whatsappClient.sendMessage(chatId, mensaje);
