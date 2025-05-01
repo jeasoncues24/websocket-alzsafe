@@ -1,4 +1,5 @@
 const WebSocket = require('ws');
+const whatsappClient = require('./server');
 
 function calculateDistance(lat1, lng1, lat2, lng2) {
     const R = 6371e3; // Radio de la Tierra en metros
@@ -37,8 +38,8 @@ const patientNotificationIntervalTimers = new Map(); // Para rastrear los timers
 module.exports = async function handleLocationEvent({
     data,
     db,
-    wss,
-    whatsappClient
+    wss
+    // whatsappClient
 }) {
 
     if (whatsappClient === undefined) {
@@ -66,7 +67,7 @@ module.exports = async function handleLocationEvent({
 
         if (zonaRows.length === 0) {
             console.warn(`⚠️ No hay configuración de zona segura para paciente ID ${pacienteId}`);
-            enviarwspaciente(patientUserId, `ℹ️ Contactar con tu administrador de sistema este paciente no tiene configuración de zona segura`, db, whatsappClient);
+            enviarwspaciente(patientUserId, `ℹ️ Contactar con tu administrador de sistema este paciente no tiene configuración de zona segura`, db);
             broadcastLocation(wss, pacienteId, currentLat, currentLng, false, false, 0, 0, 0, 0);
             return;
         }
@@ -90,7 +91,7 @@ module.exports = async function handleLocationEvent({
             if (!patientNotificationIntervalTimers.has(pacienteId)) {
                 const interval = setInterval(() => {
                     enviarwspaciente(patientUserId,
-                        `ℹ️ La zona segura para *${nombrePaciente}* está desactivada. Actívala para recibir notificaciones automáticas.`, db, whatsappClient
+                        `ℹ️ La zona segura para *${nombrePaciente}* está desactivada. Actívala para recibir notificaciones automáticas.`, db
                     );
                 }, intervaloNotificaciones);
                 patientNotificationIntervalTimers.set(pacienteId, interval);
@@ -100,41 +101,74 @@ module.exports = async function handleLocationEvent({
 
         // Lógica de salida de zona segura
         if (!dentroZona) {
-            const ultimaNotificacion = patientLastMovedTime.get(pacienteId) || 0;
-            if (Date.now() - ultimaNotificacion >= intervaloNotificaciones) {
+            if (!patientNotificationIntervalTimers.has(pacienteId)) {
+                // Enviar inmediatamente
                 enviarwspaciente(
                     patientUserId,
                     `🚨 *Alerta de Seguridad* 🚨\n\n👤 Tu familiar *${nombrePaciente}* ha salido de la 🛡️ *zona segura* (📏 radio de *${radio} metros*).\n\n📍 *Ubicación actual:*\n📌 Lat: ${currentLat.toFixed(4)}\n📌 Lng: ${currentLng.toFixed(4)}`,
-                    db, whatsappClient
+                    db
                 );
-                patientLastMovedTime.set(pacienteId, Date.now());
-                clearTimeoutIfExists(patientInactiveIntervalTimers, pacienteId);
+
+                // Crear un temporizador que mande cada 5 minutos
+                const interval = setInterval(() => {
+                    enviarwspaciente(
+                        patientUserId,
+                        `🔁 *Seguimiento de ubicación* 🔁\n\n👤 *${nombrePaciente}* sigue fuera de la 🛡️ zona segura.\n\n📍 Lat: ${currentLat.toFixed(4)}\n📍 Lng: ${currentLng.toFixed(4)}`,
+                        db
+                    );
+                }, intervaloNotificaciones);
+                patientNotificationIntervalTimers.set(pacienteId, interval);
             }
         } else {
-            patientLastMovedTime.delete(pacienteId);
+            // Si entra a la zona segura, limpiar el temporizador
+            if (patientNotificationIntervalTimers.has(pacienteId)) {
+                clearInterval(patientNotificationIntervalTimers.get(pacienteId));
+                patientNotificationIntervalTimers.delete(pacienteId);
+            }
         }
+
 
         // Lógica de inactividad
         const ultimaUbicacion = patientLastLocation.get(pacienteId);
         const ultimoMovimiento = patientLastMovedTime.get(pacienteId) || Date.now();
 
-        if (ultimaUbicacion && ultimaUbicacion.lat === currentLat && ultimaUbicacion.lng === currentLng) {
-            if (!patientInactiveIntervalTimers.has(pacienteId) && Date.now() - ultimoMovimiento >= intervaloInactividad) {
-                const timer = setTimeout(() => {
+        // Redondear latitud y longitud a 4 decimales para la comparación
+        const latRedondeada = Math.round(ultimaUbicacion.lat * 100) / 100;
+        const lngRedondeada = Math.round(ultimaUbicacion.lng * 100) / 100;
+        const latActual = Math.round(currentLat * 100) / 100;
+        const lngActual = Math.round(currentLng * 100) / 100;
+
+        // Comparar las ubicaciones redondeadas
+        if (ultimaUbicacion && latRedondeada === latActual && lngRedondeada === lngActual) {
+            // Calcular el tiempo en minutos con redondeo a dos decimales
+            const tiempoInactividad = Math.round((Date.now() - ultimoMovimiento) / 60000 * 100) / 100; // Redondear a 2 decimales
+
+            // Verificar si ha pasado el intervalo de inactividad
+            if (!patientInactiveIntervalTimers.has(pacienteId) && tiempoInactividad >= intervaloInactividad) {
+                // Enviar el primer mensaje inmediatamente
+                enviarwspaciente(
+                    patientUserId,
+                    `😌 *Todo en calma*\n\n🧘‍♂️ Tu familiar *${nombrePaciente}* parece estar tranquilo en la misma ubicación durante *${config.intervalo_inactividad} minutos*.\n\n📍 Lat: ${currentLat.toFixed(4)}\n📍 Lng: ${currentLng.toFixed(4)}`,
+                    db
+                );
+
+                // Crear un temporizador que envíe el mensaje de inactividad cada X minutos
+                const timer = setInterval(() => {
                     enviarwspaciente(
                         patientUserId,
-                        `😌 *Todo en calma*\n\n🧘‍♂️ Tu familiar *${nombrePaciente}* parece estar tranquilo en la misma ubicación durante *${config.intervalo_inactividad} minutos*.\n\n📍 Lat: ${currentLat.toFixed(4)}\n📍 Lng: ${currentLng.toFixed(4)}`,
-                        db, whatsappClient
+                        `😌 *Todo en calma*\n\n🧘‍♂️ Tu familiar *${nombrePaciente}* sigue tranquilo en la misma ubicación durante *${config.intervalo_inactividad} minutos*.\n\n📍 Lat: ${currentLat.toFixed(4)}\n📍 Lng: ${currentLng.toFixed(4)}`,
+                        db
                     );
-                    patientInactiveIntervalTimers.delete(pacienteId);
                 }, intervaloInactividad);
+
+                // Guardar el temporizador
                 patientInactiveIntervalTimers.set(pacienteId, timer);
             }
         } else {
+            // Si el paciente se mueve (cambio en la ubicación), limpiar el temporizador de inactividad
             clearTimeoutIfExists(patientInactiveIntervalTimers, pacienteId);
             patientLastMovedTime.set(pacienteId, Date.now());
         }
-
         patientLastLocation.set(pacienteId, { lat: currentLat, lng: currentLng });
     } catch (error) {
         console.error('❌ Error al procesar ubicación del paciente:', error);
@@ -146,7 +180,7 @@ module.exports = async function handleLocationEvent({
 
 
 
-const enviarwspaciente = async (userId, mensaje, db, whatsappClient) => {
+const enviarwspaciente = async (userId, mensaje, db) => {
     try {
         console.log(`📩 Enviando mensaje de WhatsApp al paciente con user_id ${userId}`);
         // Obtener el id del paciente desde la tabla patients según el user_id

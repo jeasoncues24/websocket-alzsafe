@@ -30,10 +30,14 @@ console.log(`Servidor WebSocket activo en ws://${ipAddress}:${serverPort}`);
 let db;
 (async () => {
   db = await mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    // host: process.env.DB_HOST,
+    // user: process.env.DB_USER,
+    // password: process.env.DB_PASSWORD,
+    // database: process.env.DB_NAME
+    host: "161.132.45.25",
+    user: "root",
+    password: "74237028",
+    database: "alzsafe_db"
   });
   console.log('✅ Conectado a la base de datos');
 })();
@@ -184,6 +188,7 @@ const whatsappClient = new Client({
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   }
 });
+// Exportar el cliente de WhatsApp para usarlo en otros módulos
 
 whatsappClient.on('qr', qr => {
   console.log('📲 Escanea este QR con tu WhatsApp:');
@@ -196,7 +201,7 @@ whatsappClient.on('ready', () => {
 
 
 whatsappClient.initialize();
-
+module.exports = whatsappClient;
 //Enviar mensaje de WhatsApp cada minuto
 const enviarMensajeWhatsApp = async (telefono, mensaje) => {
   try {
