@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const whatsappClient = require('./server');
+const { whatsappClient } = require('./server');
 
 function calculateDistance(lat1, lng1, lat2, lng2) {
     const R = 6371e3; // Radio de la Tierra en metros
