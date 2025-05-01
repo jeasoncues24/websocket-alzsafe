@@ -219,7 +219,7 @@ const enviarwspaciente = async (userId, mensaje, db) => {
 };
 
 
-const enviarMensajeWhatsApp = async (mensaje, nombre_paciente, nombre_cuidador, nombre_familiar, phone_familiar, phone_cuidador, whatsappClient) => {
+const enviarMensajeWhatsApp = async (mensaje, nombre_paciente, nombre_cuidador, nombre_familiar, phone_familiar, phone_cuidador) => {
     try {
         // Verificación de nombres
         if (!nombre_paciente || !nombre_cuidador || !nombre_familiar) {
