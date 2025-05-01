@@ -128,47 +128,47 @@ module.exports = async function handleLocationEvent({
         }
 
 
-        // Lógica de inactividad
-        const ultimaUbicacion = patientLastLocation.get(pacienteId);
-        const ultimoMovimiento = patientLastMovedTime.get(pacienteId) || Date.now();
+        // // Lógica de inactividad
+        // const ultimaUbicacion = patientLastLocation.get(pacienteId);
+        // const ultimoMovimiento = patientLastMovedTime.get(pacienteId) || Date.now();
 
-        // Redondear latitud y longitud a 4 decimales para la comparación
-        const latRedondeada = Math.round(ultimaUbicacion.lat * 100) / 100;
-        const lngRedondeada = Math.round(ultimaUbicacion.lng * 100) / 100;
-        const latActual = Math.round(currentLat * 100) / 100;
-        const lngActual = Math.round(currentLng * 100) / 100;
+        // // Redondear latitud y longitud a 4 decimales para la comparación
+        // const latRedondeada = Math.round(ultimaUbicacion.lat * 100) / 100;
+        // const lngRedondeada = Math.round(ultimaUbicacion.lng * 100) / 100;
+        // const latActual = Math.round(currentLat * 100) / 100;
+        // const lngActual = Math.round(currentLng * 100) / 100;
 
-        // Comparar las ubicaciones redondeadas
-        if (ultimaUbicacion && latRedondeada === latActual && lngRedondeada === lngActual) {
-            // Calcular el tiempo en minutos con redondeo a dos decimales
-            const tiempoInactividad = Math.round((Date.now() - ultimoMovimiento) / 60000 * 100) / 100; // Redondear a 2 decimales
+        // // Comparar las ubicaciones redondeadas
+        // if (ultimaUbicacion && latRedondeada === latActual && lngRedondeada === lngActual) {
+        //     // Calcular el tiempo en minutos con redondeo a dos decimales
+        //     const tiempoInactividad = Math.round((Date.now() - ultimoMovimiento) / 60000 * 100) / 100; // Redondear a 2 decimales
 
-            // Verificar si ha pasado el intervalo de inactividad
-            if (!patientInactiveIntervalTimers.has(pacienteId) && tiempoInactividad >= intervaloInactividad) {
-                // Enviar el primer mensaje inmediatamente
-                enviarwspaciente(
-                    patientUserId,
-                    `😌 *Todo en calma*\n\n🧘‍♂️ Tu familiar *${nombrePaciente}* parece estar tranquilo en la misma ubicación durante *${config.intervalo_inactividad} minutos*.\n\n📍 Lat: ${currentLat.toFixed(4)}\n📍 Lng: ${currentLng.toFixed(4)}`,
-                    db
-                );
+        //     // Verificar si ha pasado el intervalo de inactividad
+        //     if (!patientInactiveIntervalTimers.has(pacienteId) && tiempoInactividad >= intervaloInactividad) {
+        //         // Enviar el primer mensaje inmediatamente
+        //         enviarwspaciente(
+        //             patientUserId,
+        //             `😌 *Todo en calma*\n\n🧘‍♂️ Tu familiar *${nombrePaciente}* parece estar tranquilo en la misma ubicación durante *${config.intervalo_inactividad} minutos*.\n\n📍 Lat: ${currentLat.toFixed(4)}\n📍 Lng: ${currentLng.toFixed(4)}`,
+        //             db
+        //         );
 
-                // Crear un temporizador que envíe el mensaje de inactividad cada X minutos
-                const timer = setInterval(() => {
-                    enviarwspaciente(
-                        patientUserId,
-                        `😌 *Todo en calma*\n\n🧘‍♂️ Tu familiar *${nombrePaciente}* sigue tranquilo en la misma ubicación durante *${config.intervalo_inactividad} minutos*.\n\n📍 Lat: ${currentLat.toFixed(4)}\n📍 Lng: ${currentLng.toFixed(4)}`,
-                        db
-                    );
-                }, intervaloInactividad);
+        //         // Crear un temporizador que envíe el mensaje de inactividad cada X minutos
+        //         const timer = setInterval(() => {
+        //             enviarwspaciente(
+        //                 patientUserId,
+        //                 `😌 *Todo en calma*\n\n🧘‍♂️ Tu familiar *${nombrePaciente}* sigue tranquilo en la misma ubicación durante *${config.intervalo_inactividad} minutos*.\n\n📍 Lat: ${currentLat.toFixed(4)}\n📍 Lng: ${currentLng.toFixed(4)}`,
+        //                 db
+        //             );
+        //         }, intervaloInactividad);
 
-                // Guardar el temporizador
-                patientInactiveIntervalTimers.set(pacienteId, timer);
-            }
-        } else {
-            // Si el paciente se mueve (cambio en la ubicación), limpiar el temporizador de inactividad
-            clearTimeoutIfExists(patientInactiveIntervalTimers, pacienteId);
-            patientLastMovedTime.set(pacienteId, Date.now());
-        }
+        //         // Guardar el temporizador
+        //         patientInactiveIntervalTimers.set(pacienteId, timer);
+        //     }
+        // } else {
+        //     // Si el paciente se mueve (cambio en la ubicación), limpiar el temporizador de inactividad
+        //     clearTimeoutIfExists(patientInactiveIntervalTimers, pacienteId);
+        //     patientLastMovedTime.set(pacienteId, Date.now());
+        // }
         patientLastLocation.set(pacienteId, { lat: currentLat, lng: currentLng });
     } catch (error) {
         console.error('❌ Error al procesar ubicación del paciente:', error);

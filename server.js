@@ -161,7 +161,7 @@ wss.on('connection', (ws) => {
         // const patientUserId = data.id;
         // const currentLat = parseFloat(data.lat);
         // const currentLng = parseFloat(data.lng);
-        await handleLocationEvent({ data, db, wss, whatsappClient });
+        await handleLocationEvent({ data, db, wss });
       }
 
       console.log('📥 Mensaje desconocido recibido:', data);
