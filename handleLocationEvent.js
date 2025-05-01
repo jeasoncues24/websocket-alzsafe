@@ -167,10 +167,8 @@ const enviarwspaciente = async (userId, mensaje, db, whatsappClient) => {
         const idHistorial = await crearHistorialAlerta(db, id_paciente, id_familiar, id_cuidador);
         if (!idHistorial) return;
         enviarMensajeWhatsApp(mensaje, nombre_paciente, nombre_cuidador, nombre_familiar, phone_familiar, phone_cuidador);
-
         await actualizarFechaWSFinal(db, idHistorial);
-
-        console.log(`📩 [WhatsApp] Mensaje enviado al familiar ${nombre_paciente}`);
+        console.log(`📩 [WhatsApp] Mensaje enviado correctamente ${nombre_paciente}`);
     } catch (error) {
         console.error('❌ Error al enviar el mensaje de WhatsApp:', error);
     }
@@ -221,7 +219,6 @@ const enviarMensajeWhatsApp = async (mensaje, nombre_paciente, nombre_cuidador, 
             await whatsappClient.sendMessage(phonePaciente, mensaje);
             console.log(`✅ Mensaje enviado al cuidador (${phone_cuidador})`);
         }
-
     } catch (error) {
         console.error('❌ Error al enviar el mensaje de WhatsApp:', error);
     }
