@@ -40,6 +40,12 @@ module.exports = async function handleLocationEvent({
     wss,
     whatsappClient
 }) {
+
+    if (whatsappClient === undefined) {
+        console.error('❌ WhatsApp client no está definido. Asegúrate de que el cliente esté inicializado correctamente.');
+        return;
+    }
+
     try {
         const patientUserId = data.id;
         const currentLat = parseFloat(data.lat);
