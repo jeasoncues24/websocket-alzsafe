@@ -185,7 +185,7 @@ const enviarwspaciente = async (userId, mensaje, db) => {
         console.log(`📩 Enviando mensaje de WhatsApp al paciente con user_id ${userId}`);
         // Obtener el id del paciente desde la tabla patients según el user_id
         const [patientRows] = await db.execute(
-            'SELECT uf.phone AS phone_familiar, uc.phone AS phone_cuidador, uc.id AS id_cuidador, req.familiar_id AS id_familiar, p.id AS id_paciente, p.name as nombre_paciente, cr.name as nombre_cuidador, uf.name as nombre_familiar FROM requests req INNER JOIN patients p ON p.id = req.patient_id AND p.user_id = 6 INNER JOIN users uf ON uf.id = req.familiar_id INNER JOIN carer cr ON cr.id = req.carer_id INNER JOIN users uc ON uc.id = cr.user_id WHERE req.patient_id =( SELECT id FROM patients WHERE user_id = ?);',
+            'SELECT uf.phone AS phone_familiar, uc.phone AS phone_cuidador, uc.id AS id_cuidador, req.familiar_id AS id_familiar, p.id AS id_paciente, p.name as nombre_paciente, cr.name as nombre_cuidador, uf.name as nombre_familiar FROM requests req INNER JOIN patients p ON p.id = req.patient_id INNER JOIN users uf ON uf.id = req.familiar_id INNER JOIN carer cr ON cr.id = req.carer_id INNER JOIN users uc ON uc.id = cr.user_id WHERE req.patient_id =( SELECT id FROM patients WHERE user_id = ?);',
             [userId]
         );
 
