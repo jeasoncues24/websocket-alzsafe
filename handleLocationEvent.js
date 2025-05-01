@@ -1,3 +1,4 @@
+const { Client } = require('whatsapp-web.js');
 const WebSocket = require('ws');
 
 function calculateDistance(lat1, lng1, lat2, lng2) {
@@ -60,8 +61,11 @@ module.exports = async function handleLocationEvent({
 
         if (zonaRows.length === 0) {
             console.warn(`⚠️ No hay configuración de zona segura para paciente ID ${pacienteId}`);
-            enviarwspaciente(patientUserId, `ℹ️ Contactar con tu administrador de sistema este paciente no tiene configuración de zona segura`, db, whatsappClient);
+            const idHistorial = await enviarwspaciente(patientUserId, `ℹ️ Contactar con tu administrador de sistema este paciente no tiene configuración de zona segura`, db, whatsappClient);
             broadcastLocation(wss, pacienteId, currentLat, currentLng, false, false, 0, 0, 0, 0);
+            // ACTUALIZAR LA FECHA DE ENVIO DEL MENSAJE
+            await actualizarFechaWSFinal(db, idHistorial);
+            console.log(`📩 [WhatsApp] Mensaje enviado al familiar ${nombre_paciente}`);
             return;
         }
 
@@ -78,31 +82,36 @@ module.exports = async function handleLocationEvent({
         const dentroZona = parseFloat(distancia) <= radio;
         console.log(`📍 Distancia a la zona segura: ${distancia.toFixed(2)} m el radio configurado es ${radio}. isDentro: ${dentroZona}`);
 
-        broadcastLocation(wss, pacienteId, currentLat, currentLng, dentroZona, dentroZona, distancia, radio, defaultLng, defaultLat);
+        if (!isZonaActiva) {
+            broadcastLocation(wss, pacienteId, currentLat, currentLng, dentroZona, dentroZona, distancia, radio, defaultLng, defaultLat);
+        }
 
         if (!isZonaActiva) {
             if (!patientNotificationIntervalTimers.has(pacienteId)) {
-                const interval = setInterval(() => {
-                    enviarwspaciente(patientUserId,
-                        `ℹ️ La zona segura para *${nombrePaciente}* está desactivada. Actívala para recibir notificaciones automáticas.`, db, whatsappClient
-                    );
+                const interval = setInterval(async () => {
+                    const idHistorial = await enviarwspaciente(patientUserId, `ℹ️ La zona segura para *${nombrePaciente}* está desactivada. Actívala para recibir notificaciones automáticas.`, db, whatsappClient);
+                    // ACTUALIZAR LA FECHA DE ENVIO DEL MENSAJE
+                    await actualizarFechaWSFinal(db, idHistorial);
                 }, intervaloNotificaciones);
                 patientNotificationIntervalTimers.set(pacienteId, interval);
             }
             return;
         }
 
+
         // Lógica de salida de zona segura
         if (!dentroZona) {
             const ultimaNotificacion = patientLastMovedTime.get(pacienteId) || 0;
             if (Date.now() - ultimaNotificacion >= intervaloNotificaciones) {
-                enviarwspaciente(
+                const idHistorial = await enviarwspaciente(
                     patientUserId,
                     `🚨 *Alerta de Seguridad* 🚨\n\n👤 Tu familiar *${nombrePaciente}* ha salido de la 🛡️ *zona segura* (📏 radio de *${radio} metros*).\n\n📍 *Ubicación actual:*\n📌 Lat: ${currentLat.toFixed(4)}\n📌 Lng: ${currentLng.toFixed(4)}`,
                     db, whatsappClient
                 );
                 patientLastMovedTime.set(pacienteId, Date.now());
                 clearTimeoutIfExists(patientInactiveIntervalTimers, pacienteId);
+                // ACTUALIZAR LA FECHA DE ENVIO DEL MENSAJE
+                await actualizarFechaWSFinal(db, idHistorial);
             }
         } else {
             patientLastMovedTime.delete(pacienteId);
@@ -114,13 +123,15 @@ module.exports = async function handleLocationEvent({
 
         if (ultimaUbicacion && ultimaUbicacion.lat === currentLat && ultimaUbicacion.lng === currentLng) {
             if (!patientInactiveIntervalTimers.has(pacienteId) && Date.now() - ultimoMovimiento >= intervaloInactividad) {
-                const timer = setTimeout(() => {
-                    enviarwspaciente(
+                const timer = setTimeout(async () => {
+                    const idHistorial = await enviarwspaciente(
                         patientUserId,
                         `😌 *Todo en calma*\n\n🧘‍♂️ Tu familiar *${nombrePaciente}* parece estar tranquilo en la misma ubicación durante *${config.intervalo_inactividad} minutos*.\n\n📍 Lat: ${currentLat.toFixed(4)}\n📍 Lng: ${currentLng.toFixed(4)}`,
                         db, whatsappClient
                     );
                     patientInactiveIntervalTimers.delete(pacienteId);
+                    // ACTUALIZAR LA FECHA DE ENVIO DEL MENSAJE
+                    await actualizarFechaWSFinal(db, idHistorial);
                 }, intervaloInactividad);
                 patientInactiveIntervalTimers.set(pacienteId, timer);
             }
@@ -136,10 +147,6 @@ module.exports = async function handleLocationEvent({
 
 };
 
-
-
-
-
 const enviarwspaciente = async (userId, mensaje, db, whatsappClient) => {
     try {
         console.log(`📩 Enviando mensaje de WhatsApp al paciente con user_id ${userId}`);
@@ -153,6 +160,7 @@ const enviarwspaciente = async (userId, mensaje, db, whatsappClient) => {
             console.log(`⚠️ No se encontró un paciente con user_id ${userId}`);
             return;
         }
+
         const {
             phone_familiar,
             phone_cuidador,
@@ -166,18 +174,35 @@ const enviarwspaciente = async (userId, mensaje, db, whatsappClient) => {
 
         const idHistorial = await crearHistorialAlerta(db, id_paciente, id_familiar, id_cuidador);
         if (!idHistorial) return;
-
-
+        console.log(`📩 Mensaje enviado al paciente: ${nombre_paciente}`);
         // Enviar el mensaje de WhatsApp al número del familiar
-        await whatsappClient.sendMessage(`51${phone_familiar}@c.us`, mensaje);
-        await whatsappClient.sendMessage(`51${phone_cuidador}@c.us`, mensaje);
-
-        await actualizarFechaWSFinal(db, idHistorial);
-
-        console.log(`📩 [WhatsApp] Mensaje enviado al familiar ${nombre_paciente}`);
+        const fam = await enviarSiExiste(phone_familiar, mensaje, whatsappClient);
+        if (!fam) {
+            console.log(`⚠️ No se pudo enviar el mensaje al familiar ${nombre_familiar} (${phone_familiar})`);
+            return;
+        }
+        const cui = await enviarSiExiste(phone_cuidador, mensaje, whatsappClient);
+        if (!cui) {
+            console.log(`⚠️ No se pudo enviar el mensaje al cuidador ${nombre_cuidador} (${phone_cuidador})`);
+            return;
+        }
+        return parseInt(idHistorial);
     } catch (error) {
         console.error('❌ Error al enviar el mensaje de WhatsApp:', error);
     }
+};
+
+// Función auxiliar para enviar mensaje si el número es válido en WhatsApp
+const enviarSiExiste = async (numero, nombre, whatsappClient) => {
+    const numeroCompleto = `51${numero}`;
+    const contacto = await whatsappClient.getNumberId(numeroCompleto);
+    if (!contacto) {
+        console.warn(`⚠️ El número ${numeroCompleto} (${nombre}) no tiene WhatsApp`);
+        return false;
+    }
+    await whatsappClient.sendMessage(contacto._serialized, mensaje);
+    console.log(`✅ Mensaje enviado a ${nombre} (${numeroCompleto})`);
+    return true;
 };
 
 

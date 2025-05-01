@@ -192,9 +192,17 @@ whatsappClient.initialize();
 //Enviar mensaje de WhatsApp cada minuto
 const enviarMensajeWhatsApp = async (telefono, mensaje) => {
   try {
-    await whatsappClient.sendMessage(`51${telefono}@c.us`, mensaje);
-    console.log(`Mensaje enviado a ${telefono} a las ${new Date().toLocaleTimeString()}`);
+    const numeroCompleto = `51${telefono}`;
+    const contacto = await whatsappClient.getNumberId(numeroCompleto); // verifica que tenga WhatsApp
+
+    if (!contacto) {
+      console.error(`❌ El número ${numeroCompleto} no tiene WhatsApp o es inválido`);
+      return;
+    }
+
+    await whatsappClient.sendMessage(contacto._serialized, mensaje);
+    console.log(`✅ Mensaje enviado a ${numeroCompleto} a las ${new Date().toLocaleTimeString()}`);
   } catch (error) {
-    console.error('Error al enviar el mensaje de WhatsApp:', error);
+    console.error('❌ Error al enviar el mensaje de WhatsApp:', error.message || error);
   }
 };
