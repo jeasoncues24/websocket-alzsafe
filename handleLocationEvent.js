@@ -166,7 +166,11 @@ const enviarwspaciente = async (userId, mensaje, db, whatsappClient) => {
 
         const idHistorial = await crearHistorialAlerta(db, id_paciente, id_familiar, id_cuidador);
         if (!idHistorial) return;
-        enviarMensajeWhatsApp(mensaje, nombre_paciente, nombre_cuidador, nombre_familiar, phone_familiar, phone_cuidador, whatsappClient);
+        const isEnviado = await enviarMensajeWhatsApp(mensaje, nombre_paciente, nombre_cuidador, nombre_familiar, phone_familiar, phone_cuidador, whatsappClient);
+        if (!isEnviado) {
+            console.error(`El mensaje no se pudo enviar.💤`);
+            // return;
+        }
         await actualizarFechaWSFinal(db, idHistorial);
         console.log(`📩 [WhatsApp] Mensaje enviado correctamente ${nombre_paciente}`);
     } catch (error) {
@@ -201,26 +205,17 @@ const enviarMensajeWhatsApp = async (mensaje, nombre_paciente, nombre_cuidador, 
 - Paciente: ${nombre_paciente}
 - Cuidador: ${nombre_cuidador}
 - Familiar: ${nombre_familiar}`);
-
-        // Validación de usuarios registrados en WhatsApp
-        const isFamiliarRegistered = await whatsappClient.isRegisteredUser(`51${parseInt(phone_familiar)}`);
-        const isCuidadorRegistered = await whatsappClient.isRegisteredUser(`51${parseInt(phone_cuidador)}`);
-
-        if (!isFamiliarRegistered) {
-            console.error(`❌ El número del familiar (${phone_familiar}) no está registrado en WhatsApp.`);
-        } else {
-            await whatsappClient.sendMessage(phoneFamiliar, mensaje);
-            console.log(`✅ Mensaje enviado al familiar (${phone_familiar})`);
-        }
-
-        if (!isCuidadorRegistered) {
-            console.error(`❌ El número del cuidador (${phone_cuidador}) no está registrado en WhatsApp.`);
-        } else {
-            await whatsappClient.sendMessage(phonePaciente, mensaje);
-            console.log(`✅ Mensaje enviado al cuidador (${phone_cuidador})`);
-        }
+        // ENVIANDO AL FAMILIAR
+        await whatsappClient.sendMessage(phoneFamiliar, mensaje);
+        console.log(`✅ Mensaje enviado al familiar (${phone_familiar})`);
+        // ENVIANDO AL PACIENTE
+        await whatsappClient.sendMessage(phonePaciente, mensaje);
+        console.log(`✅ Mensaje enviado al cuidador (${phone_cuidador})`);
+        // RETURN TRUE
+        return true;
     } catch (error) {
         console.error('❌ Error al enviar el mensaje de WhatsApp:', error);
+        return false;
     }
 };
 
