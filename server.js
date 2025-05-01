@@ -63,6 +63,10 @@ wss.on('connection', (ws) => {
 
             if (rows.length > 0) {
               const phone = rows[0].phone;
+              if (!phone) {
+                console.log(`⚠️ No se encontró el número de teléfono para el cuidador ${data.userId}`);
+                return;
+              }
               enviarMensajeWhatsApp(phone, '¡Hola! Has iniciado sesión en la aplicación AlzSafe ❤️🙌. Tus pacientes te esperan, empezemos a trabajar.');
               console.log(`Mensaje enviado al cuidador ${data.userId} con número ${phone}`);
             } else {
@@ -128,6 +132,10 @@ wss.on('connection', (ws) => {
     💌 Por favor, revisa la solicitud y prepárate para brindar tu mejor atención. ¡Gracias por ser parte de AlzSafe! ❤️`;
 
               // Suponiendo que 'enviarMensajeWhatsApp' está definida en otro lugar
+              if (!solicitud.telefono_cuidador) {
+                console.log(`⚠️ No se encontró el número de teléfono del cuidador ${cuidadorId}`);
+                return;
+              }
               enviarMensajeWhatsApp(solicitud.telefono_cuidador, mensaje);
               console.log(`📩 [WhatsApp] Mensaje de solicitud enviado al cuidador ${cuidadorId} con número ${solicitud.telefono_cuidador}`);
             } else {
@@ -192,8 +200,9 @@ whatsappClient.initialize();
 //Enviar mensaje de WhatsApp cada minuto
 const enviarMensajeWhatsApp = async (telefono, mensaje) => {
   try {
-    const phone = `51${telefono}@c.us`;
-    await whatsappClient.sendMessage(phone, mensaje);
+    const phone = `51${telefono.trim()}`;
+    const chatId = `${phone}@c.us`;
+    await whatsappClient.sendMessage(chatId, mensaje);
     console.log(`Mensaje enviado a ${telefono} a las ${new Date().toLocaleTimeString()}`);
   } catch (error) {
     console.error('Error al enviar el mensaje de WhatsApp:', error);

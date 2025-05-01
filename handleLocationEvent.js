@@ -175,7 +175,6 @@ const enviarwspaciente = async (userId, mensaje, db, whatsappClient) => {
         await whatsappClient.sendMessage(phonePaciente, mensaje);
 
         console.log(`📋 Detalles del mensaje:\n- Paciente: ${nombre_paciente}\n- Cuidador: ${nombre_cuidador}\n- Familiar: ${nombre_familiar}`);
-
         await actualizarFechaWSFinal(db, idHistorial);
 
         console.log(`📩 [WhatsApp] Mensaje enviado al familiar ${nombre_paciente}`);
