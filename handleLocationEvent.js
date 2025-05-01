@@ -204,7 +204,9 @@ const enviarMensajeWhatsApp = async (mensaje, nombre_paciente, nombre_cuidador, 
         console.log(`📋 Detalles del mensaje:
 - Paciente: ${nombre_paciente}
 - Cuidador: ${nombre_cuidador}
-- Familiar: ${nombre_familiar}`);
+- Familiar: ${nombre_familiar}
+- Teléfono Familiar: ${phone_familiar}
+- Teléfono Cuidador: ${phone_cuidador}`);
         // ENVIANDO AL FAMILIAR
         await whatsappClient.sendMessage(phoneFamiliar, mensaje);
         console.log(`✅ Mensaje enviado al familiar (${phone_familiar})`);
