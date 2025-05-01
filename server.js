@@ -161,7 +161,7 @@ wss.on('connection', (ws) => {
         // const patientUserId = data.id;
         // const currentLat = parseFloat(data.lat);
         // const currentLng = parseFloat(data.lng);
-        await handleLocationEvent({ data, db, wss });
+        await handleLocationEvent({ data, db, wss, enviarWhatsappPaciente });
       }
 
       console.log('📥 Mensaje desconocido recibido:', data);
@@ -201,7 +201,7 @@ whatsappClient.on('ready', () => {
 
 
 whatsappClient.initialize();
-module.exports = whatsappClient;
+
 //Enviar mensaje de WhatsApp cada minuto
 const enviarMensajeWhatsApp = async (telefono, mensaje) => {
   try {
@@ -220,5 +220,127 @@ const enviarMensajeWhatsApp = async (telefono, mensaje) => {
     console.log(`Mensaje enviado a ${telefono} a las ${new Date().toLocaleTimeString()}`);
   } catch (error) {
     console.error('Error al enviar el mensaje de WhatsApp:', error);
+  }
+};
+
+
+
+const enviarWhatsappPaciente = async (userId, mensaje, db) => {
+  try {
+    console.log(`📩 Enviando mensaje de WhatsApp al paciente con user_id ${userId}`);
+    // Obtener el id del paciente desde la tabla patients según el user_id
+    const [patientRows] = await db.execute(
+      'SELECT uf.phone AS phone_familiar, uc.phone AS phone_cuidador, uc.id AS id_cuidador, req.familiar_id AS id_familiar, p.id AS id_paciente, p.name as nombre_paciente, cr.name as nombre_cuidador, uf.name as nombre_familiar FROM requests req INNER JOIN patients p ON p.id = req.patient_id INNER JOIN users uf ON uf.id = req.familiar_id INNER JOIN carer cr ON cr.id = req.carer_id INNER JOIN users uc ON uc.id = cr.user_id WHERE req.patient_id =( SELECT id FROM patients WHERE user_id = ?);',
+      [userId]
+    );
+
+    if (patientRows.length === 0) {
+      console.log(`⚠️ No se encontró un paciente con user_id ${userId}`);
+      return;
+    }
+    const {
+      phone_familiar,
+      phone_cuidador,
+      id_cuidador,
+      id_familiar,
+      id_paciente,
+      nombre_paciente,
+      nombre_cuidador,
+      nombre_familiar
+    } = patientRows[0];
+
+    const idHistorial = await crearHistorialAlerta(db, id_paciente, id_familiar, id_cuidador);
+    if (!idHistorial) return;
+    const isEnviado = await validarDataWhatsapp(mensaje, nombre_paciente, nombre_cuidador, nombre_familiar, phone_familiar, phone_cuidador, whatsappClient);
+    if (!isEnviado) {
+      console.error(`El mensaje no se pudo enviar.💤`);
+      // return;
+    }
+    await actualizarFechaWSFinal(db, idHistorial);
+    console.log(`📩 [WhatsApp] Mensaje enviado correctamente ${nombre_paciente}`);
+  } catch (error) {
+    console.error('❌ Error al enviar el mensaje de WhatsApp:', error);
+  }
+};
+
+
+const validarDataWhatsapp = async (mensaje, nombre_paciente, nombre_cuidador, nombre_familiar, phone_familiar, phone_cuidador) => {
+  try {
+    // Verificación de nombres
+    if (!nombre_paciente || !nombre_cuidador || !nombre_familiar) {
+      console.error('❌ Error: Uno o más nombres están vacíos o no definidos.');
+      return;
+    }
+
+    // Verificación de números
+    if (!phone_familiar || isNaN(phone_familiar)) {
+      console.error('❌ Error: Número de teléfono del familiar inválido.');
+      return;
+    }
+
+    if (!phone_cuidador || isNaN(phone_cuidador)) {
+      console.error('❌ Error: Número de teléfono del cuidador inválido.');
+      return;
+    }
+
+    const phoneFamiliar = `51${parseInt(phone_familiar)}@c.us`;
+    const phonePaciente = `51${parseInt(phone_cuidador)}@c.us`;
+
+    console.log(`📋 Detalles del mensaje:
+- Paciente: ${nombre_paciente}
+- Cuidador: ${nombre_cuidador}
+- Familiar: ${nombre_familiar}
+- Teléfono Familiar: ${phone_familiar}
+- Teléfono Cuidador: ${phone_cuidador}`);
+    // ENVIANDO AL FAMILIAR
+    await whatsappClient.sendMessage(phoneFamiliar, mensaje);
+    console.log(`✅ Mensaje enviado al familiar (${phone_familiar})`);
+    // ENVIANDO AL PACIENTE
+    await whatsappClient.sendMessage(phonePaciente, mensaje);
+    console.log(`✅ Mensaje enviado al cuidador (${phone_cuidador})`);
+    // RETURN TRUE
+    return true;
+  } catch (error) {
+    console.error('❌ Error al enviar el mensaje de WhatsApp:', error);
+    return false;
+  }
+};
+
+
+
+
+const crearHistorialAlerta = async (db, idPaciente, idFamiliar, idCuidador) => {
+  try {
+    const insertQuery = `
+            INSERT INTO historial_alertas (
+                isError, 
+                metrosError, 
+                fechaWSInicio, 
+                idPaciente, 
+                idFamiliar, 
+                idCuidador
+            ) VALUES (1, 0, NOW(), ?, ?, ?)
+        `;
+    const values = [idPaciente, idFamiliar, idCuidador];
+    const [result] = await db.execute(insertQuery, values);
+    console.log('✅ Registro creado en historial_alertas con ID:', result.insertId);
+    return result.insertId; // Necesario para actualizar luego
+  } catch (error) {
+    console.error('❌ Error al insertar historial de alerta:', error);
+    return null;
+  }
+};
+
+const actualizarFechaWSFinal = async (db, idHistorial) => {
+  try {
+    const updateQuery = `
+            UPDATE historial_alertas
+            SET fechaWSFinal = NOW()
+            WHERE idAlerta = ?
+        `;
+    await db.execute(updateQuery, [idHistorial]);
+    console.log(`🕒 fechaWSFinal actualizada para historial_alertas.id = ${idHistorial}`);
+  } catch (error) {
+    console.error('❌ Error al actualizar fechaWSFinal:', error);
   }
 };
