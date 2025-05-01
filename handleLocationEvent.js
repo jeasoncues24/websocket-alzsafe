@@ -166,15 +166,8 @@ const enviarwspaciente = async (userId, mensaje, db, whatsappClient) => {
 
         const idHistorial = await crearHistorialAlerta(db, id_paciente, id_familiar, id_cuidador);
         if (!idHistorial) return;
+        enviarMensajeWhatsApp(mensaje, nombre_paciente, nombre_cuidador, nombre_familiar, phone_familiar, phone_cuidador);
 
-
-        // Enviar el mensaje de WhatsApp al número del familiar
-        const phoneFamiliar = `51${parseInt(phone_familiar)}@c.us`;
-        const phonePaciente = `51${parseInt(phone_cuidador)}@c.us`;
-        await whatsappClient.sendMessage(phoneFamiliar, mensaje);
-        await whatsappClient.sendMessage(phonePaciente, mensaje);
-
-        console.log(`📋 Detalles del mensaje:\n- Paciente: ${nombre_paciente}\n- Cuidador: ${nombre_cuidador}\n- Familiar: ${nombre_familiar}`);
         await actualizarFechaWSFinal(db, idHistorial);
 
         console.log(`📩 [WhatsApp] Mensaje enviado al familiar ${nombre_paciente}`);
@@ -182,6 +175,59 @@ const enviarwspaciente = async (userId, mensaje, db, whatsappClient) => {
         console.error('❌ Error al enviar el mensaje de WhatsApp:', error);
     }
 };
+
+
+const enviarMensajeWhatsApp = async (mensaje, nombre_paciente, nombre_cuidador, nombre_familiar, phone_familiar, phone_cuidador) => {
+    try {
+        // Verificación de nombres
+        if (!nombre_paciente || !nombre_cuidador || !nombre_familiar) {
+            console.error('❌ Error: Uno o más nombres están vacíos o no definidos.');
+            return;
+        }
+
+        // Verificación de números
+        if (!phone_familiar || isNaN(phone_familiar)) {
+            console.error('❌ Error: Número de teléfono del familiar inválido.');
+            return;
+        }
+
+        if (!phone_cuidador || isNaN(phone_cuidador)) {
+            console.error('❌ Error: Número de teléfono del cuidador inválido.');
+            return;
+        }
+
+        const phoneFamiliar = `51${parseInt(phone_familiar)}@c.us`;
+        const phonePaciente = `51${parseInt(phone_cuidador)}@c.us`;
+
+        console.log(`📋 Detalles del mensaje:
+- Paciente: ${nombre_paciente}
+- Cuidador: ${nombre_cuidador}
+- Familiar: ${nombre_familiar}`);
+
+        // Validación de usuarios registrados en WhatsApp
+        const isFamiliarRegistered = await whatsappClient.isRegisteredUser(`51${parseInt(phone_familiar)}`);
+        const isCuidadorRegistered = await whatsappClient.isRegisteredUser(`51${parseInt(phone_cuidador)}`);
+
+        if (!isFamiliarRegistered) {
+            console.error(`❌ El número del familiar (${phone_familiar}) no está registrado en WhatsApp.`);
+        } else {
+            await whatsappClient.sendMessage(phoneFamiliar, mensaje);
+            console.log(`✅ Mensaje enviado al familiar (${phone_familiar})`);
+        }
+
+        if (!isCuidadorRegistered) {
+            console.error(`❌ El número del cuidador (${phone_cuidador}) no está registrado en WhatsApp.`);
+        } else {
+            await whatsappClient.sendMessage(phonePaciente, mensaje);
+            console.log(`✅ Mensaje enviado al cuidador (${phone_cuidador})`);
+        }
+
+    } catch (error) {
+        console.error('❌ Error al enviar el mensaje de WhatsApp:', error);
+    }
+};
+
+
 
 
 const crearHistorialAlerta = async (db, idPaciente, idFamiliar, idCuidador) => {
