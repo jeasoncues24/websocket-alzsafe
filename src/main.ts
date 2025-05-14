@@ -1,9 +1,10 @@
 import express from "express";
 import WebSocketHandler from "./websocket";
-import Database from "./mysql";
+import Database from "./lib/mysql";
 import { Client, LocalAuth } from "whatsapp-web.js";
 import qrcode from "qrcode-terminal";
 import os from "os";
+import { router } from "./routes";
 
 require("dotenv").config();
 
@@ -14,6 +15,8 @@ const db = new Database();
 app.post("/wa/sendMessageDirect", async (req, res) => {});
 
 app.post("/wa/sendDifusionDirect", async (req, res) => {});
+app.use(express.json());
+app.use(router);
 
 const server = app.listen(port, () => {
   console.log(`Servidor Express corriendo en http://localhost:${port}`);
@@ -28,54 +31,54 @@ process.on("SIGINT", async () => {
 });
 
 const clients: Record<string, Client> = {}; // Para almacenar las instancias de los clientes por número
-const initializeClient = async (sessionId: string) => {
-  const sessionData = await db.getSession(sessionId);
+// const initializeClient = async (sessionId: string) => {
+//   const sessionData = await db.getSession(sessionId);
 
-  const client = new Client({
-    authStrategy: new LocalAuth({ clientId: sessionId }), // Usar sessionId como clientId para LocalAuth
-  });
+//   const client = new Client({
+//     authStrategy: new LocalAuth({ clientId: sessionId }), // Usar sessionId como clientId para LocalAuth
+//   });
 
-  client.on("qr", (qr) => {
-    qrcode.generate(qr, { small: true });
-    console.log(`QR RECEIVED para ${sessionId}:`, qr);
-  });
+//   client.on("qr", (qr) => {
+//     qrcode.generate(qr, { small: true });
+//     console.log(`QR RECEIVED para ${sessionId}:`, qr);
+//   });
 
-  client.on("ready", async () => {
-    console.log(`Cliente ${sessionId} está listo!`);
-    clients[sessionId] = client;
+//   client.on("ready", async () => {
+//     console.log(`Cliente ${sessionId} está listo!`);
+//     clients[sessionId] = client;
 
-    // const session = await client.authStrategy.getSession();
-    // if (session) {
-    //   await db.saveSession(sessionId, session);
-    // }
-  });
+//     // const session = await client.authStrategy.getSession();
+//     // if (session) {
+//     //   await db.saveSession(sessionId, session);
+//     // }
+//   });
 
-  client.on("message", async (msg) => {
-    //
-  });
+//   client.on("message", async (msg) => {
+//     //
+//   });
 
-  client.on("auth_failure", (msg) => {
-    console.error(`Error de autenticación para ${sessionId}`, msg);
-    // Aquí podrías implementar lógica para reintentar la autenticación o notificar
-  });
+//   client.on("auth_failure", (msg) => {
+//     console.error(`Error de autenticación para ${sessionId}`, msg);
+//     // Aquí podrías implementar lógica para reintentar la autenticación o notificar
+//   });
 
-  client.on("disconnected", (reason) => {
-    console.log(`Cliente ${sessionId} desconectado debido a:`, reason);
-    delete clients[sessionId];
-    // Aquí podrías implementar lógica para intentar reconectar o limpiar la sesión
-  });
+//   client.on("disconnected", (reason) => {
+//     console.log(`Cliente ${sessionId} desconectado debido a:`, reason);
+//     delete clients[sessionId];
+//     // Aquí podrías implementar lógica para intentar reconectar o limpiar la sesión
+//   });
 
-  // Evento para guardar la sesión después de la autenticación (para LocalAuth esto ya debería estar cubierto en 'ready')
-  // client.on('authenticated', (session) => {
-  //   console.log(`Autenticado ${sessionId}, datos de sesión:`, session);
-  //   db.saveSession(sessionId, session);
-  // });
+//   // Evento para guardar la sesión después de la autenticación (para LocalAuth esto ya debería estar cubierto en 'ready')
+//   // client.on('authenticated', (session) => {
+//   //   console.log(`Autenticado ${sessionId}, datos de sesión:`, session);
+//   //   db.saveSession(sessionId, session);
+//   // });
 
-  await client.initialize();
-};
+//   await client.initialize();
+// };
 
-const sessionNumbers = ["51947123809", "51977596225"]; // Reemplaza con tus números de teléfono del bot
+const sessionNumbers = ["51957532973", "51977596225"]; // Reemplaza con tus números de teléfono del bot
 
-sessionNumbers.forEach((number) => {
-  initializeClient(number);
-});
+// sessionNumbers.forEach((number) => {
+//   initializeClient(number);
+// });
