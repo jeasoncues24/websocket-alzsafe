@@ -1,0 +1,70 @@
+import { Request, Response } from "express";
+import { listUserActiveClientWhatsapp } from "../../utils/wa-client";
+import { Client } from "whatsapp-web.js";
+
+const sendMessageDirect = async (req: Request, res: Response) => {
+  try {
+    const usersIterator = listUserActiveClientWhatsapp.keys();
+    const users = Array.from(usersIterator);
+    console.warn("Users:", users);
+
+    const { rucEmpresa, codigo_postal_receptor, telefono_receptor, message } =
+      req.body as {
+        rucEmpresa: string;
+        codigo_postal_receptor: string;
+        telefono_receptor: string;
+        message: string;
+      };
+
+    if (
+      !rucEmpresa ||
+      !codigo_postal_receptor ||
+      !telefono_receptor ||
+      !message
+    ) {
+      throw new Error(
+        "Faltan datos requeridos: rucEmpresa, codigo_postal_receptor, telefono_receptor o message."
+      );
+    }
+    const regex = /^\d+$/;
+    if (!regex.test(codigo_postal_receptor) || !regex.test(telefono_receptor)) {
+      throw new Error(
+        "El código postal y teléfono deben contener solo números."
+      );
+    }
+    if (!listUserActiveClientWhatsapp.has(rucEmpresa)) {
+      throw new Error("Cliente no encontrado para el RUC proporcionado.");
+    }
+    const waClient = listUserActiveClientWhatsapp.get(rucEmpresa)!;
+
+    if (!waClient) {
+      throw "Cliente no encontrado para el RUC proporcionado.";
+    }
+    const client: Client = waClient;
+
+    const chatid = `${codigo_postal_receptor}${telefono_receptor}@c.us`;
+
+    if (!client.info || !client.info.wid) {
+      throw new Error("El cliente de WhatsApp aún no está listo.");
+    }
+
+    await client.sendMessage(chatid, message);
+    // console.warn("Mensaje enviado:", messageModel);
+
+    return res.status(200).json({
+      message: `Mensaje enviado correctamente al número ${telefono_receptor}.`,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message:
+        error instanceof Error
+          ? error.message
+          : "Ocurrió un error al enviar el mensaje directo.",
+      errorType: error instanceof Error ? error.name : typeof error,
+      stack: error instanceof Error ? error.stack : null,
+      raw: error,
+    });
+  }
+};
+
+export { sendMessageDirect };

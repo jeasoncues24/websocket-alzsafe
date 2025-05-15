@@ -5,6 +5,15 @@ import { Client, LocalAuth } from "whatsapp-web.js";
 import qrcode from "qrcode-terminal";
 import os from "os";
 import { router } from "./routes";
+import { listNumberUserService } from "./app/services/user.service";
+import { getClientStatus, initializeNumberSession } from "./utils/wa-client";
+import cors from "cors";
+import {
+  activateUserModel,
+  deactivateUserModel,
+} from "./app/models/user.model";
+
+let wsHandler: WebSocketHandler;
 
 require("dotenv").config();
 
@@ -12,15 +21,13 @@ const app = express();
 const port = 3000;
 const db = new Database();
 
-app.post("/wa/sendMessageDirect", async (req, res) => {});
-
-app.post("/wa/sendDifusionDirect", async (req, res) => {});
+app.use(cors());
 app.use(express.json());
 app.use(router);
 
 const server = app.listen(port, () => {
   console.log(`Servidor Express corriendo en http://localhost:${port}`);
-  new WebSocketHandler(server); // Pasa el servidor Express al WebSocketHandler
+  wsHandler = new WebSocketHandler(server);
 });
 
 // Asegúrate de cerrar la conexión a la base de datos al finalizar
@@ -29,56 +36,3 @@ process.on("SIGINT", async () => {
   await db.endPool();
   process.exit();
 });
-
-const clients: Record<string, Client> = {}; // Para almacenar las instancias de los clientes por número
-// const initializeClient = async (sessionId: string) => {
-//   const sessionData = await db.getSession(sessionId);
-
-//   const client = new Client({
-//     authStrategy: new LocalAuth({ clientId: sessionId }), // Usar sessionId como clientId para LocalAuth
-//   });
-
-//   client.on("qr", (qr) => {
-//     qrcode.generate(qr, { small: true });
-//     console.log(`QR RECEIVED para ${sessionId}:`, qr);
-//   });
-
-//   client.on("ready", async () => {
-//     console.log(`Cliente ${sessionId} está listo!`);
-//     clients[sessionId] = client;
-
-//     // const session = await client.authStrategy.getSession();
-//     // if (session) {
-//     //   await db.saveSession(sessionId, session);
-//     // }
-//   });
-
-//   client.on("message", async (msg) => {
-//     //
-//   });
-
-//   client.on("auth_failure", (msg) => {
-//     console.error(`Error de autenticación para ${sessionId}`, msg);
-//     // Aquí podrías implementar lógica para reintentar la autenticación o notificar
-//   });
-
-//   client.on("disconnected", (reason) => {
-//     console.log(`Cliente ${sessionId} desconectado debido a:`, reason);
-//     delete clients[sessionId];
-//     // Aquí podrías implementar lógica para intentar reconectar o limpiar la sesión
-//   });
-
-//   // Evento para guardar la sesión después de la autenticación (para LocalAuth esto ya debería estar cubierto en 'ready')
-//   // client.on('authenticated', (session) => {
-//   //   console.log(`Autenticado ${sessionId}, datos de sesión:`, session);
-//   //   db.saveSession(sessionId, session);
-//   // });
-
-//   await client.initialize();
-// };
-
-const sessionNumbers = ["51957532973", "51977596225"]; // Reemplaza con tus números de teléfono del bot
-
-// sessionNumbers.forEach((number) => {
-//   initializeClient(number);
-// });

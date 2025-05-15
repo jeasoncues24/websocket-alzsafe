@@ -1,5 +1,5 @@
 export interface User {
-    id?: string;
+    id?: number;
     razon_social: string;
     ruc: string;
     nombre_comercial: string;
