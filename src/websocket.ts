@@ -77,6 +77,7 @@ async function inicializarSession(ws: WebSocket, ruc_empresa: string) {
       await activateUserModel(ruc_empresa);
       await activateServiceUsuario(ruc_empresa, 1);
       console.log(`Cliente ${nombre_comercial} está listo.`);
+      listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
     });
 
     waClient.on("disconnected", async (reason) => {

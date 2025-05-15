@@ -4,8 +4,21 @@ import Database from "../../lib/mysql";
 const db = new Database();
 
 const addUserModel = async (user: User): Promise<void> => {
-  const sql = `INSERT INTO users (ruc, razon_social, nombre_comercial, telefono, codigo_postal, is_active, is_linked) VALUES (?, ?, ?, ?, ?, ?, ? )`;
-  return await db.query(sql, [
+  // Verificamos si ya existe un usuario con el mismo ruc y teléfono
+  const checkSql = `SELECT 1 FROM users WHERE ruc = ? AND telefono = ? LIMIT 1`;
+  const [existingUser] = await db.query(checkSql, [user.ruc, user.telefono]);
+
+  if (Array.isArray(existingUser) && existingUser.length > 0) {
+    console.log("Usuario ya registrado con ese RUC y teléfono.");
+    return;
+  }
+
+  const insertSql = `
+    INSERT INTO users (ruc, razon_social, nombre_comercial, telefono, codigo_postal, is_active, is_linked)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  await db.query(insertSql, [
     user.ruc,
     user.razon_social,
     user.nombre_comercial,
@@ -15,6 +28,7 @@ const addUserModel = async (user: User): Promise<void> => {
     user.is_linked,
   ]);
 };
+
 const listNumberUserModel = async (): Promise<
   {
     user_id: number;

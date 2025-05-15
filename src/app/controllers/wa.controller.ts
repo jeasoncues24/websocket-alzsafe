@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { listUserActiveClientWhatsapp } from "../../utils/wa-client";
 import { Client } from "whatsapp-web.js";
+import { insertMessageInDatabase } from "../models/wa.model";
+import { Message } from "../../interfaces/message.interface";
+import { getUserByIdModel } from "../models/user.model";
 
 const sendMessageDirect = async (req: Request, res: Response) => {
   try {
@@ -48,11 +51,27 @@ const sendMessageDirect = async (req: Request, res: Response) => {
       throw new Error("El cliente de WhatsApp aún no está listo.");
     }
 
-    await client.sendMessage(chatid, message);
-    // console.warn("Mensaje enviado:", messageModel);
+    
+    const messagewa = await client.sendMessage(chatid, message);
+
+    try {
+      const dataUser = await getUserByIdModel(rucEmpresa);
+
+      const msg: Message = {
+        codUsuario: dataUser?.id!,
+        codigo_postal_receptor: parseInt(codigo_postal_receptor),
+        telefono_receptor,
+        message,
+        timestamp: messagewa.timestamp,
+      };
+      insertMessageInDatabase(msg);
+    } catch (error) {
+      console.log(error ?? "Error al insertar el mensaje en la base de datos");
+    }
 
     return res.status(200).json({
       message: `Mensaje enviado correctamente al número ${telefono_receptor}.`,
+
     });
   } catch (error) {
     return res.status(500).json({
