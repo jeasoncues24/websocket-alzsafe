@@ -7,6 +7,7 @@ import { getUserByIdModel } from "../models/user.model";
 import uploadMessage from "../../middleware/upload.message";
 import fs from "fs";
 import path from "path";
+import { DifusionItem } from "../../interfaces/difusion.interface";
 
 const sendMessageDifusion = async (req: Request, res: Response) => {
   try {
@@ -25,9 +26,26 @@ const sendMessageDifusion = async (req: Request, res: Response) => {
         message,
       }: {
         rucEmpresa: string;
-        lista_difusion: { telefono: string; codigo_postal: string }[];
+        lista_difusion: string;
         message: string;
       } = req.body;
+
+      let listaDifusion: DifusionItem[];
+
+      try {
+        const parsed = JSON.parse(lista_difusion);
+        if (!Array.isArray(parsed)) {
+          return res.status(400).json({
+            message: "lista_difusion debe ser un array de objetos.",
+          });
+        }
+        listaDifusion = parsed;
+      } catch (e) {
+        return res.status(400).json({
+          message:
+            "lista_difusion debe ser un JSON válido con telefono y codigo_postal.",
+        });
+      }
 
       if (!rucEmpresa || !lista_difusion || !message) {
         return res.status(400).json({
@@ -69,13 +87,12 @@ const sendMessageDifusion = async (req: Request, res: Response) => {
         media = new MessageMedia("image/png", base64Image);
       }
 
-      const results: { telefono: string; status: string; error?: string }[] = [];
-
       const dataUser = await getUserByIdModel(rucEmpresa);
 
-      for (const entry of lista_difusion) {
-        const { telefono, codigo_postal } = entry;
+      let results: { telefono: string; status: string; error?: string }[] = [];
 
+      for (const entry of listaDifusion) {
+        const { telefono, codigo_postal } = entry;
         if (!/^\d+$/.test(codigo_postal) || !/^\d+$/.test(telefono)) {
           results.push({
             telefono,
@@ -84,11 +101,14 @@ const sendMessageDifusion = async (req: Request, res: Response) => {
           });
           continue;
         }
-
         const chatid = `${codigo_postal}${telefono}@c.us`;
 
         try {
-          const messagewa = await client.sendMessage(chatid, message, media ? { media } : {});
+          const messagewa = await client.sendMessage(
+            chatid,
+            message,
+            media ? { media } : {}
+          );
           results.push({ telefono, status: "enviado" });
 
           // Guardar en base de datos
@@ -113,7 +133,6 @@ const sendMessageDifusion = async (req: Request, res: Response) => {
         message: "Difusión finalizada.",
         resultados: results,
       });
-   
     });
   } catch (error) {
     return res.status(500).json({
