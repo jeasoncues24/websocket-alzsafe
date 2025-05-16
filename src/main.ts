@@ -24,7 +24,7 @@ let wsHandler: WebSocketHandler;
 require("dotenv").config();
 
 const app = express();
-const port = 3000;
+const port = process.env.SERVER_PORT;
 const db = new Database();
 
 app.use(cors());
