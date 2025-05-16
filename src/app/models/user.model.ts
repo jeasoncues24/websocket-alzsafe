@@ -17,16 +17,24 @@ const addUserModel = async (user: User): Promise<void> => {
     INSERT INTO users (ruc, razon_social, nombre_comercial, telefono, codigo_postal, is_active, is_linked)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `;
-
-  await db.query(insertSql, [
-    user.ruc,
-    user.razon_social,
-    user.nombre_comercial,
-    user.telefono,
-    user.codigo_postal,
-    user.is_active,
-    user.is_linked,
-  ]);
+  try {
+    await db.query(insertSql, [
+      user.ruc,
+      user.razon_social,
+      user.nombre_comercial,
+      user.telefono,
+      user.codigo_postal,
+      user.is_active,
+      user.is_linked,
+    ]);
+  } catch (error: any) {
+    console.error("Error ingresar usuario:", error);
+    if (error.code === "ER_DUP_ENTRY" || error.errno === 1062) {
+      // No hacer nada
+      return;
+    }
+    throw error;
+  }
 };
 
 const listNumberUserModel = async (): Promise<
