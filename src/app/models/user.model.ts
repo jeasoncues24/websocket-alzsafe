@@ -22,7 +22,7 @@ const addUserModel = async (user: User): Promise<void> => {
       user.ruc,
       user.razon_social,
       user.nombre_comercial,
-      user.telefono,
+      user.telefono,  
       user.codigo_postal,
       user.is_active,
       user.is_linked,

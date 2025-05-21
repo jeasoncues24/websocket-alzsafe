@@ -13,7 +13,7 @@ import {
 } from "./utils/wa-client";
 import cors from "cors";
 import {
-  activateServiceUsuario,
+  activateServiceUsuario as toogleServiceUser,
   activateUserModel,
   deactivateUserModel,
 } from "./app/models/user.model";
@@ -57,15 +57,16 @@ const inicializarNumerosWhatsApp = async () => {
     listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
     waClient.on("ready", async () => {
       await activateUserModel(ruc_empresa);
-      await activateServiceUsuario(ruc_empresa, 1);
+      await toogleServiceUser(ruc_empresa, 1);
       console.log(`Cliente ${nombre_comercial} está listo.`);
       listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
     });
 
     waClient.on("disconnected", async (reason) => {
-      await activateServiceUsuario(ruc_empresa, 0);
+      await toogleServiceUser(ruc_empresa, 0);
       await deactivateUserModel(ruc_empresa);
       const messageError = `Cliente ${nombre_comercial} se ha desconectado del servicio.`;
+      listUserActiveClientWhatsapp.delete(ruc_empresa);
       console.error(messageError);
     });
 
@@ -73,12 +74,8 @@ const inicializarNumerosWhatsApp = async () => {
       await activateUserModel(ruc_empresa);
       const message = `Cliente ${nombre_comercial} está autenticado en el servicio.`;
       console.log(message);
+      listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
     });
-
-    // waClient.on("message", async (msg) => {
-    //   console.log(`message in ${nombre_comercial}` + msg);
-    // });
-
     await waClient.initialize();
   });
 };

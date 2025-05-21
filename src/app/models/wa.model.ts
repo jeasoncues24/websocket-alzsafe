@@ -4,6 +4,11 @@ import Database from "../../lib/mysql";
 
 const db = new Database();
 
+
+
+
+
+
 async function insertMessageInDatabase(msg: Message): Promise<boolean> {
   const sql = `
         INSERT INTO messages (timestamp, message, codigo_postal_receptor, telefono_receptor, codUsuario)
