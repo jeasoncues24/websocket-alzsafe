@@ -8,11 +8,12 @@ import {
   listUserActiveClientWhatsapp,
 } from "./utils/wa-client";
 import {
-  activateServiceUsuario,
+  toogleServiceUser,
   activateUserModel,
   deactivateUserModel,
 } from "./app/models/user.model";
 import { WsClienteConnection } from "./interfaces/wscliente.interface";
+import { inicializarNumerosWhatsApp } from "./app/models/wa.model";
 
 class WebSocketHandler {
   private wss: WebSocketServer;
@@ -189,13 +190,14 @@ async function inicializarSession(
 
     waClient.on("ready", async () => {
       await activateUserModel(ruc_empresa);
-      await activateServiceUsuario(ruc_empresa, 1);
+      await toogleServiceUser(ruc_empresa, 1);
       console.log(`Cliente ${nombre_comercial} está listo.`);
       listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
+      inicializarNumerosWhatsApp();
     });
 
     waClient.on("disconnected", async (reason) => {
-      await activateServiceUsuario(ruc_empresa, 0);
+      await toogleServiceUser(ruc_empresa, 0);
       await deactivateUserModel(ruc_empresa);
       const messageError = `Cliente ${nombre_comercial} se ha desconectado del servicio.`;
       waClient.logout();

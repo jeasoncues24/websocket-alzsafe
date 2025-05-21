@@ -1,6 +1,9 @@
+import { Client } from "whatsapp-web.js";
 import { Message } from "../../interfaces/message.interface";
 import { User } from "../../interfaces/user.interface";
 import Database from "../../lib/mysql";
+import { initializeNumberSession, listUserActiveClientWhatsapp } from "../../utils/wa-client";
+import { activateUserModel, deactivateUserModel, toogleServiceUser } from "./user.model";
 
 const db = new Database();
 
@@ -45,4 +48,48 @@ async function getActiveAndLinkedUsers(): Promise<User[]> {
   }
 }
 
-export { insertMessageInDatabase, getActiveAndLinkedUsers };
+const inicializarNumerosWhatsApp = async () => {
+  const numbers = await getActiveAndLinkedUsers();
+
+  if (numbers.length === 0) {
+    console.log("No hay números de WhatsApp activos y vinculados.");
+    return;
+  }
+
+  numbers.forEach(async (users) => {
+    const { ruc: ruc_empresa, telefono, nombre_comercial } = users;
+    const waClient: Client = initializeNumberSession(telefono, ruc_empresa);
+    listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
+    waClient.on("ready", async () => {
+      await activateUserModel(ruc_empresa);
+      await toogleServiceUser(ruc_empresa, 1);
+      console.log(`Cliente ${nombre_comercial} está listo.`);
+      listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
+    });
+
+    waClient.on("disconnected", async (reason) => {
+      await toogleServiceUser(ruc_empresa, 0);
+      await deactivateUserModel(ruc_empresa);
+      const messageError = `Cliente ${nombre_comercial} se ha desconectado del servicio.`;
+      listUserActiveClientWhatsapp.delete(ruc_empresa);
+      console.error(messageError);
+    });
+
+    waClient.on("authenticated", async (session) => {
+      await activateUserModel(ruc_empresa);
+      const message = `Cliente ${nombre_comercial} está autenticado en el servicio.`;
+      console.log(message);
+      listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
+    });
+    await waClient.initialize();
+  });
+};
+
+
+
+export {
+  insertMessageInDatabase,
+  getActiveAndLinkedUsers,
+  inicializarNumerosWhatsApp,
+};
+

@@ -52,7 +52,7 @@ const listNumberUserModel = async (): Promise<
   return data;
 };
 
-const activateServiceUsuario = async (
+const toogleServiceUser = async (
   ruc_empresa: string,
   estado: number = 0
 ): Promise<void> => {
@@ -85,5 +85,5 @@ export {
   deactivateUserModel,
   activateUserModel,
   getUserByIdModel,
-  activateServiceUsuario,
+  toogleServiceUser,
 };
