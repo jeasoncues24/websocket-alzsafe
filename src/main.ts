@@ -33,5 +33,4 @@ process.on("SIGINT", async () => {
   process.exit();
 });
 
-
 inicializarNumerosWhatsApp();

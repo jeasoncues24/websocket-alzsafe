@@ -2,15 +2,17 @@ import { Client } from "whatsapp-web.js";
 import { Message } from "../../interfaces/message.interface";
 import { User } from "../../interfaces/user.interface";
 import Database from "../../lib/mysql";
-import { initializeNumberSession, listUserActiveClientWhatsapp } from "../../utils/wa-client";
-import { activateUserModel, deactivateUserModel, toogleServiceUser } from "./user.model";
+import {
+  initializeNumberSession,
+  listUserActiveClientWhatsapp,
+} from "../../utils/wa-client";
+import {
+  activateUserModel,
+  deactivateUserModel,
+  toogleServiceUser,
+} from "./user.model";
 
 const db = new Database();
-
-
-
-
-
 
 async function insertMessageInDatabase(msg: Message): Promise<boolean> {
   const sql = `
@@ -60,6 +62,7 @@ const inicializarNumerosWhatsApp = async () => {
     const { ruc: ruc_empresa, telefono, nombre_comercial } = users;
     const waClient: Client = initializeNumberSession(telefono, ruc_empresa);
     listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
+    
     waClient.on("ready", async () => {
       await activateUserModel(ruc_empresa);
       await toogleServiceUser(ruc_empresa, 1);
@@ -73,6 +76,11 @@ const inicializarNumerosWhatsApp = async () => {
       const messageError = `Cliente ${nombre_comercial} se ha desconectado del servicio.`;
       listUserActiveClientWhatsapp.delete(ruc_empresa);
       console.error(messageError);
+      // try {
+      //   await waClient.logout();
+      // } catch (logoutError) {
+      //   console.error("CERRAR_SESION_FT:", logoutError);
+      // }
     });
 
     waClient.on("authenticated", async (session) => {
@@ -81,15 +89,13 @@ const inicializarNumerosWhatsApp = async () => {
       console.log(message);
       listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
     });
+
     await waClient.initialize();
   });
 };
-
-
 
 export {
   insertMessageInDatabase,
   getActiveAndLinkedUsers,
   inicializarNumerosWhatsApp,
 };
-
