@@ -60,6 +60,12 @@ const sendMessageDirect = async (req: Request, res: Response) => {
       let media: MessageMedia | undefined;
 
       if (req.file) {
+        if (!req.file || !req.file.filename) {
+          return res
+            .status(400)
+            .json({ message: "No se subió ninguna imagen." });
+        }
+
         const imagePath = req.file.filename;
         const fullPath = path.join(
           __dirname,
@@ -67,7 +73,16 @@ const sendMessageDirect = async (req: Request, res: Response) => {
           imagePath
         );
 
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          return res
+            .status(400)
+            .json({ message: "La ruta es un directorio, no un archivo." });
+        }
+
         if (fs.existsSync(fullPath)) {
+          console.log("Intentando leer archivo en:", fullPath);
+          console.log("req.file:", req.file);
           const imageBuffer = fs.readFileSync(fullPath);
           const mimeType = req.file.mimetype;
           const base64Image = imageBuffer.toString("base64");
