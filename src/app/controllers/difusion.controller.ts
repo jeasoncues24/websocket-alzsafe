@@ -28,14 +28,15 @@ const sendMessageDifusion = async (req: Request, res: Response) => {
       const {
         rucEmpresa,
         lista_difusion,
-        message,
+        // message,
       }: {
         rucEmpresa: string;
         lista_difusion: string;
-        message: string;
+        // message: string;
       } = req.body;
 
-      if (!rucEmpresa || !lista_difusion || !message) {
+      // if (!rucEmpresa || !lista_difusion || !message)
+      if (!rucEmpresa || !lista_difusion) {
         return res.status(400).json({
           message:
             "Faltan datos requeridos: rucEmpresa, lista_difusion o message.",
