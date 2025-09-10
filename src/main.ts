@@ -11,7 +11,7 @@ import { inicializarNumerosWhatsApp } from "./app/models/wa.model";
 import { EventEmitter } from "events";
 
 
-// EventEmitter.defaultMaxListeners = 50;
+EventEmitter.defaultMaxListeners = 50;
 process.setMaxListeners(50);
 
 
