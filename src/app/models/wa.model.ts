@@ -49,7 +49,6 @@ async function getActiveAndLinkedUsers(): Promise<User[]> {
     return [];
   }
 }
-
 const inicializarNumerosWhatsApp = async () => {
   const numbers = await getActiveAndLinkedUsers();
 
@@ -58,41 +57,79 @@ const inicializarNumerosWhatsApp = async () => {
     return;
   }
 
-  numbers.forEach(async (users) => {
-    const { ruc: ruc_empresa, telefono, nombre_comercial } = users;
+  for (const user of numbers) {
+    const { ruc: ruc_empresa, telefono, nombre_comercial } = user;
+
+    if (listUserActiveClientWhatsapp.has(ruc_empresa)) {
+      console.log(`Ya existe cliente activo para ${ruc_empresa}`);
+      continue;
+    }
+
     const waClient: Client = initializeNumberSession(telefono, ruc_empresa);
+
+    // registrar eventos en función aparte
+    registrarEventosCliente(waClient, {
+      ruc_empresa,
+      telefono,
+      nombre_comercial,
+    });
+
     listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
-    
-    waClient.on("ready", async () => {
-      await activateUserModel(ruc_empresa);
-      await toogleServiceUser(ruc_empresa, 1);
-      console.log(`Cliente ${nombre_comercial} está listo.`);
-      listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
-    });
 
-    waClient.on("disconnected", async (reason) => {
-      await toogleServiceUser(ruc_empresa, 0);
-      await deactivateUserModel(ruc_empresa);
-      const messageError = `Cliente ${nombre_comercial} se ha desconectado del servicio.`;
+    try {
+      await waClient.initialize();
+      console.log(
+        `Inicialización de cliente ${nombre_comercial} (${telefono}) en progreso...`
+      );
+    } catch (err) {
+      console.error(
+        `Error inicializando cliente ${nombre_comercial} (${telefono}):`,
+        err
+      );
       listUserActiveClientWhatsapp.delete(ruc_empresa);
-      console.error(messageError);
-      // try {
-      //   await waClient.logout();
-      // } catch (logoutError) {
-      //   console.error("CERRAR_SESION_FT:", logoutError);
-      // }
-    });
-
-    waClient.on("authenticated", async (session) => {
-      await activateUserModel(ruc_empresa);
-      const message = `Cliente ${nombre_comercial} está autenticado en el servicio.`;
-      console.log(message);
-      listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
-    });
-
-    await waClient.initialize();
-  });
+    }
+  }
 };
+
+function registrarEventosCliente(
+  waClient: Client,
+  {
+    ruc_empresa,
+    telefono,
+    nombre_comercial,
+  }: { ruc_empresa: string; telefono: string; nombre_comercial: string }
+) {
+  waClient.on("ready", async () => {
+    await activateUserModel(ruc_empresa);
+    await toogleServiceUser(ruc_empresa, 1);
+    console.log(
+      `✅ Cliente ${nombre_comercial} (${telefono}) está listo para iniciar en wsp.`
+    );
+    replaceExistingClient(ruc_empresa, waClient);
+  });
+
+  waClient.on("disconnected", async (reason) => {
+    await toogleServiceUser(ruc_empresa, 0);
+    await deactivateUserModel(ruc_empresa);
+    listUserActiveClientWhatsapp.delete(ruc_empresa);
+    console.error(
+      `❌ Cliente ${nombre_comercial} (${telefono}) se desconectó: ${reason}`
+    );
+  });
+
+  waClient.on("authenticated", async () => {
+    await activateUserModel(ruc_empresa);
+    console.log(`🔐 Cliente ${nombre_comercial} (${telefono}) autenticado.`);
+    replaceExistingClient(ruc_empresa, waClient);
+  });
+}
+
+function replaceExistingClient(ruc_empresa: string, waClient: Client) {
+  if (listUserActiveClientWhatsapp.has(ruc_empresa)) {
+    console.warn(`Actualizando instancia del cliente para ${ruc_empresa}`);
+  }
+  listUserActiveClientWhatsapp.set(ruc_empresa, waClient);
+}
 
 export {
   insertMessageInDatabase,
