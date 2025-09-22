@@ -180,7 +180,7 @@ async function inicializarSession(ws: WebSocket, ruc_empresa: string) {
       console.error("Error en evento 'ready':", error);
     }
   });
-  
+
   waClient.on("disconnected", async (reason) => {
     try {
       clientesEnEspera.add(ruc_empresa);
@@ -352,6 +352,7 @@ function payloadMessage(eventName: string, data: any) {
   const payload = JSON.stringify({ event: eventName, data });
   return payload;
 }
+
 async function eliminarSesionConRetry(sessionPath: string, intentos = 3) {
   for (let i = 0; i < intentos; i++) {
     try {

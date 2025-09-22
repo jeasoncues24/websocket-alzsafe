@@ -2,6 +2,7 @@ import { Client } from "whatsapp-web.js";
 import { Message } from "../../interfaces/message.interface";
 import { User } from "../../interfaces/user.interface";
 import Database from "../../lib/mysql";
+import fs from "fs/promises";
 import {
   initializeNumberSession,
   listUserActiveClientWhatsapp,
