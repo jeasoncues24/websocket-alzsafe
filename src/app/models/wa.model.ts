@@ -78,9 +78,16 @@ const inicializarNumerosWhatsApp = async () => {
 
     try {
       await waClient.initialize();
-      console.log(
-        `Inicialización de cliente ${nombre_comercial} (${telefono}) en progreso...`
-      );
+      if (waClient.info?.wid) {
+        console.log(
+          `⚡ Cliente ${nombre_comercial} (${telefono}) ya estaba listo (ready inmediato).`
+        );
+        replaceExistingClient(ruc_empresa, waClient);
+      } else {
+        console.log(
+          `Inicialización de cliente ${nombre_comercial} (${telefono}) en progreso...`
+        );
+      }
     } catch (err) {
       console.error(
         `Error inicializando cliente ${nombre_comercial} (${telefono}):`,
@@ -106,6 +113,10 @@ function registrarEventosCliente(
       `✅ Cliente ${nombre_comercial} (${telefono}) está listo para iniciar en wsp.`
     );
     replaceExistingClient(ruc_empresa, waClient);
+  });
+
+  waClient.on("loading_screen", (percent, message) => {
+    console.log(`⏳ Loading ${nombre_comercial} ${percent}%: ${message}`);
   });
 
   waClient.on("disconnected", async (reason) => {

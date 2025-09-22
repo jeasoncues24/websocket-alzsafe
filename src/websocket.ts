@@ -245,33 +245,6 @@ async function inicializarSession(ws: WebSocket, ruc_empresa: string) {
     }
   });
 
-  // waClient.on("disconnected", async (reason) => {
-  //   try {
-  //     await toogleServiceUser(ruc_empresa, 0);
-  //     await deactivateUserModel(ruc_empresa);
-  //     const messageError = `Cliente ${nombre_comercial} se ha desconectado del servicio. Razón: ${reason}`;
-
-  //     // Limpiar referencias
-  //     listUserActiveClientWhatsapp.delete(ruc_empresa);
-  //     rucToWaClientMap.delete(ruc_empresa);
-
-  //     console.error(messageError);
-  //     const nameEvent = `active-${ruc_empresa}`;
-
-  //     // Verificar si el WebSocket sigue abierto antes de enviar
-  //     if (ws.readyState === WebSocket.OPEN) {
-  //       ws.send(
-  //         payloadMessage(nameEvent, {
-  //           message: messageError,
-  //           isActive: false,
-  //         })
-  //       );
-  //     }
-  //   } catch (error) {
-  //     console.error("Error al manejar desconexión del cliente:", error);
-  //   }
-  // });
-
   waClient.on("auth_failure", async (msg) => {
     console.log(`❌ Fallo de autenticación para ${nombre_comercial}: ${msg}`);
   });
@@ -285,7 +258,7 @@ async function inicializarSession(ws: WebSocket, ruc_empresa: string) {
   waClient.on("authenticated", async (session) => {
     try {
       await activateUserModel(ruc_empresa);
-      const message = `Cliente ${nombre_comercial} está autenticado en el servicio.`;
+      const message = `Cliente ${nombre_comercial} se pudo autenticar en el servicio.`;
       console.log(message);
       const nameEvent = `active-${ruc_empresa}`;
 

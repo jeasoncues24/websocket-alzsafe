@@ -12,6 +12,7 @@ import { EventEmitter } from "events";
 
 
 EventEmitter.defaultMaxListeners = 50;
+EventEmitter.setMaxListeners(50);
 process.setMaxListeners(50);
 
 
