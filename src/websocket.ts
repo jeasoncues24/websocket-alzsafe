@@ -180,68 +180,48 @@ async function inicializarSession(ws: WebSocket, ruc_empresa: string) {
       console.error("Error en evento 'ready':", error);
     }
   });
-
+  
   waClient.on("disconnected", async (reason) => {
     try {
       clientesEnEspera.add(ruc_empresa);
       await toogleServiceUser(ruc_empresa, 0);
       await deactivateUserModel(ruc_empresa);
-      const messageError = `Cliente ${nombre_comercial} se ha desconectado del servicio. Razón: ${reason}`;
 
+      const messageError = `Cliente ${nombre_comercial} se ha desconectado. Razón: ${reason}`;
       console.error(messageError);
 
-      // Si la razón es LOGOUT, manejar la limpieza de sesión
       if (reason === "LOGOUT") {
-        console.log(
-          `🔄 Detectado LOGOUT para ${nombre_comercial}, preparando para nueva sesión...`
-        );
-
+        console.log(`🔄 Detectado LOGOUT para ${nombre_comercial}`);
         try {
-          // Intentar logout normal primero
-          // await waClient.logout();
-          await limpiarSesionManual(ruc_empresa, telefono);
-          console.log(`✅ Logout exitoso para ${nombre_comercial}`);
-        } catch (logoutError: any) {
-          console.log(
-            `⚠️ Error en logout automático para ${nombre_comercial}:`,
-            logoutError.message
-          );
+          await deleteFolder(ruc_empresa, telefono, waClient, nombre_comercial);
+        } catch (err) {
+          console.error(`⚠️ Error en deleteFolder:`, err);
         }
       }
 
-      // Limpiar referencias
       listUserActiveClientWhatsapp.delete(ruc_empresa);
       rucToWaClientMap.delete(ruc_empresa);
 
       const nameEvent = `active-${ruc_empresa}`;
-
-      // Verificar si el WebSocket sigue abierto antes de enviar
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(
           payloadMessage(nameEvent, {
             message: messageError,
             isActive: false,
-            requiresNewQR: reason === "LOGOUT", // Indicar si necesita nuevo QR
+            requiresNewQR: reason === "LOGOUT",
           })
         );
       }
 
-      // Limpiar recursos adicionales
       console.log(`🧹 Limpiando recursos para empresa: ${ruc_empresa}`);
       setTimeout(() => {
         clientesEnEspera.delete(ruc_empresa);
         console.log(`✅ Cliente ${nombre_comercial} puede reconectar.`);
       }, 60000);
     } catch (error) {
-      console.error("❌ Error al manejar desconexión del cliente:", error);
-
-      // En caso de error, también limpiar referencias
-      try {
-        listUserActiveClientWhatsapp.delete(ruc_empresa);
-        rucToWaClientMap.delete(ruc_empresa);
-      } catch (cleanupError) {
-        console.error("❌ Error al limpiar referencias:", cleanupError);
-      }
+      console.error("❌ Error al manejar desconexión:", error);
+      listUserActiveClientWhatsapp.delete(ruc_empresa);
+      rucToWaClientMap.delete(ruc_empresa);
     }
   });
 
@@ -294,59 +274,32 @@ async function inicializarSession(ws: WebSocket, ruc_empresa: string) {
 
   waClient.on("qr", async (qr) => {
     try {
-      const sessionPath = `./.wwebjs_auth/session-${ruc_empresa}-${telefono}`;
-
-      try {
-        // Eliminar la carpeta de sesión si existe
-        const exists = await fs
-          .access(sessionPath)
-          .then(() => true)
-          .catch(() => false);
-        if (exists) {
-          await eliminarSesionConRetry(sessionPath);
-        }
-        console.log(`🧹 Carpeta de sesión eliminada: ${sessionPath}`);
-      } catch (err) {
-        console.error(`❌ Error al eliminar la carpeta de sesión:`, err);
-      }
-
-      // Destruir la sesión de WhatsApp inmediatamente
-      await waClient.destroy();
-      throw new Error(
-        `El cliente ${nombre_comercial}, se eliminó la carpeta de sesión y se destruyó el cliente.`
+      const nameEvent = `qr-${ruc_empresa}`.trim();
+      console.log(
+        JSON.stringify(
+          {
+            event: nameEvent,
+            cliente: `🏢 ${nombre_comercial}`,
+            ruc: `🆔 ${ruc_empresa}`,
+            qr: `🔗 ${qr}`,
+          },
+          null,
+          2
+        )
       );
+
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          payloadMessage(nameEvent, {
+            message:
+              "Escanee el código QR, para empezar a enviar utilizar el servicio de WhatsApp en nuestro sistema.",
+            qrString: qr,
+          })
+        );
+      }
     } catch (error) {
-      console.error("Error al manejar evento 'qr':", error);
-      throw error;
+      console.error("Error en evento 'qr':", error);
     }
-
-    // try {
-    //   const nameEvent = `qr-${ruc_empresa}`.trim();
-    //   console.log(
-    //     JSON.stringify(
-    //       {
-    //         event: nameEvent,
-    //         cliente: `🏢 ${nombre_comercial}`,
-    //         ruc: `🆔 ${ruc_empresa}`,
-    //         qr: `🔗 ${qr}`,
-    //       },
-    //       null,
-    //       2
-    //     )
-    //   );
-
-    //   if (ws.readyState === WebSocket.OPEN) {
-    //     ws.send(
-    //       payloadMessage(nameEvent, {
-    //         message:
-    //           "Escanee el código QR, para empezar a enviar utilizar el servicio de WhatsApp en nuestro sistema.",
-    //         qrString: qr,
-    //       })
-    //     );
-    //   }
-    // } catch (error) {
-    //   console.error("Error en evento 'qr':", error);
-    // }
   });
 
   try {
@@ -356,6 +309,41 @@ async function inicializarSession(ws: WebSocket, ruc_empresa: string) {
     console.error("❌ Error al inicializar cliente WhatsApp:", error);
     // Limpiar referencias si falla la inicialización
     rucToWaClientMap.delete(ruc_empresa);
+    deleteFolder(ruc_empresa, telefono, waClient, nombre_comercial);
+    throw error;
+  }
+}
+
+async function deleteFolder(
+  ruc_empresa: string,
+  telefono: string,
+  waClient: Client,
+  nombre_comercial: string
+) {
+  try {
+    const sessionPath = `./.wwebjs_auth/session-${ruc_empresa}-${telefono}`;
+
+    try {
+      // Eliminar la carpeta de sesión si existe
+      const exists = await fs
+        .access(sessionPath)
+        .then(() => true)
+        .catch(() => false);
+      if (exists) {
+        await eliminarSesionConRetry(sessionPath);
+      }
+      console.log(`🧹 Carpeta de sesión eliminada: ${sessionPath}`);
+    } catch (err) {
+      console.error(`❌ Error al eliminar la carpeta de sesión:`, err);
+    }
+
+    // Destruir la sesión de WhatsApp inmediatamente
+    await waClient.destroy();
+    throw new Error(
+      `El cliente ${nombre_comercial}, se eliminó la carpeta de sesión y se destruyó el cliente.`
+    );
+  } catch (error) {
+    console.error("Error al inentar eliminar:", error);
     throw error;
   }
 }
