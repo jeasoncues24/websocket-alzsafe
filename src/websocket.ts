@@ -279,7 +279,17 @@ async function inicializarSession(ws: WebSocket, ruc_empresa: string) {
   });
 
   waClient.on("message", async (msg) => {
-    console.log(`📨 Mensaje recibido en ${nombre_comercial}: ${msg}`);
+    console.log(
+      JSON.stringify(
+        {
+          evento: "mensaje_recibido",
+          nombre_comercial,
+          mensaje: msg.body,
+        },
+        null,
+        2
+      )
+    );
   });
 
   waClient.on("qr", async (qr) => {

@@ -120,6 +120,13 @@ const sendMessageDirect = async (req: Request, res: Response) => {
         console.error("Error al insertar en la base de datos:", error);
       }
 
+      console.log({
+        enviadoPor: rucEmpresa,
+        dirigidoA: `${codigo_postal_receptor}${telefono_receptor}`,
+        mensaje: message,
+        tieneImagen: !!media,
+      });
+
       return res.status(200).json({
         message: `Mensaje enviado correctamente al número ${telefono_receptor}.`,
       });
