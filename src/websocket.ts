@@ -284,32 +284,59 @@ async function inicializarSession(ws: WebSocket, ruc_empresa: string) {
 
   waClient.on("qr", async (qr) => {
     try {
-      const nameEvent = `qr-${ruc_empresa}`.trim();
-      console.log(
-        JSON.stringify(
-          {
-            event: nameEvent,
-            cliente: `🏢 ${nombre_comercial}`,
-            ruc: `🆔 ${ruc_empresa}`,
-            qr: `🔗 ${qr}`,
-          },
-          null,
-          2
-        )
-      );
+      const sessionPath = `./.wwebjs_auth/session-${ruc_empresa}-${telefono}`;
 
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          payloadMessage(nameEvent, {
-            message:
-              "Escanee el código QR, para empezar a enviar utilizar el servicio de WhatsApp en nuestro sistema.",
-            qrString: qr,
-          })
-        );
+      try {
+        // Eliminar la carpeta de sesión si existe
+        const exists = await fs
+          .access(sessionPath)
+          .then(() => true)
+          .catch(() => false);
+        if (exists) {
+          await eliminarSesionConRetry(sessionPath);
+        }
+        console.log(`🧹 Carpeta de sesión eliminada: ${sessionPath}`);
+      } catch (err) {
+        console.error(`❌ Error al eliminar la carpeta de sesión:`, err);
       }
+
+      // Destruir la sesión de WhatsApp inmediatamente
+      await waClient.destroy();
+      throw new Error(
+        `El cliente ${nombre_comercial}, se eliminó la carpeta de sesión y se destruyó el cliente.`
+      );
     } catch (error) {
-      console.error("Error en evento 'qr':", error);
+      console.error("Error al manejar evento 'qr':", error);
+      throw error;
     }
+
+    // try {
+    //   const nameEvent = `qr-${ruc_empresa}`.trim();
+    //   console.log(
+    //     JSON.stringify(
+    //       {
+    //         event: nameEvent,
+    //         cliente: `🏢 ${nombre_comercial}`,
+    //         ruc: `🆔 ${ruc_empresa}`,
+    //         qr: `🔗 ${qr}`,
+    //       },
+    //       null,
+    //       2
+    //     )
+    //   );
+
+    //   if (ws.readyState === WebSocket.OPEN) {
+    //     ws.send(
+    //       payloadMessage(nameEvent, {
+    //         message:
+    //           "Escanee el código QR, para empezar a enviar utilizar el servicio de WhatsApp en nuestro sistema.",
+    //         qrString: qr,
+    //       })
+    //     );
+    //   }
+    // } catch (error) {
+    //   console.error("Error en evento 'qr':", error);
+    // }
   });
 
   try {
