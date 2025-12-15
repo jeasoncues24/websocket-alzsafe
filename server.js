@@ -182,25 +182,49 @@ wss.on('connection', (ws) => {
   });
 });
 
-const whatsappClient = new Client({
-  authStrategy: new LocalAuth(),
-  puppeteer: {
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  }
-});
-// Exportar el cliente de WhatsApp para usarlo en otros módulos
+let whatsappClient;
 
-whatsappClient.on('qr', qr => {
-  console.log('📲 Escanea este QR con tu WhatsApp:');
-  qrcode.generate(qr, { small: true });
-});
+function initializeWhatsAppClient() {
+  console.log('Iniciando cliente de WhatsApp...');
+  whatsappClient = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    }
+  });
 
-whatsappClient.on('ready', () => {
-  console.log('🤖 Bot de WhatsApp está listo!');
-});
+  whatsappClient.on('qr', (qr) => {
+    qrcode.generate(qr, { small: true });
+    console.log('📱 Escanea el código QR para conectar WhatsApp');
+  });
 
+  whatsappClient.on('ready', () => {
+    console.log('✅ Cliente de WhatsApp está listo!');
+  });
 
-whatsappClient.initialize();
+  whatsappClient.on('auth_failure', (msg) => {
+    console.error('❌ FALLO DE AUTENTICACIÓN:', msg);
+    console.error('Por favor, elimina la carpeta .wwebjs_auth y reinicia la aplicación para generar un nuevo QR.');
+  });
+
+  whatsappClient.on('disconnected', (reason) => {
+    console.log('❌ Cliente de WhatsApp desconectado:', reason);
+    if (whatsappClient) {
+      whatsappClient.destroy().catch(err => console.error('Error al destruir el cliente:', err));
+    }
+    console.log('Intentando reconectar en 10 segundos...');
+    setTimeout(initializeWhatsAppClient, 10000);
+  });
+
+  whatsappClient.initialize().catch(err => {
+    console.error('❌ Error al inicializar el cliente de WhatsApp:', err);
+    console.log('Reintentando en 10 segundos...');
+    setTimeout(initializeWhatsAppClient, 10000);
+  });
+}
+
+// Iniciar el cliente por primera vez
+initializeWhatsAppClient();
 
 //Enviar mensaje de WhatsApp cada minuto
 const enviarMensajeWhatsApp = async (telefono, mensaje) => {
