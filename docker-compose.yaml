@@ -1,0 +1,30 @@
+services:
+  whatsapp-api:
+    container_name: empresa_whatsapp_api
+    build:
+      context: .
+      dockerfile: docker/go/Dockerfile
+      network: host
+    restart: always
+    environment:
+      - APP_ENV=production
+      - DB_HOST=172.17.0.1 # MariaDB en el host (Linux)
+      - DB_PORT=3306
+      - DB_NAME=empresa
+      - DB_USER=empresa_user
+      - DB_PASS=empresa_pass
+    volumes:
+      - ./sessions:/app/sessions
+    expose:
+      - "8080"
+
+  nginx:
+    container_name: empresa_whatsapp_nginx
+    image: nginx:1.25-alpine
+    restart: always
+    ports:
+      - "127.0.0.1:9090:80" # Cambiar 9090 por el puerto deseado en el host en este caso el que existia en node.js era 5002 creo
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - whatsapp-api
