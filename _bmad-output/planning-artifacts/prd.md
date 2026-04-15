@@ -206,3 +206,89 @@ El sistema actual presenta inestabilidad operativa en el stack legado y riesgos 
 - Epics y stories con acceptance criteria testeables.
 - Sprint planning inicial con estados backlog.
 - Base para arquitectura tecnica y posterior implementacion.
+
+---
+
+## 14. Frontend — Fase Post-Backend
+
+Una vez completado el backend (Epics 1-4), se iniciará el desarrollo del frontend como proyecto separado. Este capítulo define los lineamientos técnicos y pedagógicos.
+
+### 14.1 Stack Tecnológico
+
+| Capa           | Tecnología               | Justificación                                                                                                                  |
+| -------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Framework      | **Next.js** (App Router) | SSR/SSG nativo, routing file-based, server actions                                                                             |
+| Lenguaje       | **TypeScript**           | Tipado estático, mejor DX e IntelliSense                                                                                       |
+| Estado global  | **Zustand**              | Minimal, sin boilerplate, composable por slice                                                                                 |
+| Componentes UI | **Shadcn/ui**            | Todos los componentes del proyecto provienen de Shadcn: botones, inputs, tablas, cards, formularios, modales — sin excepciones |
+| Estilos        | **Tailwind CSS**         | Integrado con Shadcn/ui, utility-first                                                                                         |
+
+### 14.2 Principios de Desarrollo
+
+- **Todo componente visual** (tabla, card, formulario, modal, badge, toast, alert) proviene de Shadcn/ui. No se crearán componentes UI propios salvo composición de primitivos de Shadcn.
+- **TypeScript estricto**: `strict: true` en tsconfig. Sin `any` explícito.
+- **Comentarios pedagógicos**: Cada bloque de código llevará un comentario que explica QUÉ hace y POR QUÉ — para aprendizaje del desarrollador. Formato: `// [QUÉ] descripción / [POR QUÉ] razón`.
+- **Zustand por dominio**: Un store por dominio (sessionStore, messageStore, empresaStore). Cada store con tipado explícito.
+
+### 14.3 Estructura del Proyecto Frontend
+
+```
+frontend/
+├── app/                     # Next.js App Router (páginas y layouts)
+│   ├── layout.tsx           # Root layout con providers
+│   ├── page.tsx             # Dashboard principal
+│   ├── sessions/            # Gestión de sesiones WhatsApp por empresa
+│   │   └── page.tsx
+│   ├── messages/            # Historial y envío de mensajes directos
+│   │   └── page.tsx
+│   └── broadcast/           # Motor de difusión masiva
+│       └── page.tsx
+├── components/              # Componentes reutilizables (composiciones de Shadcn)
+│   ├── sessions/
+│   ├── messages/
+│   └── shared/
+├── store/                   # Zustand stores por dominio
+│   ├── sessionStore.ts
+│   ├── messageStore.ts
+│   └── empresaStore.ts
+├── lib/                     # Helpers: API client, utils, formatters
+│   └── api.ts               # Cliente HTTP tipado hacia el backend Go
+├── types/                   # Tipos TypeScript compartidos (espejo del domain Go)
+│   └── index.ts
+└── public/
+```
+
+### 14.4 Pantallas Planeadas
+
+1. **Dashboard** — Estado general de sesiones activas por empresa (cards de Shadcn)
+2. **Gestión de Sesiones** — Lista de empresas, QR viewer, estado en tiempo real via WebSocket
+3. **Envío Directo** — Formulario validado, adjunto uploader, feedback inmediato
+4. **Historia de Mensajes** — Tabla Shadcn con filtros, paginación, exportar
+5. **Difusión** — Lista de destinos, progreso por lote, resultado granular
+
+### 14.5 Conectividad con Backend
+
+- **REST**: Cliente tipado (fetch nativo con TypeScript) apuntando al backend Go en `/message`, `/messages`
+- **WebSocket**: nativa browser WebSocket a `/ws` para eventos de sesión en tiempo real
+- **Auth**: Sin auth en la primera iteración — se agrega en Epic 4 hardening
+
+### 14.6 Estilo Pedagógico de Código
+
+Cada archivo TypeScript/TSX que se escriba incluirá:
+
+```typescript
+// [QUÉ] Este componente muestra la lista de empresas conectadas
+// [POR QUÉ] Centraliza el estado de sesión en un solo lugar para el dashboard
+// [APRENDE] useEffect se ejecuta después del render; aquí lo usamos para
+//           conectar al WebSocket solo si el store dice que no hay conexión activa
+```
+
+Este estilo aplica a: componentes, stores, hooks, API clients, y tipos.
+
+### 14.7 Epics Frontend (Post-Backend)
+
+- **Epic F1**: Scaffold del proyecto Next.js + Shadcn + Zustand + estructura base
+- **Epic F2**: Dashboard de sesiones con WebSocket en tiempo real
+- **Epic F3**: Pantalla de mensajes directos (envío + historial)
+- **Epic F4**: Motor de difusión masiva UI
+- **Epic F5**: Hardening: auth, errores, loading states, responsivo

@@ -1,9 +1,14 @@
 package config
 
-import "os"
+import (
+	"os"
+
+	"github.com/joho/godotenv"
+)
 
 type Config struct {
 	AppEnv  string
+	AppPort string
 	DBHost  string
 	DBPort  string
 	DBName  string
@@ -12,12 +17,21 @@ type Config struct {
 }
 
 func Load() *Config {
+	_ = godotenv.Load()
 	return &Config{
-		AppEnv: os.Getenv("APP_ENV"),
-		DBHost: os.Getenv("DB_HOST"),
-		DBPort: os.Getenv("DB_PORT"),
-		DBName: os.Getenv("DB_NAME"),
-		DBUser: os.Getenv("DB_USER"),
-		DBPass: os.Getenv("DB_PASS"),
+		AppEnv:  getEnv("APP_ENV", "development"),
+		AppPort: getEnv("APP_PORT", "8080"),
+		DBHost:  getEnv("DB_HOST", "localhost"),
+		DBPort:  getEnv("DB_PORT", "3306"),
+		DBName:  getEnv("DB_NAME", "wsapi"),
+		DBUser:  getEnv("DB_USER", "root"),
+		DBPass:  getEnv("DB_PASS", ""),
 	}
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }

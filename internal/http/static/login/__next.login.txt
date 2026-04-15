@@ -1,0 +1,5 @@
+1:"$Sreact.fragment"
+2:I[99551,["/_next/static/chunks/0deg98qrs8h09.js","/_next/static/chunks/0c.0j7m52w-js.js","/_next/static/chunks/0e.zgy8-e2c96.js"],"ThemeProvider"]
+3:I[69909,["/_next/static/chunks/0deg98qrs8h09.js","/_next/static/chunks/0c.0j7m52w-js.js","/_next/static/chunks/0e.zgy8-e2c96.js"],"default"]
+4:I[38640,["/_next/static/chunks/0deg98qrs8h09.js","/_next/static/chunks/0c.0j7m52w-js.js","/_next/static/chunks/0e.zgy8-e2c96.js"],"default"]
+0:{"rsc":["$","$1","c",{"children":[null,["$","html",null,{"lang":"es","suppressHydrationWarning":true,"children":["$","body",null,{"className":"h-full antialiased","children":["$","$L2",null,{"attribute":"class","defaultTheme":"system","enableSystem":true,"disableTransitionOnChange":true,"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}]}]}]}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"UzO2U4-uJdpb9JlAizq9I"}

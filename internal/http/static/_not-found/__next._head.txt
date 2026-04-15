@@ -1,0 +1,6 @@
+1:"$Sreact.fragment"
+2:I[18919,["/_next/static/chunks/0deg98qrs8h09.js","/_next/static/chunks/0c.0j7m52w-js.js","/_next/static/chunks/0e.zgy8-e2c96.js"],"ViewportBoundary"]
+3:I[18919,["/_next/static/chunks/0deg98qrs8h09.js","/_next/static/chunks/0c.0j7m52w-js.js","/_next/static/chunks/0e.zgy8-e2c96.js"],"MetadataBoundary"]
+4:"$Sreact.suspense"
+5:I[81970,["/_next/static/chunks/0deg98qrs8h09.js","/_next/static/chunks/0c.0j7m52w-js.js","/_next/static/chunks/0e.zgy8-e2c96.js"],"IconMark"]
+0:{"rsc":["$","$1","h",{"children":[["$","meta",null,{"name":"robots","content":"noindex"}],["$","$L2",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$L3",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"WhatsApp API Admin"}],["$","meta","1",{"name":"description","content":"Panel administrativo para gestión de WhatsApp API"}],["$","link","2",{"rel":"icon","href":"/favicon.ico?favicon.0x3dzn~oxb6tn.ico","sizes":"256x256","type":"image/x-icon"}],["$","$L5","3",{}]]}]}]}],null]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"UzO2U4-uJdpb9JlAizq9I"}

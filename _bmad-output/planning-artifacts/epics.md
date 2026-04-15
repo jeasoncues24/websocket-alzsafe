@@ -65,6 +65,7 @@ No aplica (servicio backend/API-first en esta fase).
 - Epic 2: API de Mensajeria Directa con Persistencia y Adjuntos
 - Epic 3: Motor de Difusion Masiva Resiliente y Escalable
 - Epic 4: Plataforma de Produccion (DB Migrations, Seguridad, Observabilidad)
+- Epic 6: Frontend shadcn Refactor
 
 ## Epic 1: Nucleo de Sesion Multiempresa y WebSocket de Estado
 
@@ -250,3 +251,19 @@ So that podamos detectar incidentes y operar con seguridad.
 **When** ocurren eventos de sesion o envio
 **Then** se generan logs estructurados con correlacion por empresa
 **And** metricas y configuracion sensible cumplen politicas de seguridad.
+
+## Epic 6: Frontend shadcn Refactor
+
+Adopcion completa de shadcn/ui para el frontend. Reemplazar CSS manual con componentes shadcn, corregir theme light/dark.
+
+### Stories
+
+- Story 6-1: Corregir Theme Light/Dark y globals.css
+- Story 6-2: Refactorizar Login con shadcn completo
+- Story 6-3: Refactorizar Sidebar con shadcn
+- Story 6-4: Refactorizar Dashboard con shadcn Cards y Tabs
+- Story 6-5: Refactorizar Companies con shadcn Table y Select
+- Story 6-6: Refactorizar Messages con shadcn Table y Tabs
+- Story 6-7: Refactorizar Sessions con shadcn Cards y Dialog
+- Story 6-8: Refactorizar Broadcasts con shadcn Table y Sheet
+- Story 6-9: Refactorizar Settings con shadcn Tabs
