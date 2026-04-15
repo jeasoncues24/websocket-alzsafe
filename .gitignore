@@ -1,0 +1,84 @@
+# ============================================
+# Go
+# ============================================
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+wsapi
+*.test
+coverage.txt
+
+# Go workspace
+*.wasm
+
+# Go vendor (if used)
+/vendor/
+
+# ============================================
+# Frontend (Next.js)
+# ============================================
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.pnp
+frontend/.pnp.*
+frontend/yarn.lock
+frontend/package-lock.json
+
+# ============================================
+# IDE
+# ============================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ============================================
+# OS
+# ============================================
+.DS_Store
+Thumbs.db
+
+# ============================================
+# Entornos y Secrets
+# ============================================
+.env
+.env.local
+.env.*.local
+*.pem
+
+# ============================================
+# BMAD - Agent Skills (no versionar)
+# ============================================
+.agent/
+.agents/
+.gemini/
+.github/
+.opencode/skills/bmad-tea/
+.opencode/skills/bmad-teach-me-testing/
+.opencode/skills/bmad-testarch-*/
+_bmad/tea/
+_bmad-output/
+
+# ============================================
+# Build artifacts
+# ============================================
+internal/http/static/
+dist/
+
+# ============================================
+# Test
+# ============================================
+*.test
+http.test
+whatsapp.test
+
+# ============================================
+# Logs
+# ============================================
+*.log
+logs/
