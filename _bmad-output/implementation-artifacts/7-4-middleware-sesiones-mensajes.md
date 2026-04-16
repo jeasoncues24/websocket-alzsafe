@@ -1,5 +1,5 @@
 ---
-status: review
+status: done
 type: backend
 story_key: 7-4-middleware-sesiones-mensajes
 created: 2026-04-15
@@ -16,7 +16,7 @@ last_updated: 2026-04-15
 
 ## Acceptance Criteria
 
-**Given** una request a /api/sessions/*, /api/message/*, o /api/broadcast/*
+**Given** una request a /api/sessions/_, /api/message/_, o /api/broadcast/\*
 **When** no incluye JWT válido
 **Then** retorna HTTP 401 con mensaje "Token requerido"
 

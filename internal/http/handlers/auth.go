@@ -1,6 +1,8 @@
 package http
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -16,12 +18,12 @@ import (
 
 type AuthHandler struct {
 	userStore      *storage.AdminUserStore
-	empresaStore   *storage.EmpresaStore
+	empresaStore   domain.EmpresaStoreInterface
 	blacklistStore *storage.TokenBlacklistStore
 	jwtConfig      *config.JWTConfig
 }
 
-func NewAuthHandler(userStore *storage.AdminUserStore, empresaStore *storage.EmpresaStore, blacklistStore *storage.TokenBlacklistStore, jwtConfig *config.JWTConfig) *AuthHandler {
+func NewAuthHandler(userStore *storage.AdminUserStore, empresaStore domain.EmpresaStoreInterface, blacklistStore *storage.TokenBlacklistStore, jwtConfig *config.JWTConfig) *AuthHandler {
 	return &AuthHandler{
 		userStore:      userStore,
 		empresaStore:   empresaStore,
@@ -167,6 +169,14 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Invalidar el token anterior
+	if jti, ok := claims["jti"].(string); ok {
+		if exp, ok := claims["exp"].(float64); ok {
+			expiresAt := time.Unix(int64(exp), 0)
+			h.blacklistStore.Add(jti, expiresAt)
+		}
+	}
+
 	// Get user and generate new token
 	userID := int64(claims["user_id"].(float64))
 	user, err := h.userStore.GetByID(userID)
@@ -245,13 +255,18 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) generateToken(user *domain.AdminUser, empresaRUC, empresaNombre *string) (string, error) {
 	now := time.Now()
-	jti := now.Format("20060102150405") + "-" + user.Username
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	jti := hex.EncodeToString(b)
 
 	claims := jwt.MapClaims{
 		"jti":            jti,
 		"user_id":        float64(user.ID),
 		"username":       user.Username,
 		"rol":            string(user.Rol),
+		"is_root":        user.IsRoot,
 		"iat":            now.Unix(),
 		"exp":            now.Add(h.jwtConfig.Expiry).Unix(),
 		"iss":            h.jwtConfig.Issuer,

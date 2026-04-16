@@ -1,56 +1,97 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Button } from "@/components/ui/button"
-import { Building2, MessageSquare, Send, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react"
-import { getMetrics, type DashboardMetrics } from "@/lib/api"
-import Link from "next/link"
+import { useEffect, useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Building2,
+  MessageSquare,
+  Send,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
+import { getMetrics, type DashboardMetrics } from "@/lib/api";
+import Link from "next/link";
+
+function alertVariant(level: string): "default" | "secondary" | "destructive" {
+  if (level === "error") return "destructive";
+  if (level === "warning") return "secondary";
+  return "default";
+}
 
 export default function DashboardPage() {
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [lastUpdate, setLastUpdate] = useState<string>("")
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<string>("");
 
   async function loadMetrics() {
-    setLoading(true)
+    setLoading(true);
     try {
-      const data = await getMetrics()
-      setMetrics(data)
-      setLastUpdate(data.last_update)
-    } catch (error) {
-      console.error("Failed to load metrics:", error)
+      const data = await getMetrics();
+      setMetrics(data);
+      setLastUpdate(data.last_update);
+    } catch {
+      // silencioso — UI muestra ceros
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadMetrics()
-  }, [])
+    loadMetrics();
+  }, []);
 
-  const formatNumber = (num: number) => {
-    if (num >= 1000) {
-      return (num / 1000).toFixed(1) + "k"
-    }
-    return num.toLocaleString()
-  }
+  const fmt = (n: number) =>
+    n >= 1000 ? (n / 1000).toFixed(1) + "k" : n.toLocaleString();
+  const fmtPct = (n: number) => n.toFixed(1) + "%";
 
-  const formatPercent = (num: number) => {
-    return num.toFixed(1) + "%"
-  }
-
-  const getAlertColor = (level: string) => {
-    switch (level) {
-      case "warning":
-        return "text-yellow-500"
-      case "error":
-        return "text-red-500"
-      default:
-        return "text-blue-500"
-    }
-  }
+  const MetricCard = ({
+    href,
+    title,
+    icon: Icon,
+    value,
+    sub,
+  }: {
+    href?: string;
+    title: string;
+    icon: React.ElementType;
+    value: string;
+    sub: string;
+  }) => {
+    const card = (
+      <Card
+        className={
+          href ? "hover:bg-muted/50 transition-colors cursor-pointer" : ""
+        }
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <Skeleton className="h-8 w-20" />
+          ) : (
+            <>
+              <div className="text-2xl font-bold">{value}</div>
+              <p className="text-xs text-muted-foreground">{sub}</p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    );
+    return href ? <Link href={href}>{card}</Link> : card;
+  };
 
   return (
     <div className="space-y-6">
@@ -67,159 +108,155 @@ export default function DashboardPage() {
               Actualizado: {new Date(lastUpdate).toLocaleTimeString()}
             </span>
           )}
-          <Button variant="outline" size="sm" onClick={loadMetrics}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadMetrics}
+            disabled={loading}
+          >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Link href="/companies">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Empresas Activas
-              </CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">
-                    {formatNumber(metrics?.sessions_active || 0)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Sesiones activas
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/messages">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Mensajes Hoy
-              </CardTitle>
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">
-                    {formatNumber(metrics?.messages_today || 0)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Enviados
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/broadcasts">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Broadcasts Hoy
-              </CardTitle>
-              <Send className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <Skeleton className="h-8 w-20" />
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">
-                    {formatNumber(metrics?.broadcasts_today || 0)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Creados
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Tasa de Éxito
-            </CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">
-                  {formatPercent(metrics?.success_rate || 0)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Mensajes entregados
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <MetricCard
+          href="/companies"
+          title="Empresas Activas"
+          icon={Building2}
+          value={fmt(metrics?.sessions_active || 0)}
+          sub="Sesiones activas"
+        />
+        <MetricCard
+          href="/messages"
+          title="Mensajes Hoy"
+          icon={MessageSquare}
+          value={fmt(metrics?.messages_today || 0)}
+          sub="Enviados"
+        />
+        <MetricCard
+          href="/broadcasts"
+          title="Broadcasts Hoy"
+          icon={Send}
+          value={fmt(metrics?.broadcasts_today || 0)}
+          sub="Creados"
+        />
+        <MetricCard
+          title="Tasa de Éxito"
+          icon={CheckCircle2}
+          value={fmtPct(metrics?.success_rate || 0)}
+          sub="Mensajes entregados"
+        />
       </div>
 
-      {metrics?.alerts && metrics.alerts.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Alertas</CardTitle>
-              <CardDescription>
-                Recomendaciones del sistema
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {metrics.alerts.map((alert, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <AlertCircle className={`h-4 w-4 ${getAlertColor(alert.level)}`} />
-                    <span className="text-sm">{alert.message}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Resumen</TabsTrigger>
+          <TabsTrigger value="alerts">
+            Alertas
+            {metrics?.alerts && metrics.alerts.length > 0 && (
+              <Badge variant="destructive" className="ml-2 h-5 px-1.5 text-xs">
+                {metrics.alerts.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="overview" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Métricas</CardTitle>
+              <CardTitle>Métricas detalladas</CardTitle>
               <CardDescription>
-                Detalles adicionales
+                Detalles de mensajes y broadcasts
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Mensajes fallidos</span>
-                  <span className="text-sm font-medium">
-                    {formatNumber(metrics?.messages_failed || 0)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Broadcasts completados</span>
-                  <span className="text-sm font-medium">
-                    {formatNumber(metrics?.broadcasts_created || 0)}
-                  </span>
-                </div>
+              <div className="space-y-3">
+                {loading ? (
+                  <>
+                    <Skeleton className="h-5 w-full" />
+                    <Skeleton className="h-5 w-full" />
+                    <Skeleton className="h-5 w-3/4" />
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Mensajes enviados (total)
+                      </span>
+                      <span className="font-medium">
+                        {fmt(metrics?.messages_sent || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Mensajes fallidos
+                      </span>
+                      <span className="font-medium">
+                        {fmt(metrics?.messages_failed || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Broadcasts completados
+                      </span>
+                      <span className="font-medium">
+                        {fmt(metrics?.broadcasts_created || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Empresas registradas
+                      </span>
+                      <span className="font-medium">
+                        {fmt(metrics?.active_companies || 0)}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
-        </div>
-      )}
+        </TabsContent>
+
+        <TabsContent value="alerts" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Alertas del sistema</CardTitle>
+              <CardDescription>Avisos y recomendaciones</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-5 w-full" />
+                  <Skeleton className="h-5 w-3/4" />
+                </div>
+              ) : !metrics?.alerts || metrics.alerts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Sin alertas activas.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {metrics.alerts.map((alert, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <AlertCircle className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 flex items-center justify-between gap-2">
+                        <span className="text-sm">{alert.message}</span>
+                        <Badge
+                          variant={alertVariant(alert.level)}
+                          className="flex-shrink-0"
+                        >
+                          {alert.level}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
-  )
+  );
 }

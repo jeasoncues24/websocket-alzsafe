@@ -1,5 +1,5 @@
 ---
-status: ready-for-dev
+status: done
 type: frontend
 story_key: 8-3-panel-empresas-frontend
 created: 2026-04-15
@@ -38,18 +38,21 @@ last_updated: 2026-04-15
 
 ## Tasks/Subtasks
 
-- [ ] 1. Crear componente de lista de empresas con búsqueda y filtros
-- [ ] 2. Crear modal/formulario para nueva empresa
-- [ ] 3. Crear formulario de edición de empresa
-- [ ] 4. Crear página de detalle de empresa
-- [ ] 5. Conectar con API /api/companies
-- [ ] 6. Tests y verificación
+- [x] 1. Crear componente de lista de empresas con búsqueda y filtros
+- [x] 2. Crear modal/formulario para nueva empresa
+- [x] 3. Crear formulario de edición de empresa
+- [x] 4. Crear página de detalle de empresa
+- [x] 5. Conectar con API /api/companies
+- [x] 6. Tests y verificación
 
 ## File List
 
-- frontend/app/companies/page.tsx (actualizar)
-- frontend/components/companies/ (nuevos componentes)
+- frontend/app/companies/page.tsx (actualizado — reescrito con CRUD completo)
+- frontend/components/companies/empresa-form-modal.tsx (nuevo)
+- frontend/components/companies/empresa-detail-modal.tsx (nuevo)
+- frontend/lib/api.ts (nuevas funciones y tipos: Empresa, getEmpresas, createEmpresa, updateEmpresa, deleteEmpresa)
 
 ## Change Log
 
 - (2026-04-15) Story creada para panel frontend de empresas
+- (2026-04-15) Implementado: lista con búsqueda/filtros, modal nueva empresa, modal edición, modal detalle, paginación, conectado con /api/companies con auth JWT

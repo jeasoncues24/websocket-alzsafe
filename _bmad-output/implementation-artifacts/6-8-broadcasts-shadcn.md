@@ -8,16 +8,16 @@ Refactorizar página de broadcasts para usar Table y Sheet de shadcn.
 
 ## Tareas
 
-- [ ] Usar Table de shadcn para lista de broadcasts
-- [ ] Usar Sheet de shadcn para ver detalles/resultados
-- [ ] Usar Badge para status de broadcast
-- [ ] Usar Button para crear nuevo broadcast
+- [x] Usar Table de shadcn para lista de broadcasts
+- [x] Usar Sheet de shadcn para ver detalles/resultados
+- [x] Usar Badge para status de broadcast
+- [x] Usar Button para crear nuevo broadcast
 
 ## Criterios de Aceptación
 
-1. Lista de broadcasts usa Table de shadcn
-2. Detalles se muestran en Sheet de shadcn
-3. Theme correcto
+1. [x] Lista de broadcasts usa Table de shadcn
+2. [x] Detalles se muestran en Sheet de shadcn
+3. [x] Theme correcto
 
 ## Dependencies
 

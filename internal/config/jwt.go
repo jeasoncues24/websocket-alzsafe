@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"time"
 )
@@ -12,9 +13,16 @@ type JWTConfig struct {
 	Issuer        string
 }
 
+const defaultJWTSecret = "wsapi-secret-key-change-in-production"
+
 func LoadJWT() *JWTConfig {
+	secret := getEnv("JWT_SECRET", "")
+	if secret == "" {
+		fmt.Println("[WARN] JWT_SECRET no configurado — usando secret por defecto, NO SEGURO para producción")
+		secret = defaultJWTSecret
+	}
 	return &JWTConfig{
-		Secret:        getEnv("JWT_SECRET", "wsapi-secret-key-change-in-production"),
+		Secret:        secret,
 		Expiry:        getEnvDuration("JWT_EXPIRY", 24*time.Hour),
 		RefreshExpiry: getEnvDuration("JWT_REFRESH_EXPIRY", 7*24*time.Hour),
 		Issuer:        getEnv("JWT_ISSUER", "wsapi"),

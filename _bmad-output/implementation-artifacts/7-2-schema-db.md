@@ -1,5 +1,5 @@
 ---
-status: review
+status: done
 type: backend
 story_key: 7-2-schema-db
 created: 2026-04-15
@@ -19,6 +19,7 @@ last_updated: 2026-04-15
 **Given** el sistema necesita almacenar usuarios admin
 **When** se ejecutan migraciones
 **Then** crea tabla `admin_users`:
+
 - id (INT, PK, AUTO_INCREMENT)
 - username (VARCHAR(50), UNIQUE, NOT NULL)
 - password_hash (VARCHAR(255), NOT NULL)
@@ -31,6 +32,7 @@ last_updated: 2026-04-15
 **Given** el sistema necesita almacenar API keys
 **When** se ejecutan migraciones
 **Then** crea tabla `api_keys`:
+
 - id (INT, PK, AUTO_INCREMENT)
 - empresa_id (INT, FK, NOT NULL)
 - key_hash (VARCHAR(255), NOT NULL)
@@ -42,6 +44,7 @@ last_updated: 2026-04-15
 **Given** el sistema necesita almacenar empresas
 **When** se ejecutan migraciones
 **Then** crea tabla `empresas`:
+
 - id (INT, PK, AUTO_INCREMENT)
 - ruc (VARCHAR(11), UNIQUE, NOT NULL)
 - nombre (VARCHAR(255), NOT NULL)

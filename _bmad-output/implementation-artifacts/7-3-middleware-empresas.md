@@ -1,5 +1,5 @@
 ---
-status: review
+status: done
 type: backend
 story_key: 7-3-middleware-empresas
 created: 2026-04-15
@@ -48,3 +48,11 @@ last_updated: 2026-04-15
 
 - (2026-04-15) Story creada para middleware de protección empresas
 - (2026-04-15) Implementado: handler companies con CRUD, middleware auth, permisos
+
+### Review Findings
+
+- [x] [Review][Patch] Blacklist NO consultada en RequireAuth — token blacklisteado sigue siendo válido [internal/http/middleware/auth.go — RequireAuth()]
+- [x] [Review][Patch] Panic en ValidateToken por type assertions sin comma-ok — DoS con token malformado [internal/http/middleware/auth.go:52-54]
+- [x] [Review][Patch] HTTP 204 No Content con body JSON en Delete empresa [internal/http/handlers/companies.go — Delete()]
+- [x] [Review][Defer] ApiKeyStore.Delete y Revoke son duplicados idénticos — pre-existing, no bug — deferred, pre-existing
+- [x] [Review][Defer] GetAll lee y descarta password_hash de DB (columna sensible innecesaria) — deferred, pre-existing

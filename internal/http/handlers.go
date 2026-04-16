@@ -21,6 +21,7 @@ type Handler struct {
 	manager         *whatsapp.Manager
 	sessionStore    *storage.SessionStore
 	msgRepo         storage.MessagesRepository
+	empresaStore    domain.EmpresaStoreInterface
 	broadcastWorker *whatsapp.BroadcastWorker
 	broadcastStore  *storage.BroadcastStore
 }
@@ -48,12 +49,12 @@ type outboundPayload struct {
 	Data  map[string]any `json:"data"`
 }
 
-func NewHandler(manager *whatsapp.Manager, sessionStore *storage.SessionStore, msgRepo storage.MessagesRepository) *Handler {
-	return &Handler{manager: manager, sessionStore: sessionStore, msgRepo: msgRepo}
+func NewHandler(manager *whatsapp.Manager, sessionStore *storage.SessionStore, msgRepo storage.MessagesRepository, empresaStore domain.EmpresaStoreInterface) *Handler {
+	return &Handler{manager: manager, sessionStore: sessionStore, msgRepo: msgRepo, empresaStore: empresaStore}
 }
 
-func NewHandlerWithBroadcast(manager *whatsapp.Manager, sessionStore *storage.SessionStore, msgRepo storage.MessagesRepository, bw *whatsapp.BroadcastWorker, bs *storage.BroadcastStore) *Handler {
-	return &Handler{manager: manager, sessionStore: sessionStore, msgRepo: msgRepo, broadcastWorker: bw, broadcastStore: bs}
+func NewHandlerWithBroadcast(manager *whatsapp.Manager, sessionStore *storage.SessionStore, msgRepo storage.MessagesRepository, empresaStore domain.EmpresaStoreInterface, bw *whatsapp.BroadcastWorker, bs *storage.BroadcastStore) *Handler {
+	return &Handler{manager: manager, sessionStore: sessionStore, msgRepo: msgRepo, empresaStore: empresaStore, broadcastWorker: bw, broadcastStore: bs}
 }
 
 func (h *Handler) HandleWS(w stdhttp.ResponseWriter, r *stdhttp.Request) {
@@ -227,6 +228,17 @@ func writeEvent(ctx context.Context, c *websocket.Conn, payload outboundPayload)
 func (h *Handler) HandlePostMessage(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	// Get empresa filter from token
+	filter, ok := domain.GetEmpresaFilter(r.Context(), r.Header.Get("X-Empresa-ID"))
+	if !ok {
+		w.WriteHeader(stdhttp.StatusUnauthorized)
+		json.NewEncoder(w).Encode(domain.MessageResponse{
+			OK:    false,
+			Error: "UNAUTHORIZED",
+		})
+		return
+	}
+
 	// Parse request body
 	var req domain.MessageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -250,8 +262,25 @@ func (h *Handler) HandlePostMessage(w stdhttp.ResponseWriter, r *stdhttp.Request
 		return
 	}
 
-	// Normalize ruc_empresa
-	ruc := whatsapp.NormalizeAccountID(req.RUCEmpresa)
+	// Get RUC from filter
+	ruc := ""
+	if filter.IsRoot && filter.EmpresaID == nil {
+		// Root sin header puede usar el ruc del body
+		ruc = whatsapp.NormalizeAccountID(req.RUCEmpresa)
+	} else {
+		// Usuario normal debe usar su empresa del token
+		empresa, err := domain.GetRUCFromContext(r.Context(), filter, h.empresaStore)
+		if err != nil || empresa == "" {
+			w.WriteHeader(stdhttp.StatusForbidden)
+			json.NewEncoder(w).Encode(domain.MessageResponse{
+				OK:      false,
+				Error:   "NO_EMPRESA_ACCESS",
+				Details: "No empresa access",
+			})
+			return
+		}
+		ruc = whatsapp.NormalizeAccountID(empresa)
+	}
 
 	// Check if session is active
 	sessionState, ok := h.sessionStore.Get(ruc)
@@ -285,12 +314,26 @@ func (h *Handler) HandlePostMessage(w stdhttp.ResponseWriter, r *stdhttp.Request
 		}
 	}
 
-	// Return 202 Accepted with reference ID
 	w.WriteHeader(stdhttp.StatusAccepted)
+
+	var usuarioID *int64
+	var empresaNombre string
+
+	if claims, ok := domain.GetTokenClaims(r.Context()); ok {
+		usuarioID = &claims.UserID
+		if claims.EmpresaNombre != nil {
+			empresaNombre = *claims.EmpresaNombre
+		}
+	}
+
 	json.NewEncoder(w).Encode(domain.MessageResponse{
-		OK:          true,
-		Message:     "Message accepted for processing",
-		ReferenceID: message.ReferenceID,
+		OK:            true,
+		Message:       "Message accepted for processing",
+		ReferenceID:   message.ReferenceID,
+		UsuarioID:     usuarioID,
+		RUCEmpresa:    ruc,
+		EmpresaNombre: empresaNombre,
+		SessionID:     sessionState.SessionID,
 	})
 }
 
@@ -299,11 +342,13 @@ func (h *Handler) HandlePostMessage(w stdhttp.ResponseWriter, r *stdhttp.Request
 // [POR QUÉ] Permite al frontend mostrar el historial y al operador auditar envíos.
 //
 // Query params:
-//   - ruc_empresa (requerido)
 //   - page (opcional, default 1)
 //   - limit (opcional, default 20, max 100)
-//   - start_date (opcional, formato YYYY-MM-DD)
-//   - end_date (opcional, formato YYYY-MM-DD)
+//   - desde (opcional, formato YYYY-MM-DD)
+//   - hasta (opcional, formato YYYY-MM-DD)
+//   - telefono (opcional, búsqueda parcial)
+//   - empresa_id (opcional, solo para super_admin)
+//   - estado (opcional: pending, sent, delivered, failed, rejected)
 func (h *Handler) HandleGetMessages(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -316,27 +361,12 @@ func (h *Handler) HandleGetMessages(w stdhttp.ResponseWriter, r *stdhttp.Request
 		return
 	}
 
-	rucEmpresa := strings.TrimSpace(r.URL.Query().Get("ruc_empresa"))
-	if rucEmpresa == "" {
-		w.WriteHeader(stdhttp.StatusBadRequest)
+	filter, ok := domain.GetEmpresaFilter(r.Context(), r.Header.Get("X-Empresa-ID"))
+	if !ok {
+		w.WriteHeader(stdhttp.StatusUnauthorized)
 		json.NewEncoder(w).Encode(domain.MessagesListResponse{
-			OK:      false,
-			Error:   domain.ErrorCodeMissingField,
-			Details: "ruc_empresa is required",
-		})
-		return
-	}
-	rucEmpresa = whatsapp.NormalizeAccountID(rucEmpresa)
-
-	// [QUÉ] Validar que la empresa tenga sesión activa antes de permitir auditoría.
-	// [POR QUÉ] Evita consultar historial de empresas sin sesión autorizada actualmente.
-	sessionState, ok := h.sessionStore.Get(rucEmpresa)
-	if !ok || sessionState.Status != "active" || !sessionState.IsActive {
-		w.WriteHeader(stdhttp.StatusForbidden)
-		json.NewEncoder(w).Encode(domain.MessagesListResponse{
-			OK:      false,
-			Error:   domain.ErrorCodeSessionNotActive,
-			Details: "Session is not active for this empresa",
+			OK:    false,
+			Error: "UNAUTHORIZED",
 		})
 		return
 	}
@@ -346,19 +376,24 @@ func (h *Handler) HandleGetMessages(w stdhttp.ResponseWriter, r *stdhttp.Request
 	if page < 1 {
 		page = 1
 	}
-	// [QUÉ] Limitar a 100 registros por página para evitar queries excesivamente grandes.
 	if limit < 1 || limit > 100 {
 		limit = 20
 	}
 	offset := (page - 1) * limit
 
-	startDateStr := strings.TrimSpace(r.URL.Query().Get("start_date"))
-	endDateStr := strings.TrimSpace(r.URL.Query().Get("end_date"))
+	desdeStr := strings.TrimSpace(r.URL.Query().Get("desde"))
+	hastaStr := strings.TrimSpace(r.URL.Query().Get("hasta"))
+	telefono := strings.TrimSpace(r.URL.Query().Get("telefono"))
+	empresaIDStr := strings.TrimSpace(r.URL.Query().Get("empresa_id"))
 	estado := strings.TrimSpace(r.URL.Query().Get("estado"))
+
+	if empresaIDStr != "" && !filter.IsRoot {
+		empresaIDStr = ""
+	}
+
 	if estado != "" {
 		switch domain.MessageState(estado) {
 		case domain.MessageStatePending, domain.MessageStateSent, domain.MessageStateDelivered, domain.MessageStateFailed, domain.MessageStateRejected:
-			// estado válido
 		default:
 			w.WriteHeader(stdhttp.StatusBadRequest)
 			json.NewEncoder(w).Encode(domain.MessagesListResponse{
@@ -370,49 +405,138 @@ func (h *Handler) HandleGetMessages(w stdhttp.ResponseWriter, r *stdhttp.Request
 		}
 	}
 
+	var targetEmpresaID *int64
+	if empresaIDStr != "" && filter.IsRoot {
+		if id, err := strconv.ParseInt(empresaIDStr, 10, 64); err == nil && id > 0 {
+			targetEmpresaID = &id
+		}
+	}
+
 	var messages []domain.Message
 	var total int
 	var err error
 
-	if startDateStr != "" || endDateStr != "" {
-		var startDate, endDate time.Time
+	if filter.IsRoot && targetEmpresaID == nil && filter.EmpresaID == nil {
+		rucs, err := domain.GetAllEmpresaRUCs(h.empresaStore)
+		if err != nil {
+			w.WriteHeader(stdhttp.StatusInternalServerError)
+			json.NewEncoder(w).Encode(domain.MessagesListResponse{
+				OK:    false,
+				Error: "QUERY_ERROR",
+			})
+			return
+		}
 
-		// [APRENDE] time.Parse en Go necesita una "fecha de referencia" fija: 2006-01-02 15:04:05.
-		// Go usa esa fecha específica (Unix time = lunes 2 de enero de 2006) como plantilla.
-		if startDateStr != "" {
-			startDate, err = time.Parse("2006-01-02", startDateStr)
-			if err != nil {
-				w.WriteHeader(stdhttp.StatusBadRequest)
-				json.NewEncoder(w).Encode(domain.MessagesListResponse{
-					OK:      false,
-					Error:   "INVALID_DATE_FORMAT",
-					Details: "start_date must be in YYYY-MM-DD format",
-				})
-				return
+		allMessages := []domain.Message{}
+		totalCount := 0
+		for _, ruc := range rucs {
+			if desdeStr != "" || hastaStr != "" {
+				var startDate, endDate time.Time
+				if desdeStr != "" {
+					startDate, err = time.Parse("2006-01-02", desdeStr)
+					if err != nil {
+						w.WriteHeader(stdhttp.StatusBadRequest)
+						json.NewEncoder(w).Encode(domain.MessagesListResponse{
+							OK:      false,
+							Error:   "INVALID_DATE_FORMAT",
+							Details: "desde must be in YYYY-MM-DD format",
+						})
+						return
+					}
+				}
+				if hastaStr != "" {
+					endDate, err = time.Parse("2006-01-02", hastaStr)
+					if err != nil {
+						w.WriteHeader(stdhttp.StatusBadRequest)
+						json.NewEncoder(w).Encode(domain.MessagesListResponse{
+							OK:      false,
+							Error:   "INVALID_DATE_FORMAT",
+							Details: "hasta must be in YYYY-MM-DD format",
+						})
+						return
+					}
+					endDate = endDate.Add(24*time.Hour - time.Millisecond)
+				}
+				if desdeStr != "" && hastaStr == "" {
+					endDate = startDate.Add(24*time.Hour - time.Millisecond)
+				}
+				msgs, cnt, err := h.msgRepo.GetByEmpresaAndDateRange(ruc, startDate, endDate, estado, telefono, limit, offset)
+				if err != nil {
+					continue
+				}
+				totalCount += cnt
+				allMessages = append(allMessages, msgs...)
+			} else {
+				msgs, cnt, err := h.msgRepo.GetByEmpresa(ruc, estado, telefono, limit, offset)
+				if err != nil {
+					continue
+				}
+				totalCount += cnt
+				allMessages = append(allMessages, msgs...)
 			}
 		}
-
-		if endDateStr != "" {
-			endDate, err = time.Parse("2006-01-02", endDateStr)
-			if err != nil {
-				w.WriteHeader(stdhttp.StatusBadRequest)
-				json.NewEncoder(w).Encode(domain.MessagesListResponse{
-					OK:      false,
-					Error:   "INVALID_DATE_FORMAT",
-					Details: "end_date must be in YYYY-MM-DD format",
-				})
-				return
-			}
-			// Ajustar al final del día para incluir todos los mensajes del día indicado
-			endDate = endDate.Add(24*time.Hour - time.Millisecond)
-		}
-
-		if startDateStr != "" && endDateStr == "" {
-			endDate = startDate.Add(24*time.Hour - time.Millisecond)
-		}
-		messages, total, err = h.msgRepo.GetByEmpresaAndDateRange(rucEmpresa, startDate, endDate, estado, limit, offset)
+		messages = allMessages
+		total = totalCount
 	} else {
-		messages, total, err = h.msgRepo.GetByEmpresa(rucEmpresa, estado, limit, offset)
+		empresa, err := domain.GetRUCFromContext(r.Context(), filter, h.empresaStore)
+		if err != nil || empresa == "" {
+			w.WriteHeader(stdhttp.StatusForbidden)
+			json.NewEncoder(w).Encode(domain.MessagesListResponse{
+				OK:      false,
+				Error:   "NO_EMPRESA_ACCESS",
+				Details: "No empresa access",
+			})
+			return
+		}
+
+		sessionState, ok := h.sessionStore.Get(empresa)
+		if !ok || sessionState.Status != "active" || !sessionState.IsActive {
+			w.WriteHeader(stdhttp.StatusForbidden)
+			json.NewEncoder(w).Encode(domain.MessagesListResponse{
+				OK:      false,
+				Error:   domain.ErrorCodeSessionNotActive,
+				Details: "Session is not active for this empresa",
+			})
+			return
+		}
+
+		if desdeStr != "" || hastaStr != "" {
+			var startDate, endDate time.Time
+
+			if desdeStr != "" {
+				startDate, err = time.Parse("2006-01-02", desdeStr)
+				if err != nil {
+					w.WriteHeader(stdhttp.StatusBadRequest)
+					json.NewEncoder(w).Encode(domain.MessagesListResponse{
+						OK:      false,
+						Error:   "INVALID_DATE_FORMAT",
+						Details: "desde must be in YYYY-MM-DD format",
+					})
+					return
+				}
+			}
+
+			if hastaStr != "" {
+				endDate, err = time.Parse("2006-01-02", hastaStr)
+				if err != nil {
+					w.WriteHeader(stdhttp.StatusBadRequest)
+					json.NewEncoder(w).Encode(domain.MessagesListResponse{
+						OK:      false,
+						Error:   "INVALID_DATE_FORMAT",
+						Details: "hasta must be in YYYY-MM-DD format",
+					})
+					return
+				}
+				endDate = endDate.Add(24*time.Hour - time.Millisecond)
+			}
+
+			if desdeStr != "" && hastaStr == "" {
+				endDate = startDate.Add(24*time.Hour - time.Millisecond)
+			}
+			messages, total, err = h.msgRepo.GetByEmpresaAndDateRange(empresa, startDate, endDate, estado, telefono, limit, offset)
+		} else {
+			messages, total, err = h.msgRepo.GetByEmpresa(empresa, estado, telefono, limit, offset)
+		}
 	}
 
 	if err != nil {
@@ -424,13 +548,32 @@ func (h *Handler) HandleGetMessages(w stdhttp.ResponseWriter, r *stdhttp.Request
 		return
 	}
 
+	var usuarioID *int64
+	var empresaNombre string
+
+	if claims, ok := domain.GetTokenClaims(r.Context()); ok {
+		usuarioID = &claims.UserID
+		if claims.EmpresaNombre != nil {
+			empresaNombre = *claims.EmpresaNombre
+		}
+	}
+
+	totalPages := 0
+	if limit > 0 {
+		totalPages = (total + limit - 1) / limit
+	}
+
 	w.WriteHeader(stdhttp.StatusOK)
 	json.NewEncoder(w).Encode(domain.MessagesListResponse{
-		OK:       true,
-		Messages: messages,
-		Total:    total,
-		Page:     page,
-		Limit:    limit,
+		OK:            true,
+		Messages:      messages,
+		Total:         total,
+		Page:          page,
+		Limit:         limit,
+		TotalPages:    totalPages,
+		UsuarioID:     usuarioID,
+		RUCEmpresa:    "",
+		EmpresaNombre: empresaNombre,
 	})
 }
 
@@ -453,6 +596,17 @@ func parseIntParam(s string, defaultValue int) int {
 // (worker pool, per-recipient results, persistence) belong to Stories 3.2 and 3.3.
 func (h *Handler) HandlePostBroadcast(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	// Get empresa filter from token
+	filter, ok := domain.GetEmpresaFilter(r.Context(), r.Header.Get("X-Empresa-ID"))
+	if !ok {
+		w.WriteHeader(stdhttp.StatusUnauthorized)
+		json.NewEncoder(w).Encode(domain.BroadcastResponse{
+			OK:    false,
+			Error: "UNAUTHORIZED",
+		})
+		return
+	}
 
 	var rawReq struct {
 		RUCEmpresa    string          `json:"ruc_empresa"`
@@ -490,8 +644,26 @@ func (h *Handler) HandlePostBroadcast(w stdhttp.ResponseWriter, r *stdhttp.Reque
 		return
 	}
 
+	// Get RUC from filter
+	ruc := ""
+	if filter.IsRoot && filter.EmpresaID == nil {
+		ruc = whatsapp.NormalizeAccountID(rawReq.RUCEmpresa)
+	} else {
+		empresa, err := domain.GetRUCFromContext(r.Context(), filter, h.empresaStore)
+		if err != nil || empresa == "" {
+			w.WriteHeader(stdhttp.StatusForbidden)
+			json.NewEncoder(w).Encode(domain.BroadcastResponse{
+				OK:      false,
+				Error:   "NO_EMPRESA_ACCESS",
+				Details: "No empresa access",
+			})
+			return
+		}
+		ruc = whatsapp.NormalizeAccountID(empresa)
+	}
+
 	req := domain.BroadcastRequest{
-		RUCEmpresa:    rawReq.RUCEmpresa,
+		RUCEmpresa:    ruc,
 		ListaDifusion: listaDifusion,
 	}
 
@@ -504,8 +676,6 @@ func (h *Handler) HandlePostBroadcast(w stdhttp.ResponseWriter, r *stdhttp.Reque
 		})
 		return
 	}
-
-	ruc := whatsapp.NormalizeAccountID(req.RUCEmpresa)
 
 	sessionState, ok := h.sessionStore.Get(ruc)
 	if !ok || sessionState.Status != "active" || !sessionState.IsActive {
@@ -540,11 +710,12 @@ func (h *Handler) HandlePostBroadcast(w stdhttp.ResponseWriter, r *stdhttp.Reque
 		go func() {
 			for result := range resultChan {
 				domainResult := domain.BroadcastResult{
-					Index:     result.Index,
-					Destino:   result.Destino,
-					State:     result.State,
-					Error:     result.Error,
-					Timestamp: result.Timestamp,
+					Index:      result.Index,
+					Destino:    result.Destino,
+					RUCEmpresa: ruc,
+					State:      result.State,
+					Error:      result.Error,
+					Timestamp:  result.Timestamp,
 				}
 				h.broadcastStore.AppendResult(referenceID, domainResult)
 			}
@@ -553,11 +724,20 @@ func (h *Handler) HandlePostBroadcast(w stdhttp.ResponseWriter, r *stdhttp.Reque
 		}()
 	}
 
+	var empresaNombre string
+	if claims, ok := domain.GetTokenClaims(r.Context()); ok {
+		if claims.EmpresaNombre != nil {
+			empresaNombre = *claims.EmpresaNombre
+		}
+	}
+
 	w.WriteHeader(stdhttp.StatusAccepted)
 	json.NewEncoder(w).Encode(domain.BroadcastResponse{
-		OK:          true,
-		ReferenceID: referenceID,
-		Total:       len(req.ListaDifusion),
+		OK:            true,
+		ReferenceID:   referenceID,
+		Total:         len(req.ListaDifusion),
+		RUCEmpresa:    ruc,
+		EmpresaNombre: empresaNombre,
 	})
 }
 

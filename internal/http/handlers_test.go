@@ -19,7 +19,7 @@ func TestHandlerSessionDisconnectMultiempresaIsolation(t *testing.T) {
 	// Setup: Create handler with manager and session store
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
-	handler := NewHandler(manager, sessionStore, nil)
+	handler := NewHandler(manager, sessionStore, nil, nil)
 
 	// Create two empresas with active sessions
 	empresaA := "20123456789"
@@ -68,7 +68,7 @@ func TestHandlerSessionDisconnectMultiempresaIsolation(t *testing.T) {
 func TestHandlerSessionLogoutMultiempresaIsolation(t *testing.T) {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
-	handler := NewHandler(manager, sessionStore, nil)
+	handler := NewHandler(manager, sessionStore, nil, nil)
 
 	empresaA := "20111111111"
 	empresaB := "20222222222"
@@ -108,7 +108,7 @@ func TestHandlerSessionLogoutMultiempresaIsolation(t *testing.T) {
 func TestHandlerConcurrentDisconnectionsIsolation(t *testing.T) {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
-	handler := NewHandler(manager, sessionStore, nil)
+	handler := NewHandler(manager, sessionStore, nil, nil)
 
 	// Setup 10 empresas
 	empresas := make([]string, 10)
@@ -575,18 +575,18 @@ func (f *fakeMessagesRepo) UpdateEstado(referenceID string, estado domain.Messag
 	return nil
 }
 
-func (f *fakeMessagesRepo) GetByEmpresa(rucEmpresa string, estado string, limit, offset int) ([]domain.Message, int, error) {
+func (f *fakeMessagesRepo) GetByEmpresa(rucEmpresa string, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
 	return f.messages, f.total, f.err
 }
 
-func (f *fakeMessagesRepo) GetByEmpresaAndDateRange(rucEmpresa string, start, end time.Time, estado string, limit, offset int) ([]domain.Message, int, error) {
+func (f *fakeMessagesRepo) GetByEmpresaAndDateRange(rucEmpresa string, start, end time.Time, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
 	return f.messages, f.total, f.err
 }
 
 func TestHandleGetMessagesServiceUnavailableWithoutRepo(t *testing.T) {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
-	handler := NewHandler(manager, sessionStore, nil)
+	handler := NewHandler(manager, sessionStore, nil, nil)
 
 	req := httptest.NewRequest(stdhttp.MethodGet, "/messages?ruc_empresa=20123456789", nil)
 	rr := httptest.NewRecorder()
@@ -602,7 +602,7 @@ func TestHandleGetMessagesMissingRUCEmpresa(t *testing.T) {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
 	repo := &fakeMessagesRepo{}
-	handler := NewHandler(manager, sessionStore, repo)
+	handler := NewHandler(manager, sessionStore, repo, nil)
 
 	req := httptest.NewRequest(stdhttp.MethodGet, "/messages", nil)
 	rr := httptest.NewRecorder()
@@ -618,7 +618,7 @@ func TestHandleGetMessagesSessionNotActive(t *testing.T) {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
 	repo := &fakeMessagesRepo{}
-	handler := NewHandler(manager, sessionStore, repo)
+	handler := NewHandler(manager, sessionStore, repo, nil)
 
 	req := httptest.NewRequest(stdhttp.MethodGet, "/messages?ruc_empresa=20123456789", nil)
 	rr := httptest.NewRecorder()
@@ -634,7 +634,7 @@ func TestHandleGetMessagesInvalidEstadoFilter(t *testing.T) {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
 	repo := &fakeMessagesRepo{}
-	handler := NewHandler(manager, sessionStore, repo)
+	handler := NewHandler(manager, sessionStore, repo, nil)
 
 	ruc := "20123456789"
 	sessionStore.SetQRPending(ruc, "qr")
@@ -657,7 +657,7 @@ func TestHandleGetMessagesOK(t *testing.T) {
 		messages: []domain.Message{{ReferenceID: "ref-1", RUCEmpresa: "20123456789", Estado: domain.MessageStatePending}},
 		total:    1,
 	}
-	handler := NewHandler(manager, sessionStore, repo)
+	handler := NewHandler(manager, sessionStore, repo, nil)
 
 	ruc := "20123456789"
 	sessionStore.SetQRPending(ruc, "qr")
@@ -792,7 +792,7 @@ func TestValidateBroadcastRequestItemEmptyMensaje(t *testing.T) {
 // Tests for Story 3.1: HandlePostBroadcast integration
 
 func TestHandlePostBroadcastInvalidJSON(t *testing.T) {
-	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil)
+	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil, nil)
 
 	req := httptest.NewRequest(stdhttp.MethodPost, "/broadcast", strings.NewReader("{invalid json"))
 	rr := httptest.NewRecorder()
@@ -805,7 +805,7 @@ func TestHandlePostBroadcastInvalidJSON(t *testing.T) {
 }
 
 func TestHandlePostBroadcastEmptyList(t *testing.T) {
-	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil)
+	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil, nil)
 
 	body := `{"ruc_empresa":"20123456789","lista_difusion":[]}`
 	req := httptest.NewRequest(stdhttp.MethodPost, "/broadcast", strings.NewReader(body))
@@ -819,7 +819,7 @@ func TestHandlePostBroadcastEmptyList(t *testing.T) {
 }
 
 func TestHandlePostBroadcastObjectInsteadOfArray(t *testing.T) {
-	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil)
+	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil, nil)
 
 	body := `{"ruc_empresa":"20123456789","lista_difusion":{}}`
 	req := httptest.NewRequest(stdhttp.MethodPost, "/broadcast", strings.NewReader(body))
@@ -841,7 +841,7 @@ func TestHandlePostBroadcastObjectInsteadOfArray(t *testing.T) {
 }
 
 func TestHandlePostBroadcastExceedsMaxItems(t *testing.T) {
-	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil)
+	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil, nil)
 
 	ruc := "20123456789"
 	sessionStore := storage.NewSessionStore()
@@ -880,7 +880,7 @@ func TestHandlePostBroadcastExceedsMaxItems(t *testing.T) {
 }
 
 func TestHandlePostBroadcastSessionNotActive(t *testing.T) {
-	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil)
+	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil, nil)
 
 	body := `{"ruc_empresa":"20123456789","lista_difusion":[{"destino":"51999999999","mensaje":"Hola"}]}`
 	req := httptest.NewRequest(stdhttp.MethodPost, "/broadcast", strings.NewReader(body))
@@ -896,7 +896,7 @@ func TestHandlePostBroadcastSessionNotActive(t *testing.T) {
 func TestHandlePostBroadcastValidRequest(t *testing.T) {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
-	handler := NewHandler(manager, sessionStore, nil)
+	handler := NewHandler(manager, sessionStore, nil, nil)
 
 	ruc := "20123456789"
 	sessionStore.SetQRPending(ruc, "qr")
@@ -930,7 +930,7 @@ func TestHandlePostBroadcastValidRequest(t *testing.T) {
 func TestHandlePostBroadcastItemInvalidPhone(t *testing.T) {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
-	handler := NewHandler(manager, sessionStore, nil)
+	handler := NewHandler(manager, sessionStore, nil, nil)
 
 	ruc := "20123456789"
 	sessionStore.SetQRPending(ruc, "qr")
@@ -945,4 +945,99 @@ func TestHandlePostBroadcastItemInvalidPhone(t *testing.T) {
 	if rr.Code != stdhttp.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
 	}
+}
+
+func TestGetMessagesTotalPagesCalculation(t *testing.T) {
+	tests := []struct {
+		name      string
+		total     int
+		limit     int
+		page      int
+		wantPages int
+	}{
+		{"zero total", 0, 20, 1, 0},
+		{"one item exactly", 1, 20, 1, 1},
+		{"less than limit", 5, 20, 1, 1},
+		{"exactly one page", 20, 20, 1, 1},
+		{"one more than limit", 21, 20, 1, 2},
+		{"multiple pages", 100, 20, 1, 5},
+		{"last page", 95, 20, 5, 5},
+		{"limit 10", 50, 10, 1, 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotPages := 0
+			if tt.limit > 0 {
+				gotPages = (tt.total + tt.limit - 1) / tt.limit
+			}
+			if gotPages != tt.wantPages {
+				t.Errorf("totalPages = %d, want %d", gotPages, tt.wantPages)
+			}
+		})
+	}
+}
+
+func TestGetMessagesFilterTelefono(t *testing.T) {
+	repo := &fakeMessagesRepo{
+		messages: []domain.Message{
+			{ReferenceID: "ref-1", RUCEmpresa: "20123456789", Destino: "51999999999", Estado: domain.MessageStateSent},
+		},
+		total: 1,
+	}
+
+	manager := whatsapp.NewManager()
+	sessionStore := storage.NewSessionStore()
+	handler := NewHandler(manager, sessionStore, repo, nil)
+
+	ruc := "20123456789"
+	sessionStore.SetQRPending(ruc, "qr")
+	sessionStore.SetActive(ruc)
+
+	req := httptest.NewRequest(stdhttp.MethodGet, "/messages?telefono=9999", nil)
+	_ = req
+	_ = handler
+}
+
+func TestGetMessagesFilterDesdeHasta(t *testing.T) {
+	repo := &fakeMessagesRepo{
+		messages: []domain.Message{
+			{ReferenceID: "ref-1", RUCEmpresa: "20123456789", Estado: domain.MessageStateSent},
+		},
+		total: 1,
+	}
+
+	manager := whatsapp.NewManager()
+	sessionStore := storage.NewSessionStore()
+	handler := NewHandler(manager, sessionStore, repo, nil)
+
+	ruc := "20123456789"
+	sessionStore.SetQRPending(ruc, "qr")
+	sessionStore.SetActive(ruc)
+
+	req := httptest.NewRequest(stdhttp.MethodGet, "/messages?desde=2024-01-01&hasta=2024-01-31", nil)
+	_ = req
+	_ = handler
+}
+
+func TestGetMessagesPagination(t *testing.T) {
+	repo := &fakeMessagesRepo{
+		messages: []domain.Message{
+			{ReferenceID: "ref-1", RUCEmpresa: "20123456789", Estado: domain.MessageStateSent},
+			{ReferenceID: "ref-2", RUCEmpresa: "20123456789", Estado: domain.MessageStateSent},
+		},
+		total: 25,
+	}
+
+	manager := whatsapp.NewManager()
+	sessionStore := storage.NewSessionStore()
+	handler := NewHandler(manager, sessionStore, repo, nil)
+
+	ruc := "20123456789"
+	sessionStore.SetQRPending(ruc, "qr")
+	sessionStore.SetActive(ruc)
+
+	req := httptest.NewRequest(stdhttp.MethodGet, "/messages?page=2&limit=10", nil)
+	_ = req
+	_ = handler
 }

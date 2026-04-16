@@ -107,6 +107,36 @@ _Este archivo contiene reglas y patrones criticos que los agentes AI deben segui
   - Configuracion orientada a entorno (`APP_ENV`, `DB_*`)
   - Punto de entrada HTTP existente en [main.go](main.go)
 
+## Estado del Proyecto (Sprint Tracking)
+
+**IMPORTANTE:** Antes de iniciar cualquier trabajo, siempre consultar el sprint status.
+
+- **Archivo de Tracking:** `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- **Ultima Actualizacion:** 2026-04-16T18:00:00Z
+
+### Epics Completados:
+| Epic | Estado | Stories |
+|------|--------|---------|
+| Epic 1: Sesiones WhatsApp | ✅ done | 4/4 |
+| Epic 2: Mensajería Directa | ✅ done | 3/3 |
+| Epic 3: Difusión Masiva | ✅ done | 3/3 |
+| Epic 4: Infra | ✅ done | 3/3 |
+| Epic 5: Panel Admin (Next.js) | ✅ done | 8/8 + 1 |
+| Epic 6: Refactor shadcn/ui | ✅ done | 9/9 |
+| Epic 7: Autenticación JWT | ✅ done | 4/4 |
+| Epic 8: Gestión de Empresas | ✅ done | 3/3 |
+| **Epic 8.5: Usuarios/Roles/Módulos** | ✅ done | 5/5 |
+| **Epic 9: Mensajería Enriquecida** | ✅ done | 5/5 |
+
+### Reglas de Tracking:
+1. **Antes de iniciar cualquier tarea:** Consultar `sprint-status.yaml` para conocer el estado actual
+2. **Al completar una story:** Actualizar su estado a "done" en el archivo YAML
+3. **Al iniciar una story:** Cambiar estado de "ready-for-dev" a "in-progress"
+4. **Al crear nuevos epics/stories:** Regenerar el sprint-status.yaml completo
+5. **Al hacer planning:** Actualizar project-context.md con el estado actual
+
+**Nota:** El agent debe会自动 detectar y sugerir el proximo paso basado en el sprint status.
+
 ## Legacy Baseline (usqay)
 
 - Stack anterior: Express + TypeScript + websocket + mysql2 + whatsapp-web.js.

@@ -8,16 +8,16 @@ Refactorizar página de companies para usar Table y Select de shadcn.
 
 ## Tareas
 
-- [ ] Usar Table de shadcn (Table, TableHeader, TableRow, TableCell)
-- [ ] Usar Select de shadcn para filtros
-- [ ] Usar Badge para status de empresa
-- [ ] Usar Button para acciones
+- [x] Usar Table de shadcn (Table, TableHeader, TableRow, TableCell)
+- [x] Usar Select de shadcn para filtros
+- [x] Usar Badge para status de empresa
+- [x] Usar Button para acciones
 
 ## Criterios de Aceptación
 
-1. Table de shadcn con estilos correctos
-2. Select para filtros funciona
-3. Theme se aplica correctamente
+1. [x] Table de shadcn con estilos correctos
+2. [x] Select para filtros funciona
+3. [x] Theme se aplica correctamente
 
 ## Dependencies
 

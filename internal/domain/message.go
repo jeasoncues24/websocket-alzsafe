@@ -53,11 +53,15 @@ type MessageRequest struct {
 
 // MessageResponse represents the HTTP response for message creation
 type MessageResponse struct {
-	OK          bool   `json:"ok"`
-	Message     string `json:"message"`
-	ReferenceID string `json:"reference_id,omitempty"`
-	Error       string `json:"error,omitempty"`
-	Details     string `json:"details,omitempty"`
+	OK            bool   `json:"ok"`
+	Message       string `json:"message"`
+	ReferenceID   string `json:"reference_id,omitempty"`
+	UsuarioID     *int64 `json:"usuario_id,omitempty"`
+	RUCEmpresa    string `json:"ruc_empresa,omitempty"`
+	EmpresaNombre string `json:"empresa_nombre,omitempty"`
+	SessionID     string `json:"session_id,omitempty"`
+	Error         string `json:"error,omitempty"`
+	Details       string `json:"details,omitempty"`
 }
 
 // NewMessage creates a new Message instance with default values
@@ -100,11 +104,15 @@ const ErrorCodeValidation = "VALIDATION_ERROR"
 // [QUÉ] Envuelve la lista de mensajes con metadatos de paginación.
 // [POR QUÉ] Estandarizar el envelope de respuesta facilita al frontend saber cuántas páginas hay.
 type MessagesListResponse struct {
-	OK       bool      `json:"ok"`
-	Messages []Message `json:"messages"`
-	Total    int       `json:"total"`
-	Page     int       `json:"page"`
-	Limit    int       `json:"limit"`
-	Error    string    `json:"error,omitempty"`
-	Details  string    `json:"details,omitempty"`
+	OK            bool      `json:"ok"`
+	Messages      []Message `json:"messages"`
+	Total         int       `json:"total"`
+	Page          int       `json:"page"`
+	Limit         int       `json:"limit"`
+	TotalPages    int       `json:"total_pages"`
+	UsuarioID     *int64    `json:"usuario_id,omitempty"`
+	RUCEmpresa    string    `json:"ruc_empresa,omitempty"`
+	EmpresaNombre string    `json:"empresa_nombre,omitempty"`
+	Error         string    `json:"error,omitempty"`
+	Details       string    `json:"details,omitempty"`
 }

@@ -192,15 +192,25 @@ func (r *MigrationRunner) parseMigrationFile(filename string) (Migration, error)
 }
 
 func (r *MigrationRunner) runUp(db *sql.DB, m Migration) error {
-	// m.Description already has the full name without extension
 	filepath := filepath.Join(r.migrationsPath, fmt.Sprintf("%03d_%s.up.sql", m.Version, m.Description))
 	content, err := os.ReadFile(filepath)
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Exec(string(content))
-	return err
+	// Split by semicolon and execute each statement
+	statements := strings.Split(string(content), ";")
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || strings.HasPrefix(stmt, "--") {
+			continue
+		}
+		_, err = db.Exec(stmt)
+		if err != nil {
+			return fmt.Errorf("failed to execute statement: %w", err)
+		}
+	}
+	return nil
 }
 
 func (r *MigrationRunner) runDown(db *sql.DB, m Migration) error {
@@ -214,8 +224,18 @@ func (r *MigrationRunner) runDown(db *sql.DB, m Migration) error {
 		return err
 	}
 
-	_, err = db.Exec(string(content))
-	return err
+	statements := strings.Split(string(content), ";")
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || strings.HasPrefix(stmt, "--") {
+			continue
+		}
+		_, err = db.Exec(stmt)
+		if err != nil {
+			return fmt.Errorf("failed to execute statement: %w", err)
+		}
+	}
+	return nil
 }
 
 func (r *MigrationRunner) recordMigration(db *sql.DB, m Migration) error {

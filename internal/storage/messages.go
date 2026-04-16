@@ -26,11 +26,17 @@ type MessagesRepository interface {
 	UpdateEstado(referenceID string, estado domain.MessageState, errorReason string) error
 
 	// GetByEmpresa retorna mensajes de una empresa, ordenados por timestamp DESC, con paginación.
-	GetByEmpresa(rucEmpresa string, estado string, limit, offset int) ([]domain.Message, int, error)
+	GetByEmpresa(rucEmpresa string, estado string, telefono string, limit, offset int) ([]domain.Message, int, error)
 
 	// GetByEmpresaAndDateRange filtra por empresa y rango de fechas, con paginación.
 	// [POR QUÉ] Permite auditoría temporal: "dame todos los mensajes de enero de empresa X".
-	GetByEmpresaAndDateRange(rucEmpresa string, start, end time.Time, estado string, limit, offset int) ([]domain.Message, int, error)
+	GetByEmpresaAndDateRange(rucEmpresa string, start, end time.Time, estado string, telefono string, limit, offset int) ([]domain.Message, int, error)
+
+	// GetMessageMetricsByEmpresa retorna métricas de mensajes para una empresa específica
+	GetMessageMetricsByEmpresa(rucEmpresa string) (*MessageMetrics, error)
+
+	// GetAllMessageMetrics retorna métricas agregadas de todas las empresas
+	GetAllMessageMetrics() (*MessageMetrics, error)
 }
 
 // mariaDBMessagesRepository implementa MessagesRepository contra MariaDB/MySQL.
@@ -118,46 +124,40 @@ func (r *mariaDBMessagesRepository) UpdateEstado(referenceID string, estado doma
 // GetByEmpresa retorna mensajes paginados de una empresa, ordenados por timestamp_created DESC.
 // Retorna: lista de mensajes, total de registros (para calcular páginas), error.
 // [APRENDE] Se hacen 2 queries: una para COUNT (total) y otra para los datos paginados.
-func (r *mariaDBMessagesRepository) GetByEmpresa(rucEmpresa string, estado string, limit, offset int) ([]domain.Message, int, error) {
+func (r *mariaDBMessagesRepository) GetByEmpresa(rucEmpresa string, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
+	// Build WHERE clause dynamically
+	whereClause := "ruc_empresa = ?"
+	args := []interface{}{rucEmpresa}
+
+	if estado != "" {
+		whereClause += " AND estado = ?"
+		args = append(args, estado)
+	}
+	if telefono != "" {
+		whereClause += " AND destino LIKE ?"
+		args = append(args, "%"+telefono+"%")
+	}
+
 	// Query 1: contar total para paginación
 	var total int
-	var err error
-	if estado != "" {
-		err = r.db.QueryRow(
-			`SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND estado = ?`, rucEmpresa, estado,
-		).Scan(&total)
-	} else {
-		err = r.db.QueryRow(
-			`SELECT COUNT(*) FROM messages WHERE ruc_empresa = ?`, rucEmpresa,
-		).Scan(&total)
-	}
+	countQuery := "SELECT COUNT(*) FROM messages WHERE " + whereClause
+	err := r.db.QueryRow(countQuery, args...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error contando mensajes: %w", err)
 	}
 
 	// Query 2: obtener página de datos
-	var rows *sql.Rows
-	if estado != "" {
-		rows, err = r.db.Query(`
-			SELECT id, reference_id, ruc_empresa, destino, contenido,
-			       adjuntos_json, estado, error_reason,
-			       timestamp_created, timestamp_sent, timestamp_confirmed
-			FROM messages
-			WHERE ruc_empresa = ? AND estado = ?
-			ORDER BY timestamp_created DESC
-			LIMIT ? OFFSET ?
-		`, rucEmpresa, estado, limit, offset)
-	} else {
-		rows, err = r.db.Query(`
-			SELECT id, reference_id, ruc_empresa, destino, contenido,
-			       adjuntos_json, estado, error_reason,
-			       timestamp_created, timestamp_sent, timestamp_confirmed
-			FROM messages
-			WHERE ruc_empresa = ?
-			ORDER BY timestamp_created DESC
-			LIMIT ? OFFSET ?
-		`, rucEmpresa, limit, offset)
-	}
+	selectQuery := `
+		SELECT id, reference_id, ruc_empresa, destino, contenido,
+		       adjuntos_json, estado, error_reason,
+		       timestamp_created, timestamp_sent, timestamp_confirmed
+		FROM messages
+		WHERE ` + whereClause + `
+		ORDER BY timestamp_created DESC
+		LIMIT ? OFFSET ?
+	`
+	args = append(args, limit, offset)
+	rows, err := r.db.Query(selectQuery, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error obteniendo mensajes: %w", err)
 	}
@@ -172,46 +172,37 @@ func (r *mariaDBMessagesRepository) GetByEmpresa(rucEmpresa string, estado strin
 }
 
 // GetByEmpresaAndDateRange filtra mensajes por empresa y rango de fechas con paginación.
-func (r *mariaDBMessagesRepository) GetByEmpresaAndDateRange(rucEmpresa string, start, end time.Time, estado string, limit, offset int) ([]domain.Message, int, error) {
-	var total int
-	var err error
+func (r *mariaDBMessagesRepository) GetByEmpresaAndDateRange(rucEmpresa string, start, end time.Time, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
+	whereClause := "ruc_empresa = ? AND timestamp_created BETWEEN ? AND ?"
+	args := []interface{}{rucEmpresa, start, end}
+
 	if estado != "" {
-		err = r.db.QueryRow(
-			`SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND timestamp_created BETWEEN ? AND ? AND estado = ?`,
-			rucEmpresa, start, end, estado,
-		).Scan(&total)
-	} else {
-		err = r.db.QueryRow(
-			`SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND timestamp_created BETWEEN ? AND ?`,
-			rucEmpresa, start, end,
-		).Scan(&total)
+		whereClause += " AND estado = ?"
+		args = append(args, estado)
 	}
+	if telefono != "" {
+		whereClause += " AND destino LIKE ?"
+		args = append(args, "%"+telefono+"%")
+	}
+
+	var total int
+	countQuery := "SELECT COUNT(*) FROM messages WHERE " + whereClause
+	err := r.db.QueryRow(countQuery, args...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error contando mensajes por rango: %w", err)
 	}
 
-	var rows *sql.Rows
-	if estado != "" {
-		rows, err = r.db.Query(`
-			SELECT id, reference_id, ruc_empresa, destino, contenido,
-			       adjuntos_json, estado, error_reason,
-			       timestamp_created, timestamp_sent, timestamp_confirmed
-			FROM messages
-			WHERE ruc_empresa = ? AND timestamp_created BETWEEN ? AND ? AND estado = ?
-			ORDER BY timestamp_created DESC
-			LIMIT ? OFFSET ?
-		`, rucEmpresa, start, end, estado, limit, offset)
-	} else {
-		rows, err = r.db.Query(`
-			SELECT id, reference_id, ruc_empresa, destino, contenido,
-			       adjuntos_json, estado, error_reason,
-			       timestamp_created, timestamp_sent, timestamp_confirmed
-			FROM messages
-			WHERE ruc_empresa = ? AND timestamp_created BETWEEN ? AND ?
-			ORDER BY timestamp_created DESC
-			LIMIT ? OFFSET ?
-		`, rucEmpresa, start, end, limit, offset)
-	}
+	selectQuery := `
+		SELECT id, reference_id, ruc_empresa, destino, contenido,
+		       adjuntos_json, estado, error_reason,
+		       timestamp_created, timestamp_sent, timestamp_confirmed
+		FROM messages
+		WHERE ` + whereClause + `
+		ORDER BY timestamp_created DESC
+		LIMIT ? OFFSET ?
+	`
+	args = append(args, limit, offset)
+	rows, err := r.db.Query(selectQuery, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error obteniendo mensajes por rango: %w", err)
 	}
@@ -223,6 +214,111 @@ func (r *mariaDBMessagesRepository) GetByEmpresaAndDateRange(rucEmpresa string, 
 	}
 
 	return messages, total, nil
+}
+
+// MessageMetrics contiene las métricas calculadas para una empresa
+type MessageMetrics struct {
+	TotalMensajes        int64 `json:"total_mensajes"`
+	MensajesHoy          int64 `json:"mensajes_hoy"`
+	MensajesSemana       int64 `json:"mensajes_semana"`
+	MensajesExitosos     int64 `json:"mensajes_exitosos"`
+	MensajesFallidos     int64 `json:"mensajes_fallidos"`
+	SesionesActivas      int   `json:"sesiones_activas"`
+	BroadcastsEjecutados int64 `json:"broadcasts_ejecutados"`
+}
+
+// GetMessageMetricsByEmpresa retorna métricas de mensajes para una empresa específica
+func (r *mariaDBMessagesRepository) GetMessageMetricsByEmpresa(rucEmpresa string) (*MessageMetrics, error) {
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	weekStart := todayStart.AddDate(0, 0, -7)
+
+	metrics := &MessageMetrics{}
+
+	// Total mensajes
+	err := r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE ruc_empresa = ?", rucEmpresa).Scan(&metrics.TotalMensajes)
+	if err != nil {
+		return nil, fmt.Errorf("error contando total mensajes: %w", err)
+	}
+
+	// Mensajes de hoy
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND timestamp_created >= ?", rucEmpresa, todayStart).Scan(&metrics.MensajesHoy)
+	if err != nil {
+		return nil, fmt.Errorf("error contando mensajes hoy: %w", err)
+	}
+
+	// Mensajes de la última semana
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND timestamp_created >= ?", rucEmpresa, weekStart).Scan(&metrics.MensajesSemana)
+	if err != nil {
+		return nil, fmt.Errorf("error contando mensajes semana: %w", err)
+	}
+
+	// Mensajes exitosos (sent, delivered)
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND estado IN ('sent', 'delivered')", rucEmpresa).Scan(&metrics.MensajesExitosos)
+	if err != nil {
+		return nil, fmt.Errorf("error contando mensajes exitosos: %w", err)
+	}
+
+	// Mensajes fallidos (failed, rejected)
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND estado IN ('failed', 'rejected')", rucEmpresa).Scan(&metrics.MensajesFallidos)
+	if err != nil {
+		return nil, fmt.Errorf("error contando mensajes fallidos: %w", err)
+	}
+
+	// Broadcasts ejecutados
+	err = r.db.QueryRow("SELECT COUNT(*) FROM broadcast_jobs WHERE ruc_empresa = ?", rucEmpresa).Scan(&metrics.BroadcastsEjecutados)
+	if err != nil {
+		return nil, fmt.Errorf("error contando broadcasts: %w", err)
+	}
+
+	return metrics, nil
+}
+
+// GetAllMessageMetrics retorna métricas agregadas de todas las empresas
+func (r *mariaDBMessagesRepository) GetAllMessageMetrics() (*MessageMetrics, error) {
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	weekStart := todayStart.AddDate(0, 0, -7)
+
+	metrics := &MessageMetrics{}
+
+	// Total mensajes
+	err := r.db.QueryRow("SELECT COUNT(*) FROM messages").Scan(&metrics.TotalMensajes)
+	if err != nil {
+		return nil, fmt.Errorf("error contando total mensajes: %w", err)
+	}
+
+	// Mensajes de hoy
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE timestamp_created >= ?", todayStart).Scan(&metrics.MensajesHoy)
+	if err != nil {
+		return nil, fmt.Errorf("error contando mensajes hoy: %w", err)
+	}
+
+	// Mensajes de la última semana
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE timestamp_created >= ?", weekStart).Scan(&metrics.MensajesSemana)
+	if err != nil {
+		return nil, fmt.Errorf("error contando mensajes semana: %w", err)
+	}
+
+	// Mensajes exitosos
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE estado IN ('sent', 'delivered')").Scan(&metrics.MensajesExitosos)
+	if err != nil {
+		return nil, fmt.Errorf("error contando mensajes exitosos: %w", err)
+	}
+
+	// Mensajes fallidos
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE estado IN ('failed', 'rejected')").Scan(&metrics.MensajesFallidos)
+	if err != nil {
+		return nil, fmt.Errorf("error contando mensajes fallidos: %w", err)
+	}
+
+	// Broadcasts ejecutados
+	err = r.db.QueryRow("SELECT COUNT(*) FROM broadcast_jobs").Scan(&metrics.BroadcastsEjecutados)
+	if err != nil {
+		return nil, fmt.Errorf("error counting broadcasts: %w", err)
+	}
+
+	return metrics, nil
 }
 
 // scanMessages convierte las filas de un *sql.Rows en un slice de domain.Message.

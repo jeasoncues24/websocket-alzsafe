@@ -6,16 +6,18 @@ import (
 
 	"wsapi/internal/config"
 	"wsapi/internal/domain"
+	"wsapi/internal/storage"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
 type AuthMiddleware struct {
-	jwtConfig *config.JWTConfig
+	jwtConfig      *config.JWTConfig
+	blacklistStore *storage.TokenBlacklistStore
 }
 
-func NewAuthMiddleware(jwtConfig *config.JWTConfig) *AuthMiddleware {
-	return &AuthMiddleware{jwtConfig: jwtConfig}
+func NewAuthMiddleware(jwtConfig *config.JWTConfig, blacklistStore *storage.TokenBlacklistStore) *AuthMiddleware {
+	return &AuthMiddleware{jwtConfig: jwtConfig, blacklistStore: blacklistStore}
 }
 
 // ValidateToken validates the JWT token and extracts claims
@@ -40,10 +42,33 @@ func (m *AuthMiddleware) ValidateToken(tokenString string) (*domain.TokenClaims,
 		return nil, jwt.ErrSignatureInvalid
 	}
 
-	// Extract claims
-	userID := int64(claims["user_id"].(float64))
-	username := claims["username"].(string)
-	rol := domain.UserRole(claims["rol"].(string))
+	// Extract required claims with safe type assertions
+	userIDRaw, ok := claims["user_id"].(float64)
+	if !ok {
+		return nil, jwt.ErrSignatureInvalid
+	}
+	userID := int64(userIDRaw)
+
+	username, ok := claims["username"].(string)
+	if !ok {
+		return nil, jwt.ErrSignatureInvalid
+	}
+
+	rolRaw, ok := claims["rol"].(string)
+	if !ok {
+		return nil, jwt.ErrSignatureInvalid
+	}
+	rol := domain.UserRole(rolRaw)
+
+	// Extract is_root claim
+	isRoot := false
+	if v, ok := claims["is_root"]; ok {
+		if b, ok := v.(bool); ok {
+			isRoot = b
+		}
+	}
+
+	jti, _ := claims["jti"].(string)
 
 	var empresaID *int64
 	if v, ok := claims["empresa_id"]; ok && v != nil {
@@ -68,9 +93,11 @@ func (m *AuthMiddleware) ValidateToken(tokenString string) (*domain.TokenClaims,
 	}
 
 	return &domain.TokenClaims{
+		JTI:           jti,
 		UserID:        userID,
 		Username:      username,
 		Rol:           rol,
+		IsRoot:        isRoot,
 		EmpresaID:     empresaID,
 		EmpresaRUC:    empresaRUC,
 		EmpresaNombre: empresaNombre,
@@ -98,6 +125,15 @@ func (m *AuthMiddleware) RequireAuth() func(http.Handler) http.Handler {
 			if err != nil {
 				http.Error(w, `{"ok": false, "error": "Token inválido"}`, http.StatusUnauthorized)
 				return
+			}
+
+			// Check blacklist
+			if m.blacklistStore != nil && claims.JTI != "" {
+				blacklisted, _ := m.blacklistStore.IsBlacklisted(claims.JTI)
+				if blacklisted {
+					http.Error(w, `{"ok": false, "error": "Token invalidado"}`, http.StatusUnauthorized)
+					return
+				}
 			}
 
 			// Store claims in context

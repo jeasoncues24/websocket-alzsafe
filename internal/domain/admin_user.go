@@ -38,6 +38,8 @@ type AdminUser struct {
 	Email        string     `json:"email,omitempty"`
 	EmpresaID    *int64     `json:"empresa_id,omitempty"`
 	Rol          UserRole   `json:"rol"`
+	RoleID       *int64     `json:"role_id,omitempty"`
+	IsRoot       bool       `json:"is_root"`
 	Activo       bool       `json:"activo"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
@@ -60,9 +62,11 @@ type LoginResponse struct {
 
 // TokenClaims representa los claims del JWT
 type TokenClaims struct {
+	JTI           string   `json:"jti,omitempty"`
 	UserID        int64    `json:"user_id"`
 	Username      string   `json:"username"`
 	Rol           UserRole `json:"rol"`
+	IsRoot        bool     `json:"is_root"`
 	EmpresaID     *int64   `json:"empresa_id,omitempty"`
 	EmpresaRUC    *string  `json:"empresa_ruc,omitempty"`
 	EmpresaNombre *string  `json:"empresa_nombre,omitempty"`

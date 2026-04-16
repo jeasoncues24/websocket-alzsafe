@@ -12,6 +12,7 @@ type SessionState struct {
 	QRString  string
 	Reason    string
 	UpdatedAt time.Time
+	SessionID string
 }
 
 type SessionStore struct {

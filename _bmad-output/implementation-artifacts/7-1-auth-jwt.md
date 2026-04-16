@@ -1,5 +1,5 @@
 ---
-status: review
+status: done
 type: backend
 story_key: 7-1-auth-jwt
 created: 2026-04-15
@@ -74,4 +74,10 @@ last_updated: 2026-04-15
 ## Change Log
 
 - (2026-04-15) Story creada para implementar autenticación JWT
-- (2026-04-15) Implementados: config JWT, middleware, handlers, rutas /api/auth/*
+- (2026-04-15) Implementados: config JWT, middleware, handlers, rutas /api/auth/\*
+
+### Review Findings
+
+- [x] [Review][Patch] JTI no es aleatorio — colisión en logins rápidos del mismo usuario [internal/http/handlers/auth.go — generateToken()]
+- [x] [Review][Defer] `UpdateLastLogin` error ignorado — non-critical path, pre-existing — deferred, pre-existing
+- [x] [Review][Patch] Missing 008_create_token_blacklist_table.down.sql — sin rollback para migración 008 [internal/storage/migrations/]

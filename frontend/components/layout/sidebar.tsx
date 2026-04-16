@@ -1,7 +1,7 @@
-'use client'
+"use client";
 
-import { usePathname, useRouter } from 'next/navigation'
-import { cn } from '@/lib/utils'
+import { usePathname, useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Building2,
@@ -11,39 +11,49 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-} from 'lucide-react'
-import { useAppStore } from '@/stores/useAppStore'
-import { Button } from '@/components/ui/button'
-import { useTheme } from 'next-themes'
-import { Moon, Sun, LogOut } from 'lucide-react'
+  Users,
+  Shield,
+  LayoutGrid,
+} from "lucide-react";
+import { useAppStore } from "@/stores/useAppStore";
+import { Button } from "@/components/ui/button";
+import { useTheme } from "next-themes";
+import { Moon, Sun, LogOut } from "lucide-react";
 
 const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-  { id: 'companies', label: 'Empresas', icon: Building2, href: '/companies' },
-  { id: 'messages', label: 'Mensajes', icon: MessageSquare, href: '/messages' },
-  { id: 'sessions', label: 'Sesiones', icon: Wifi, href: '/sessions' },
-  { id: 'broadcasts', label: 'Broadcasts', icon: Send, href: '/broadcasts' },
-  { id: 'settings', label: 'Settings', icon: Settings, href: '/settings' },
-]
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    href: "/dashboard",
+  },
+  { id: "companies", label: "Empresas", icon: Building2, href: "/companies" },
+  { id: "messages", label: "Mensajes", icon: MessageSquare, href: "/messages" },
+  { id: "sessions", label: "Sesiones", icon: Wifi, href: "/sessions" },
+  { id: "broadcasts", label: "Broadcasts", icon: Send, href: "/broadcasts" },
+  { id: "users", label: "Usuarios", icon: Users, href: "/users_admin" },
+  { id: "roles", label: "Roles", icon: Shield, href: "/roles" },
+  { id: "modules", label: "Módulos", icon: LayoutGrid, href: "/modules" },
+  { id: "settings", label: "Settings", icon: Settings, href: "/settings" },
+];
 
 export function Sidebar() {
-  const pathname = usePathname()
-  const router = useRouter()
-  const { sidebarOpen, setSidebarOpen, activeNav, setActiveNav } = useAppStore()
-  const { theme, setTheme, resolvedTheme } = useTheme()
+  const pathname = usePathname();
+  const router = useRouter();
+  const { sidebarOpen, setSidebarOpen, activeNav, setActiveNav } =
+    useAppStore();
+  const { setTheme, resolvedTheme } = useTheme();
 
-  const currentTheme = theme || resolvedTheme
-
-  const handleNavClick = (item: typeof navItems[0]) => {
-    setActiveNav(item.id)
-    router.push(item.href)
-  }
+  const handleNavClick = (item: (typeof navItems)[0]) => {
+    setActiveNav(item.id);
+    router.push(item.href);
+  };
 
   return (
     <div
       className={cn(
-        'flex flex-col h-screen bg-background border-r transition-all duration-300',
-        sidebarOpen ? 'w-64' : 'w-16'
+        "flex flex-col h-screen bg-background border-r transition-all duration-300",
+        sidebarOpen ? "w-64" : "w-16",
       )}
     >
       <div className="flex items-center justify-between p-4 border-b">
@@ -55,31 +65,33 @@ export function Sidebar() {
           size="icon"
           onClick={() => setSidebarOpen(!sidebarOpen)}
         >
-          {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          {sidebarOpen ? (
+            <ChevronLeft className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
         </Button>
       </div>
 
       <nav className="flex-1 p-2 space-y-1">
         {navItems.map((item) => {
-          const isActive = pathname.startsWith(item.href)
+          const isActive = pathname.startsWith(item.href);
           return (
-            <button
+            <Button
               key={item.id}
+              variant="ghost"
               onClick={() => handleNavClick(item)}
               className={cn(
-                'flex items-center w-full p-3 rounded-lg transition-colors',
-                isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'hover:bg-muted',
-                !sidebarOpen && 'justify-center'
+                "w-full h-11 transition-colors",
+                sidebarOpen ? "justify-start px-3" : "justify-center px-0",
+                isActive &&
+                  "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
               )}
             >
               <item.icon className="h-5 w-5 flex-shrink-0" />
-              {sidebarOpen && (
-                <span className="ml-3">{item.label}</span>
-              )}
-            </button>
-          )
+              {sidebarOpen && <span className="ml-3">{item.label}</span>}
+            </Button>
+          );
         })}
       </nav>
 
@@ -87,21 +99,25 @@ export function Sidebar() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
         >
-          {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {resolvedTheme === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
         </Button>
         <Button
           variant="ghost"
           size="icon"
           onClick={() => {
-            localStorage.removeItem("admin_token")
-            window.location.href = "/login"
+            localStorage.removeItem("admin_token");
+            window.location.href = "/login";
           }}
         >
           <LogOut className="h-4 w-4" />
         </Button>
       </div>
     </div>
-  )
+  );
 }

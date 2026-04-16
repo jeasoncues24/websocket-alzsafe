@@ -6,14 +6,13 @@ import (
 	"strconv"
 
 	"wsapi/internal/domain"
-	"wsapi/internal/storage"
 )
 
 type CompaniesHandler struct {
-	empresaStore *storage.EmpresaStore
+	empresaStore domain.EmpresaStoreInterface
 }
 
-func NewCompaniesHandler(empresaStore *storage.EmpresaStore) *CompaniesHandler {
+func NewCompaniesHandler(empresaStore domain.EmpresaStoreInterface) *CompaniesHandler {
 	return &CompaniesHandler{empresaStore: empresaStore}
 }
 
@@ -105,9 +104,11 @@ func (h *CompaniesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verificar acceso
-	if claims.Rol != domain.RoleSuperAdmin && claims.EmpresaID != nil && *claims.EmpresaID != empresa.ID {
-		http.Error(w, `{"ok": false, "error": "Acceso denegado a esta empresa"}`, http.StatusForbidden)
-		return
+	if claims.Rol != domain.RoleSuperAdmin {
+		if claims.EmpresaID == nil || *claims.EmpresaID != empresa.ID {
+			http.Error(w, `{"ok": false, "error": "Acceso denegado a esta empresa"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -186,9 +187,11 @@ func (h *CompaniesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verificar acceso
-	if claims.Rol != domain.RoleSuperAdmin && claims.EmpresaID != nil && *claims.EmpresaID != empresa.ID {
-		http.Error(w, `{"ok": false, "error": "Acceso denegado a esta empresa"}`, http.StatusForbidden)
-		return
+	if claims.Rol != domain.RoleSuperAdmin {
+		if claims.EmpresaID == nil || *claims.EmpresaID != empresa.ID {
+			http.Error(w, `{"ok": false, "error": "Acceso denegado a esta empresa"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	var req domain.EmpresaRequest
@@ -244,9 +247,11 @@ func (h *CompaniesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verificar acceso
-	if claims.Rol != domain.RoleSuperAdmin && claims.EmpresaID != nil && *claims.EmpresaID != empresa.ID {
-		http.Error(w, `{"ok": false, "error": "Acceso denegado a esta empresa"}`, http.StatusForbidden)
-		return
+	if claims.Rol != domain.RoleSuperAdmin {
+		if claims.EmpresaID == nil || *claims.EmpresaID != empresa.ID {
+			http.Error(w, `{"ok": false, "error": "Acceso denegado a esta empresa"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	// Verificar si tiene sesiones activas (simplificado)
@@ -261,6 +266,5 @@ func (h *CompaniesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNoContent)
 	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }

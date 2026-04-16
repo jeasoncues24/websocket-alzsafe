@@ -13,6 +13,8 @@ export default function SessionsPage() {
   const [loading, setLoading] = useState(true)
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null)
   const [qrOpen, setQrOpen] = useState(false)
+  const [disconnectOpen, setDisconnectOpen] = useState(false)
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
 
   async function loadSessions() {
     setLoading(true)
@@ -31,12 +33,20 @@ export default function SessionsPage() {
   }, [])
 
   const disconnect = async (accountId: string) => {
-    if (!confirm(`¿Desconectar sesión de ${accountId}?`)) return
+    setDisconnectingId(accountId)
+    setDisconnectOpen(true)
+  }
+
+  const confirmDisconnect = async () => {
+    if (!disconnectingId) return
     try {
-      await postAdminSession("disconnect", accountId)
+      await postAdminSession("disconnect", disconnectingId)
       await loadSessions()
     } catch (error) {
       console.error("Failed to disconnect:", error)
+    } finally {
+      setDisconnectOpen(false)
+      setDisconnectingId(null)
     }
   }
 
@@ -142,6 +152,26 @@ export default function SessionsPage() {
               </p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar desconexión</DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de que deseas desconectar la sesión de {disconnectingId}? 
+              El dispositivo deberá escanear el código QR nuevamente para reconectar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDisconnectOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={confirmDisconnect}>
+              Desconectar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
