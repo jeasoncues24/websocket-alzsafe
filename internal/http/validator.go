@@ -12,11 +12,11 @@ import (
 
 // ValidateMessageRequest validates a message request payload
 func ValidateMessageRequest(req *domain.MessageRequest) *domain.ValidationError {
-	// Validate ruc_empresa presence
-	if strings.TrimSpace(req.RUCEmpresa) == "" {
+	// Validate telefono_id presence
+	if req.TelefonoID <= 0 {
 		return &domain.ValidationError{
 			Code:    domain.ErrorCodeMissingField,
-			Message: "ruc_empresa is required",
+			Message: "telefono_id is required and must be greater than 0",
 		}
 	}
 
@@ -228,13 +228,13 @@ func validateMIMETypeExtensionMatch(filename, mimeType string) *domain.Validatio
 const MaxBroadcastItems = 500
 
 // ValidateBroadcastRequest validates a broadcast request payload.
-// Checks ruc_empresa, that lista_difusion is a non-empty array, and that
+// Checks telefono_id, that lista_difusion is a non-empty array, and that
 // every item has a valid destino (phone) and non-empty mensaje.
 func ValidateBroadcastRequest(req *domain.BroadcastRequest) *domain.ValidationError {
-	if strings.TrimSpace(req.RUCEmpresa) == "" {
+	if req.TelefonoID <= 0 {
 		return &domain.ValidationError{
 			Code:    domain.ErrorCodeMissingField,
-			Message: "ruc_empresa is required",
+			Message: "telefono_id is required and must be greater than 0",
 		}
 	}
 

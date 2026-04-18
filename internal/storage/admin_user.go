@@ -18,7 +18,7 @@ func NewAdminUserStore(db *sql.DB) *AdminUserStore {
 
 // Create inserta un nuevo usuario admin
 func (s *AdminUserStore) Create(user *domain.AdminUser) (int64, error) {
-	query := `INSERT INTO admin_users (username, password_hash, email, empresa_id, role, is_active, role_id, is_root) 
+	query := `INSERT INTO admin_users (username, password_hash, email, empresa_id, rol, activo, role_id, is_root) 
 			  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	result, err := s.db.Exec(query, user.Username, user.PasswordHash, user.Email,
@@ -41,7 +41,7 @@ func (s *AdminUserStore) Create(user *domain.AdminUser) (int64, error) {
 
 // GetByID obtiene un usuario por ID
 func (s *AdminUserStore) GetByID(id int64) (*domain.AdminUser, error) {
-	query := `SELECT id, username, password_hash, email, empresa_id, role, is_active, created_at, updated_at, last_login_at, role_id, is_root 
+	query := `SELECT id, username, password_hash, email, empresa_id, rol, activo, created_at, updated_at, last_login_at, role_id, is_root 
 			  FROM admin_users WHERE id = ?`
 
 	user := &domain.AdminUser{}
@@ -79,7 +79,7 @@ func (s *AdminUserStore) GetByID(id int64) (*domain.AdminUser, error) {
 
 // GetByUsername obtiene un usuario por username
 func (s *AdminUserStore) GetByUsername(username string) (*domain.AdminUser, error) {
-	query := `SELECT id, username, password_hash, email, empresa_id, role, is_active, created_at, updated_at, last_login_at, role_id, is_root 
+	query := `SELECT id, username, password_hash, email, empresa_id, rol, activo, created_at, updated_at, last_login_at, role_id, is_root 
 			  FROM admin_users WHERE username = ?`
 
 	user := &domain.AdminUser{}
@@ -125,7 +125,7 @@ func (s *AdminUserStore) GetAll(page, limit int) ([]domain.AdminUser, int, error
 		return nil, 0, fmt.Errorf("error al contar usuarios: %w", err)
 	}
 
-	query := `SELECT id, username, password_hash, email, empresa_id, role, is_active, created_at, updated_at, last_login_at 
+	query := `SELECT id, username, password_hash, email, empresa_id, rol, activo, created_at, updated_at, last_login_at 
 			  FROM admin_users ORDER BY created_at DESC LIMIT ? OFFSET ?`
 
 	rows, err := s.db.Query(query, limit, offset)
@@ -166,7 +166,7 @@ func (s *AdminUserStore) GetAll(page, limit int) ([]domain.AdminUser, int, error
 
 // Update actualiza un usuario existente
 func (s *AdminUserStore) Update(user *domain.AdminUser) error {
-	query := `UPDATE admin_users SET email = ?, empresa_id = ?, role = ?, is_active = ?, role_id = ?, is_root = ?, updated_at = NOW() 
+	query := `UPDATE admin_users SET email = ?, empresa_id = ?, rol = ?, activo = ?, role_id = ?, is_root = ?, updated_at = NOW() 
 			  WHERE id = ?`
 
 	_, err := s.db.Exec(query, user.Email, user.EmpresaID, user.Rol, user.Activo, user.RoleID, user.IsRoot, user.ID)
@@ -200,7 +200,7 @@ func (s *AdminUserStore) UpdateLastLogin(id int64) error {
 
 // Delete realiza soft delete de un usuario
 func (s *AdminUserStore) Delete(id int64) error {
-	query := `UPDATE admin_users SET is_active = FALSE, updated_at = NOW() WHERE id = ?`
+	query := `UPDATE admin_users SET activo = FALSE, updated_at = NOW() WHERE id = ?`
 
 	_, err := s.db.Exec(query, id)
 	if err != nil {

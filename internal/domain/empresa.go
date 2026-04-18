@@ -8,8 +8,10 @@ type Empresa struct {
 	RUC             string    `json:"ruc"`
 	Nombre          string    `json:"nombre"`
 	NombreComercial string    `json:"nombre_comercial,omitempty"`
-	Telefono        string    `json:"telefono,omitempty"`
-	Direccion       string    `json:"direccion,omitempty"`
+	Telefono        string    `json:"telefono_contacto,omitempty"`
+	Direccion       *string   `json:"direccion,omitempty"`
+	TokenVersion    int       `json:"token_version"`
+	Permissions     []string  `json:"permissions,omitempty"`
 	Activo          bool      `json:"activo"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -20,7 +22,7 @@ type EmpresaRequest struct {
 	RUC             string `json:"ruc"`
 	Nombre          string `json:"nombre"`
 	NombreComercial string `json:"nombre_comercial,omitempty"`
-	Telefono        string `json:"telefono,omitempty"`
+	Telefono        string `json:"telefono_contacto,omitempty"`
 	Direccion       string `json:"direccion,omitempty"`
 }
 

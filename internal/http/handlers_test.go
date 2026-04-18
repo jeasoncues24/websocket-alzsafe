@@ -206,7 +206,7 @@ func TestPostMessageValidPayload(t *testing.T) {
 
 	// Create valid request
 	req := &domain.MessageRequest{
-		RUCEmpresa: ruc,
+		TelefonoID: 1,
 		Destino:    "51999999999",
 		Mensaje:    "Test message",
 	}
@@ -218,16 +218,16 @@ func TestPostMessageValidPayload(t *testing.T) {
 	}
 }
 
-func TestPostMessageMissingRUCEmpresa(t *testing.T) {
+func TestPostMessageMissingTelefonoID(t *testing.T) {
 	req := &domain.MessageRequest{
-		RUCEmpresa: "",
+		TelefonoID: 0,
 		Destino:    "51999999999",
 		Mensaje:    "Test message",
 	}
 
 	validationErr := ValidateMessageRequest(req)
 	if validationErr == nil {
-		t.Fatalf("expected validation error for missing ruc_empresa")
+		t.Fatalf("expected validation error for missing telefono_id")
 	}
 	if validationErr.Code != domain.ErrorCodeMissingField {
 		t.Fatalf("expected MISSING_FIELD, got: %s", validationErr.Code)
@@ -236,7 +236,7 @@ func TestPostMessageMissingRUCEmpresa(t *testing.T) {
 
 func TestPostMessageMissingDestino(t *testing.T) {
 	req := &domain.MessageRequest{
-		RUCEmpresa: "20123456789",
+		TelefonoID: 1,
 		Destino:    "",
 		Mensaje:    "Test message",
 	}
@@ -252,7 +252,7 @@ func TestPostMessageMissingDestino(t *testing.T) {
 
 func TestPostMessageEmptyMessage(t *testing.T) {
 	req := &domain.MessageRequest{
-		RUCEmpresa: "20123456789",
+		TelefonoID: 1,
 		Destino:    "51999999999",
 		Mensaje:    "",
 	}
@@ -268,7 +268,7 @@ func TestPostMessageEmptyMessage(t *testing.T) {
 
 func TestPostMessageInvalidPhoneShortNumber(t *testing.T) {
 	req := &domain.MessageRequest{
-		RUCEmpresa: "20123456789",
+		TelefonoID: 1,
 		Destino:    "51999",
 		Mensaje:    "Test message",
 	}
@@ -284,7 +284,7 @@ func TestPostMessageInvalidPhoneShortNumber(t *testing.T) {
 
 func TestPostMessageInvalidPhoneNonNumeric(t *testing.T) {
 	req := &domain.MessageRequest{
-		RUCEmpresa: "20123456789",
+		TelefonoID: 1,
 		Destino:    "51999999abc",
 		Mensaje:    "Test message",
 	}
@@ -305,7 +305,7 @@ func TestPostMessageSessionNotActive(t *testing.T) {
 	ruc := "20123456789"
 
 	req := &domain.MessageRequest{
-		RUCEmpresa: ruc,
+		TelefonoID: 1,
 		Destino:    "51999999999",
 		Mensaje:    "Test message",
 	}
@@ -337,7 +337,7 @@ func TestPostMessageMultiempresaIsolation(t *testing.T) {
 
 	// Validate a message for empresaA (should be valid)
 	reqA := &domain.MessageRequest{
-		RUCEmpresa: empresaA,
+		TelefonoID: 1,
 		Destino:    "51999999999",
 		Mensaje:    "Message from A",
 	}
@@ -575,12 +575,20 @@ func (f *fakeMessagesRepo) UpdateEstado(referenceID string, estado domain.Messag
 	return nil
 }
 
-func (f *fakeMessagesRepo) GetByEmpresa(rucEmpresa string, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
+func (f *fakeMessagesRepo) GetByEmpresa(empresaID int64, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
 	return f.messages, f.total, f.err
 }
 
-func (f *fakeMessagesRepo) GetByEmpresaAndDateRange(rucEmpresa string, start, end time.Time, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
+func (f *fakeMessagesRepo) GetByEmpresaAndDateRange(empresaID int64, start, end time.Time, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
 	return f.messages, f.total, f.err
+}
+
+func (f *fakeMessagesRepo) GetAllMessageMetrics() (*storage.MessageMetrics, error) {
+	return &storage.MessageMetrics{}, nil
+}
+
+func (f *fakeMessagesRepo) GetMessageMetricsByEmpresa(empresaID int64) (*storage.MessageMetrics, error) {
+	return &storage.MessageMetrics{}, nil
 }
 
 func TestHandleGetMessagesServiceUnavailableWithoutRepo(t *testing.T) {
@@ -654,7 +662,7 @@ func TestHandleGetMessagesOK(t *testing.T) {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
 	repo := &fakeMessagesRepo{
-		messages: []domain.Message{{ReferenceID: "ref-1", RUCEmpresa: "20123456789", Estado: domain.MessageStatePending}},
+		messages: []domain.Message{{ReferenceID: "ref-1", EmpresaID: 1, Estado: domain.MessageStatePending}},
 		total:    1,
 	}
 	handler := NewHandler(manager, sessionStore, repo, nil)
@@ -677,7 +685,7 @@ func TestHandleGetMessagesOK(t *testing.T) {
 
 func TestValidateBroadcastRequestValid(t *testing.T) {
 	req := &domain.BroadcastRequest{
-		RUCEmpresa: "20123456789",
+		TelefonoID: 1,
 		ListaDifusion: []domain.BroadcastItem{
 			{Destino: "51999999999", Mensaje: "Hola"},
 			{Destino: "51988888888", Mensaje: "Mundo"},
@@ -688,14 +696,14 @@ func TestValidateBroadcastRequestValid(t *testing.T) {
 	}
 }
 
-func TestValidateBroadcastRequestMissingRUCEmpresa(t *testing.T) {
+func TestValidateBroadcastRequestMissingTelefonoID(t *testing.T) {
 	req := &domain.BroadcastRequest{
-		RUCEmpresa:    "",
+		TelefonoID:    0,
 		ListaDifusion: []domain.BroadcastItem{{Destino: "51999999999", Mensaje: "Hola"}},
 	}
 	err := ValidateBroadcastRequest(req)
 	if err == nil {
-		t.Fatalf("expected error for missing ruc_empresa")
+		t.Fatalf("expected error for missing telefono_id")
 	}
 	if err.Code != domain.ErrorCodeMissingField {
 		t.Fatalf("expected MISSING_FIELD, got: %s", err.Code)
@@ -704,7 +712,7 @@ func TestValidateBroadcastRequestMissingRUCEmpresa(t *testing.T) {
 
 func TestValidateBroadcastRequestEmptyList(t *testing.T) {
 	req := &domain.BroadcastRequest{
-		RUCEmpresa:    "20123456789",
+		TelefonoID:    1,
 		ListaDifusion: []domain.BroadcastItem{},
 	}
 	err := ValidateBroadcastRequest(req)
@@ -718,7 +726,7 @@ func TestValidateBroadcastRequestEmptyList(t *testing.T) {
 
 func TestValidateBroadcastRequestNilList(t *testing.T) {
 	req := &domain.BroadcastRequest{
-		RUCEmpresa:    "20123456789",
+		TelefonoID:    1,
 		ListaDifusion: nil,
 	}
 	err := ValidateBroadcastRequest(req)
@@ -732,7 +740,7 @@ func TestValidateBroadcastRequestNilList(t *testing.T) {
 
 func TestValidateBroadcastRequestItemShortPhone(t *testing.T) {
 	req := &domain.BroadcastRequest{
-		RUCEmpresa: "20123456789",
+		TelefonoID: 1,
 		ListaDifusion: []domain.BroadcastItem{
 			{Destino: "51999999999", Mensaje: "ok"},
 			{Destino: "51234", Mensaje: "ok"}, // índice 1 inválido
@@ -752,7 +760,7 @@ func TestValidateBroadcastRequestItemShortPhone(t *testing.T) {
 
 func TestValidateBroadcastRequestItemNonNumericPhone(t *testing.T) {
 	req := &domain.BroadcastRequest{
-		RUCEmpresa: "20123456789",
+		TelefonoID: 1,
 		ListaDifusion: []domain.BroadcastItem{
 			{Destino: "51999abc999", Mensaje: "ok"}, // índice 0 inválido
 		},
@@ -771,7 +779,7 @@ func TestValidateBroadcastRequestItemNonNumericPhone(t *testing.T) {
 
 func TestValidateBroadcastRequestItemEmptyMensaje(t *testing.T) {
 	req := &domain.BroadcastRequest{
-		RUCEmpresa: "20123456789",
+		TelefonoID: 1,
 		ListaDifusion: []domain.BroadcastItem{
 			{Destino: "51999999999", Mensaje: "ok"},
 			{Destino: "51988888888", Mensaje: "  "}, // índice 1: espacio vacío
@@ -807,7 +815,7 @@ func TestHandlePostBroadcastInvalidJSON(t *testing.T) {
 func TestHandlePostBroadcastEmptyList(t *testing.T) {
 	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil, nil)
 
-	body := `{"ruc_empresa":"20123456789","lista_difusion":[]}`
+	body := `{"ruc_empresa":"20123456789","telefono_id":1,"lista_difusion":[]}`
 	req := httptest.NewRequest(stdhttp.MethodPost, "/broadcast", strings.NewReader(body))
 	rr := httptest.NewRecorder()
 
@@ -821,7 +829,7 @@ func TestHandlePostBroadcastEmptyList(t *testing.T) {
 func TestHandlePostBroadcastObjectInsteadOfArray(t *testing.T) {
 	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil, nil)
 
-	body := `{"ruc_empresa":"20123456789","lista_difusion":{}}`
+	body := `{"ruc_empresa":"20123456789","telefono_id":1,"lista_difusion":{}}`
 	req := httptest.NewRequest(stdhttp.MethodPost, "/broadcast", strings.NewReader(body))
 	rr := httptest.NewRecorder()
 
@@ -858,6 +866,7 @@ func TestHandlePostBroadcastExceedsMaxItems(t *testing.T) {
 
 	bodyMap := map[string]any{
 		"ruc_empresa":    ruc,
+		"telefono_id":    1,
 		"lista_difusion": items,
 	}
 	bodyBytes, _ := json.Marshal(bodyMap)
@@ -882,7 +891,7 @@ func TestHandlePostBroadcastExceedsMaxItems(t *testing.T) {
 func TestHandlePostBroadcastSessionNotActive(t *testing.T) {
 	handler := NewHandler(whatsapp.NewManager(), storage.NewSessionStore(), nil, nil)
 
-	body := `{"ruc_empresa":"20123456789","lista_difusion":[{"destino":"51999999999","mensaje":"Hola"}]}`
+	body := `{"ruc_empresa":"20123456789","telefono_id":1,"lista_difusion":[{"destino":"51999999999","mensaje":"Hola"}]}`
 	req := httptest.NewRequest(stdhttp.MethodPost, "/broadcast", strings.NewReader(body))
 	rr := httptest.NewRecorder()
 
@@ -902,7 +911,7 @@ func TestHandlePostBroadcastValidRequest(t *testing.T) {
 	sessionStore.SetQRPending(ruc, "qr")
 	sessionStore.SetActive(ruc)
 
-	body := `{"ruc_empresa":"20123456789","lista_difusion":[{"destino":"51999999999","mensaje":"Hola"},{"destino":"51988888888","mensaje":"Mundo"}]}`
+	body := `{"ruc_empresa":"20123456789","telefono_id":1,"lista_difusion":[{"destino":"51999999999","mensaje":"Hola"},{"destino":"51988888888","mensaje":"Mundo"}]}`
 	req := httptest.NewRequest(stdhttp.MethodPost, "/broadcast", strings.NewReader(body))
 	rr := httptest.NewRecorder()
 
@@ -936,7 +945,7 @@ func TestHandlePostBroadcastItemInvalidPhone(t *testing.T) {
 	sessionStore.SetQRPending(ruc, "qr")
 	sessionStore.SetActive(ruc)
 
-	body := `{"ruc_empresa":"20123456789","lista_difusion":[{"destino":"123","mensaje":"Hola"}]}`
+	body := `{"ruc_empresa":"20123456789","telefono_id":1,"lista_difusion":[{"destino":"123","mensaje":"Hola"}]}`
 	req := httptest.NewRequest(stdhttp.MethodPost, "/broadcast", strings.NewReader(body))
 	rr := httptest.NewRecorder()
 
@@ -981,7 +990,7 @@ func TestGetMessagesTotalPagesCalculation(t *testing.T) {
 func TestGetMessagesFilterTelefono(t *testing.T) {
 	repo := &fakeMessagesRepo{
 		messages: []domain.Message{
-			{ReferenceID: "ref-1", RUCEmpresa: "20123456789", Destino: "51999999999", Estado: domain.MessageStateSent},
+			{ReferenceID: "ref-1", EmpresaID: 1, Destino: "51999999999", Estado: domain.MessageStateSent},
 		},
 		total: 1,
 	}
@@ -1002,7 +1011,7 @@ func TestGetMessagesFilterTelefono(t *testing.T) {
 func TestGetMessagesFilterDesdeHasta(t *testing.T) {
 	repo := &fakeMessagesRepo{
 		messages: []domain.Message{
-			{ReferenceID: "ref-1", RUCEmpresa: "20123456789", Estado: domain.MessageStateSent},
+			{ReferenceID: "ref-1", EmpresaID: 1, Estado: domain.MessageStateSent},
 		},
 		total: 1,
 	}
@@ -1023,8 +1032,8 @@ func TestGetMessagesFilterDesdeHasta(t *testing.T) {
 func TestGetMessagesPagination(t *testing.T) {
 	repo := &fakeMessagesRepo{
 		messages: []domain.Message{
-			{ReferenceID: "ref-1", RUCEmpresa: "20123456789", Estado: domain.MessageStateSent},
-			{ReferenceID: "ref-2", RUCEmpresa: "20123456789", Estado: domain.MessageStateSent},
+			{ReferenceID: "ref-1", EmpresaID: 1, Estado: domain.MessageStateSent},
+			{ReferenceID: "ref-2", EmpresaID: 1, Estado: domain.MessageStateSent},
 		},
 		total: 25,
 	}

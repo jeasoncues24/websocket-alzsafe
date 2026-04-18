@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Building2, QrCode, LogOut, RefreshCw, AlertCircle, CheckCircle } from "lucide-react"
+import { Building2, QrCode, LogOut, RefreshCw } from "lucide-react"
 import { getAdminSessions, postAdminSession, type SessionInfo } from "@/lib/api"
 
 export default function SessionsPage() {
@@ -16,7 +17,7 @@ export default function SessionsPage() {
   const [disconnectOpen, setDisconnectOpen] = useState(false)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
 
-  async function loadSessions() {
+  const loadSessions = useCallback(async () => {
     setLoading(true)
     try {
       const data = await getAdminSessions()
@@ -26,11 +27,11 @@ export default function SessionsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     loadSessions()
-  }, [])
+  }, [loadSessions])
 
   const disconnect = async (accountId: string) => {
     setDisconnectingId(accountId)
@@ -142,10 +143,13 @@ export default function SessionsPage() {
           </DialogHeader>
           {selectedSession?.qr_string && (
             <div className="flex flex-col items-center gap-4 p-4">
-              <img
+              <Image
                 src={`https://api.qrserver.com/v1/create/?size=200x200&data=${encodeURIComponent(selectedSession.qr_string)}`}
                 alt="QR Code"
+                width={200}
+                height={200}
                 className="border rounded-lg"
+                unoptimized
               />
               <p className="text-xs text-muted-foreground text-center">
                 Válido por 60 segundos. Recarga la página si expira.

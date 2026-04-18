@@ -1,0 +1,34 @@
+package domain
+
+import "context"
+
+// EmpresaJWTClaims representa los claims del JWT de empresa (long-lived, 5 años)
+// Campos mínimos: sub (empresa_id), ver (token_version), iss, iat, exp
+type EmpresaJWTClaims struct {
+	EmpresaID     int64    `json:"sub"`
+	TokenVersion  int      `json:"ver"`
+	EmpresaRUC    string   `json:"ruc"`
+	EmpresaNombre string   `json:"nombre"`
+	Permissions   []string `json:"permissions,omitempty"`
+}
+
+type empresaJWTClaimsKey struct{}
+
+// WithEmpresaJWTClaims almacena EmpresaJWTClaims en el contexto.
+func WithEmpresaJWTClaims(ctx context.Context, claims *EmpresaJWTClaims) context.Context {
+	return context.WithValue(ctx, empresaJWTClaimsKey{}, claims)
+}
+
+// GetEmpresaJWTClaims recupera EmpresaJWTClaims del contexto.
+func GetEmpresaJWTClaims(ctx context.Context) (*EmpresaJWTClaims, bool) {
+	claims, ok := ctx.Value(empresaJWTClaimsKey{}).(*EmpresaJWTClaims)
+	return claims, ok
+}
+
+// EmpresaJWTResponse es la respuesta del endpoint que genera el JWT de empresa.
+type EmpresaJWTResponse struct {
+	OK      bool   `json:"ok"`
+	Token   string `json:"token,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
+}

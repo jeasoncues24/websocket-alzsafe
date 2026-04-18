@@ -1,15 +1,10 @@
 import type { NextConfig } from "next";
 
-const isProd = process.env.NODE_ENV === "production";
-
 const nextConfig: NextConfig = {
-  output: isProd ? "export" : undefined,
-  distDir: isProd ? "out" : undefined,
   images: {
     unoptimized: true,
   },
   async rewrites() {
-    if (isProd) return [];
     return [
       {
         source: "/api/:path*",
@@ -22,10 +17,6 @@ const nextConfig: NextConfig = {
       {
         source: "/metrics",
         destination: "http://localhost:8080/metrics",
-      },
-      {
-        source: "/companies",
-        destination: "http://localhost:8080/companies",
       },
       {
         source: "/ws",

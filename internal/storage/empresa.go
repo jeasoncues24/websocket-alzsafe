@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -19,11 +20,15 @@ func NewEmpresaStore(db *sql.DB) *EmpresaStore {
 
 // Create inserta una nueva empresa
 func (s *EmpresaStore) Create(empresa *domain.Empresa) (int64, error) {
-	query := `INSERT INTO empresas (ruc, nombre, nombre_comercial, telefono, direccion, activo) 
-			  VALUES (?, ?, ?, ?, ?, ?)`
+	permissionsJSON, err := json.Marshal(empresa.Permissions)
+	if err != nil {
+		permissionsJSON = []byte("[]")
+	}
+	query := `INSERT INTO empresas (ruc, nombre, nombre_comercial, telefono_contacto, direccion, token_version, permissions, activo) 
+			  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	result, err := s.db.Exec(query, empresa.RUC, empresa.Nombre, empresa.NombreComercial,
-		empresa.Telefono, empresa.Direccion, empresa.Activo)
+		empresa.Telefono, empresa.Direccion, empresa.TokenVersion, string(permissionsJSON), empresa.Activo)
 	if err != nil {
 		return 0, fmt.Errorf("error al crear empresa: %w", err)
 	}
@@ -42,13 +47,14 @@ func (s *EmpresaStore) Create(empresa *domain.Empresa) (int64, error) {
 
 // GetByID obtiene una empresa por ID
 func (s *EmpresaStore) GetByID(id int64) (*domain.Empresa, error) {
-	query := `SELECT id, ruc, nombre, nombre_comercial, telefono, direccion, activo, created_at, updated_at 
+	query := `SELECT id, ruc, nombre, nombre_comercial, telefono_contacto, direccion, token_version, permissions, activo, created_at, updated_at 
 			  FROM empresas WHERE id = ?`
 
+	var permissionsJSON sql.NullString
 	empresa := &domain.Empresa{}
 	err := s.db.QueryRow(query, id).Scan(
 		&empresa.ID, &empresa.RUC, &empresa.Nombre, &empresa.NombreComercial,
-		&empresa.Telefono, &empresa.Direccion, &empresa.Activo,
+		&empresa.Telefono, &empresa.Direccion, &empresa.TokenVersion, &permissionsJSON, &empresa.Activo,
 		&empresa.CreatedAt, &empresa.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -57,19 +63,23 @@ func (s *EmpresaStore) GetByID(id int64) (*domain.Empresa, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error al obtener empresa: %w", err)
 	}
+	if permissionsJSON.Valid {
+		json.Unmarshal([]byte(permissionsJSON.String), &empresa.Permissions)
+	}
 
 	return empresa, nil
 }
 
 // GetByRUC obtiene una empresa por RUC
 func (s *EmpresaStore) GetByRUC(ruc string) (*domain.Empresa, error) {
-	query := `SELECT id, ruc, nombre, nombre_comercial, telefono, direccion, activo, created_at, updated_at 
+	query := `SELECT id, ruc, nombre, nombre_comercial, telefono_contacto, direccion, token_version, permissions, activo, created_at, updated_at 
 			  FROM empresas WHERE ruc = ?`
 
+	var permissionsJSON sql.NullString
 	empresa := &domain.Empresa{}
 	err := s.db.QueryRow(query, ruc).Scan(
 		&empresa.ID, &empresa.RUC, &empresa.Nombre, &empresa.NombreComercial,
-		&empresa.Telefono, &empresa.Direccion, &empresa.Activo,
+		&empresa.Telefono, &empresa.Direccion, &empresa.TokenVersion, &permissionsJSON, &empresa.Activo,
 		&empresa.CreatedAt, &empresa.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -77,6 +87,9 @@ func (s *EmpresaStore) GetByRUC(ruc string) (*domain.Empresa, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("error al obtener empresa por RUC: %w", err)
+	}
+	if permissionsJSON.Valid {
+		json.Unmarshal([]byte(permissionsJSON.String), &empresa.Permissions)
 	}
 
 	return empresa, nil
@@ -113,7 +126,7 @@ func (s *EmpresaStore) GetAll(page, limit int, search string, activo *bool) ([]d
 	}
 
 	// Get paginated results
-	query := fmt.Sprintf(`SELECT id, ruc, nombre, nombre_comercial, telefono, direccion, activo, created_at, updated_at 
+	query := fmt.Sprintf(`SELECT id, ruc, nombre, nombre_comercial, telefono_contacto, direccion, token_version, permissions, activo, created_at, updated_at 
 						  FROM empresas %s ORDER BY created_at DESC LIMIT ? OFFSET ?`, where)
 
 	args = append(args, limit, offset)
@@ -127,10 +140,14 @@ func (s *EmpresaStore) GetAll(page, limit int, search string, activo *bool) ([]d
 	var empresas []domain.Empresa
 	for rows.Next() {
 		var e domain.Empresa
+		var permissionsJSON sql.NullString
 		err := rows.Scan(&e.ID, &e.RUC, &e.Nombre, &e.NombreComercial,
-			&e.Telefono, &e.Direccion, &e.Activo, &e.CreatedAt, &e.UpdatedAt)
+			&e.Telefono, &e.Direccion, &e.TokenVersion, &permissionsJSON, &e.Activo, &e.CreatedAt, &e.UpdatedAt)
 		if err != nil {
 			return nil, 0, fmt.Errorf("error al escanear empresa: %w", err)
+		}
+		if permissionsJSON.Valid {
+			json.Unmarshal([]byte(permissionsJSON.String), &e.Permissions)
 		}
 		empresas = append(empresas, e)
 	}
@@ -140,17 +157,36 @@ func (s *EmpresaStore) GetAll(page, limit int, search string, activo *bool) ([]d
 
 // Update actualiza una empresa existente
 func (s *EmpresaStore) Update(empresa *domain.Empresa) error {
-	query := `UPDATE empresas SET nombre = ?, nombre_comercial = ?, telefono = ?, 
+	permissionsJSON, err := json.Marshal(empresa.Permissions)
+	if err != nil {
+		permissionsJSON = []byte("[]")
+	}
+	query := `UPDATE empresas SET nombre = ?, nombre_comercial = ?, telefono_contacto = ?, 
 			  direccion = ?, activo = ?, updated_at = NOW() WHERE id = ?`
 
-	_, err := s.db.Exec(query, empresa.Nombre, empresa.NombreComercial,
+	_, err = s.db.Exec(query, empresa.Nombre, empresa.NombreComercial,
 		empresa.Telefono, empresa.Direccion, empresa.Activo, empresa.ID)
 	if err != nil {
 		return fmt.Errorf("error al actualizar empresa: %w", err)
 	}
 
+	_ = permissionsJSON // permissions se actualiza por separado si necesario
 	empresa.UpdatedAt = time.Now()
 	return nil
+}
+
+// IncrementTokenVersion incrementa el token_version para revocar todos los JWT activos
+func (s *EmpresaStore) IncrementTokenVersion(id int64) (int, error) {
+	_, err := s.db.Exec(`UPDATE empresas SET token_version = token_version + 1, updated_at = NOW() WHERE id = ?`, id)
+	if err != nil {
+		return 0, fmt.Errorf("error al incrementar token_version: %w", err)
+	}
+	var newVersion int
+	err = s.db.QueryRow(`SELECT token_version FROM empresas WHERE id = ?`, id).Scan(&newVersion)
+	if err != nil {
+		return 0, fmt.Errorf("error al leer token_version: %w", err)
+	}
+	return newVersion, nil
 }
 
 // Delete realiza soft delete de una empresa

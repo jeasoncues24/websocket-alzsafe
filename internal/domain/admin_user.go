@@ -17,16 +17,16 @@ const (
 
 type contextKey string
 
-const tokenClaimsKey contextKey = "token_claims"
+const adminJWTClaimsKey contextKey = "admin_jwt_claims"
 
-// WithTokenClaims stores TokenClaims in context
-func WithTokenClaims(ctx context.Context, claims *TokenClaims) context.Context {
-	return context.WithValue(ctx, tokenClaimsKey, claims)
+// WithAdminJWTClaims stores AdminJWTClaims in context
+func WithAdminJWTClaims(ctx context.Context, claims *AdminJWTClaims) context.Context {
+	return context.WithValue(ctx, adminJWTClaimsKey, claims)
 }
 
-// GetTokenClaims retrieves TokenClaims from context
-func GetTokenClaims(ctx context.Context) (*TokenClaims, bool) {
-	claims, ok := ctx.Value(tokenClaimsKey).(*TokenClaims)
+// GetAdminJWTClaims retrieves AdminJWTClaims from context
+func GetAdminJWTClaims(ctx context.Context) (*AdminJWTClaims, bool) {
+	claims, ok := ctx.Value(adminJWTClaimsKey).(*AdminJWTClaims)
 	return claims, ok
 }
 
@@ -60,8 +60,8 @@ type LoginResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-// TokenClaims representa los claims del JWT
-type TokenClaims struct {
+// AdminJWTClaims representa los claims del JWT
+type AdminJWTClaims struct {
 	JTI           string   `json:"jti,omitempty"`
 	UserID        int64    `json:"user_id"`
 	Username      string   `json:"username"`

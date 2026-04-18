@@ -27,7 +27,7 @@ const navItems = [
     icon: LayoutDashboard,
     href: "/dashboard",
   },
-  { id: "companies", label: "Empresas", icon: Building2, href: "/companies" },
+  { id: "companies", label: "Empresas", icon: Building2, href: "/empresas" },
   { id: "messages", label: "Mensajes", icon: MessageSquare, href: "/messages" },
   { id: "sessions", label: "Sesiones", icon: Wifi, href: "/sessions" },
   { id: "broadcasts", label: "Broadcasts", icon: Send, href: "/broadcasts" },
@@ -40,7 +40,7 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { sidebarOpen, setSidebarOpen, activeNav, setActiveNav } =
+  const { sidebarOpen, setSidebarOpen, setActiveNav } =
     useAppStore();
   const { setTheme, resolvedTheme } = useTheme();
 

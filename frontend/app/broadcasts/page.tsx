@@ -1,41 +1,41 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
-import { Send, Check, X, ExternalLink } from "lucide-react"
-import { getAdminBroadcasts, getCompanies, type BroadcastInfo, type Company } from "@/lib/api"
+import { ExternalLink } from "lucide-react"
+import { getAdminBroadcasts, getEmpresas, type BroadcastInfo, type Empresa } from "@/lib/api"
 
 export default function BroadcastsPage() {
   const [broadcasts, setBroadcasts] = useState<BroadcastInfo[]>([])
-  const [companies, setCompanies] = useState<Company[]>([])
+  const [companies, setCompanies] = useState<Empresa[]>([])
   const [loading, setLoading] = useState(true)
   const [filterRuc, setFilterRuc] = useState("")
   const [selectedBroadcast, setSelectedBroadcast] = useState<BroadcastInfo | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
       const [bcData, compsData] = await Promise.all([
         getAdminBroadcasts(filterRuc || undefined),
-        getCompanies(),
+        getEmpresas({ limit: 1000 }),
       ])
       setBroadcasts(bcData.broadcasts)
-      setCompanies(compsData.companies)
+      setCompanies(compsData.empresas)
     } catch (error) {
       console.error("Failed to load data:", error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [filterRuc])
 
   useEffect(() => {
     loadData()
-  }, [filterRuc])
+  }, [loadData])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -76,11 +76,11 @@ export default function BroadcastsPage() {
               onChange={(e) => setFilterRuc(e.target.value)}
             >
               <option value="">Todas las empresas</option>
-              {companies.map((c) => (
-                <option key={c.account_id} value={c.account_id}>
-                  {c.account_id}
-                </option>
-              ))}
+                {companies.map((c) => (
+                  <option key={c.ruc} value={c.ruc}>
+                    {c.ruc}
+                  </option>
+                ))}
             </select>
           </div>
         </CardHeader>

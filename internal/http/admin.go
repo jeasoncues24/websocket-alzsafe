@@ -11,23 +11,40 @@ import (
 	"wsapi/internal/config"
 	"wsapi/internal/domain"
 	"wsapi/internal/storage"
+	"wsapi/internal/whatsapp"
 )
 
 type AdminHandler struct {
-	userStore   *storage.AdminUserStore
-	roleStore   *storage.RoleStore
-	moduleStore *storage.ModuleStore
+	db            *sql.DB
+	userStore     *storage.AdminUserStore
+	roleStore     *storage.RoleStore
+	moduleStore   *storage.ModuleStore
+	telefonoStore *storage.TelefonoStore
+	apiKeyStore   *storage.ApiKeyStore
+	sessionStore  *storage.SessionStore
+	manager       *whatsapp.Manager
 }
 
-func NewAdminHandler(db *sql.DB) *AdminHandler {
+func NewAdminHandler(db *sql.DB, sessionStore *storage.SessionStore, manager *whatsapp.Manager) *AdminHandler {
 	if db == nil {
 		return nil
 	}
 	return &AdminHandler{
-		userStore:   storage.NewAdminUserStore(db),
-		roleStore:   storage.NewRoleStore(db),
-		moduleStore: storage.NewModuleStore(db),
+		db:            db,
+		userStore:     storage.NewAdminUserStore(db),
+		roleStore:     storage.NewRoleStore(db),
+		moduleStore:   storage.NewModuleStore(db),
+		telefonoStore: storage.NewTelefonoStore(db),
+		apiKeyStore:   storage.NewApiKeyStore(db),
+		sessionStore:  sessionStore,
+		manager:       manager,
 	}
+}
+
+type adminTelefonoRequest struct {
+	CodigoPais string `json:"codigo_pais"`
+	Numero     string `json:"numero"`
+	Status     string `json:"status,omitempty"`
 }
 
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -266,6 +283,30 @@ type AssignModulesRequest struct {
 	ModuleIDs []int64 `json:"module_ids"`
 }
 
+func (h *AdminHandler) GetUserModules(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	id, err := h.extractUserID(r.URL.Path, "/api/admin/users/")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	userModuleStore := storage.NewUserModuleStore(h.db)
+	modules, err := userModuleStore.GetByUserID(id)
+	if err != nil {
+		http.Error(w, "error al obtener módulos", http.StatusInternalServerError)
+		return
+	}
+
+	moduleIDs := make([]int64, len(modules))
+	for i, m := range modules {
+		moduleIDs[i] = m.ID
+	}
+
+	json.NewEncoder(w).Encode(map[string][]int64{"module_ids": moduleIDs})
+}
+
 func (h *AdminHandler) AssignUserModules(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -329,7 +370,7 @@ func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
 
 	roles, err := h.roleStore.GetAll()
 	if err != nil {
-		http.Error(w, "error al obtener roles", http.StatusInternalServerError)
+		http.Error(w, "error al obtener roles "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -343,13 +384,244 @@ func (h *AdminHandler) ListModules(w http.ResponseWriter, r *http.Request) {
 
 	modules, err := h.moduleStore.GetAll()
 	if err != nil {
-		http.Error(w, "error al obtener módulos", http.StatusInternalServerError)
+		http.Error(w, "error al obtener módulos: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"modules": modules,
 	})
+}
+
+func (h *AdminHandler) ListCompanyPhones(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if h.telefonoStore == nil {
+		http.Error(w, "telefono store no disponible", http.StatusInternalServerError)
+		return
+	}
+
+	companyID, err := extractCompanyIDFromPath(r.URL.Path, "/api/admin/empresas/", "/telefonos")
+	if err != nil || companyID <= 0 {
+		http.Error(w, "invalid company ID", http.StatusBadRequest)
+		return
+	}
+
+	companyStore := storage.NewEmpresaStore(h.db)
+	company, err := companyStore.GetByID(companyID)
+	if err != nil {
+		http.Error(w, "error al validar empresa", http.StatusInternalServerError)
+		return
+	}
+	if company == nil {
+		http.Error(w, "empresa no encontrada", http.StatusNotFound)
+		return
+	}
+
+	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	if claims != nil && !claims.IsRoot {
+		if claims.EmpresaID == nil || *claims.EmpresaID != companyID {
+			http.Error(w, "acceso denegado", http.StatusForbidden)
+			return
+		}
+	}
+
+	phones, err := h.telefonoStore.GetByEmpresa(companyID)
+	if err != nil {
+		http.Error(w, "error al obtener teléfonos", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(domain.TelefonosListResponse{
+		OK:        true,
+		Telefonos: phones,
+		Total:     len(phones),
+	})
+}
+
+func (h *AdminHandler) CreateCompanyPhone(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	companyID, err := extractCompanyIDFromPath(r.URL.Path, "/api/admin/empresas/", "/telefonos")
+	if err != nil || companyID <= 0 {
+		http.Error(w, "invalid company ID", http.StatusBadRequest)
+		return
+	}
+
+	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	if claims != nil && !claims.IsRoot {
+		if claims.EmpresaID == nil || *claims.EmpresaID != companyID {
+			http.Error(w, "acceso denegado", http.StatusForbidden)
+			return
+		}
+	}
+
+	var req adminTelefonoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		return
+	}
+
+	req.CodigoPais = strings.TrimSpace(req.CodigoPais)
+	req.Numero = strings.TrimSpace(req.Numero)
+	if req.CodigoPais == "" || req.Numero == "" {
+		http.Error(w, "codigo_pais y numero requeridos", http.StatusBadRequest)
+		return
+	}
+
+	status := domain.TelefonoStatusDisconnected
+	if req.Status != "" {
+		status = domain.TelefonoStatus(strings.TrimSpace(req.Status))
+		switch status {
+		case domain.TelefonoStatusActive, domain.TelefonoStatusQRPending, domain.TelefonoStatusDisconnected:
+		default:
+			http.Error(w, "estado de teléfono inválido", http.StatusBadRequest)
+			return
+		}
+	}
+
+	numeroCompleto := req.CodigoPais + req.Numero
+	if existing, _ := h.telefonoStore.GetByNumeroCompleto(numeroCompleto); existing != nil {
+		http.Error(w, "ya existe un teléfono con ese número", http.StatusConflict)
+		return
+	}
+
+	phone := &domain.Telefono{
+		EmpresaID:      companyID,
+		CodigoPais:     req.CodigoPais,
+		Numero:         req.Numero,
+		NumeroCompleto: numeroCompleto,
+		Status:         status,
+	}
+
+	if _, err := h.telefonoStore.Create(phone); err != nil {
+		http.Error(w, "error al crear teléfono", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(domain.TelefonoResponse{OK: true, Telefono: phone})
+}
+
+func (h *AdminHandler) UpdateCompanyPhone(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
+	if err != nil || telefonoID <= 0 {
+		http.Error(w, "invalid telefono ID", http.StatusBadRequest)
+		return
+	}
+
+	phone, err := h.telefonoStore.GetByID(telefonoID)
+	if err != nil || phone == nil {
+		http.Error(w, "teléfono no encontrado", http.StatusNotFound)
+		return
+	}
+
+	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	if claims != nil && !claims.IsRoot {
+		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
+			http.Error(w, "acceso denegado", http.StatusForbidden)
+			return
+		}
+	}
+
+	var req adminTelefonoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(req.CodigoPais) != "" {
+		phone.CodigoPais = strings.TrimSpace(req.CodigoPais)
+	}
+	if strings.TrimSpace(req.Numero) != "" {
+		phone.Numero = strings.TrimSpace(req.Numero)
+	}
+	if strings.TrimSpace(req.Status) != "" {
+		phone.Status = domain.TelefonoStatus(strings.TrimSpace(req.Status))
+		switch phone.Status {
+		case domain.TelefonoStatusActive, domain.TelefonoStatusQRPending, domain.TelefonoStatusDisconnected:
+		default:
+			http.Error(w, "estado de teléfono inválido", http.StatusBadRequest)
+			return
+		}
+	}
+	phone.NumeroCompleto = phone.CodigoPais + phone.Numero
+
+	if existing, _ := h.telefonoStore.GetByNumeroCompleto(phone.NumeroCompleto); existing != nil && existing.ID != phone.ID {
+		http.Error(w, "ya existe un teléfono con ese número", http.StatusConflict)
+		return
+	}
+
+	if err := h.telefonoStore.Update(phone); err != nil {
+		http.Error(w, "error al actualizar teléfono", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(domain.TelefonoResponse{OK: true, Telefono: phone})
+}
+
+func (h *AdminHandler) DeleteCompanyPhone(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
+	if err != nil || telefonoID <= 0 {
+		http.Error(w, "invalid telefono ID", http.StatusBadRequest)
+		return
+	}
+
+	phone, err := h.telefonoStore.GetByID(telefonoID)
+	if err != nil || phone == nil {
+		http.Error(w, "teléfono no encontrado", http.StatusNotFound)
+		return
+	}
+
+	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	if claims != nil && !claims.IsRoot {
+		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
+			http.Error(w, "acceso denegado", http.StatusForbidden)
+			return
+		}
+	}
+
+	if h.apiKeyStore != nil {
+		if err := h.apiKeyStore.RevokeByTelefonoID(phone.ID); err != nil {
+			http.Error(w, "error al invalidar API keys", http.StatusInternalServerError)
+			return
+		}
+	}
+	if h.manager != nil {
+		h.manager.Delete(phone.NumeroCompleto)
+	}
+	if h.sessionStore != nil {
+		h.sessionStore.SetDisconnected(phone.NumeroCompleto, "admin_delete")
+	}
+
+	if err := h.telefonoStore.Delete(telefonoID); err != nil {
+		http.Error(w, "error al eliminar teléfono", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func extractTelefonoIDFromAdminPath(path string) (int64, error) {
+	base := strings.TrimPrefix(path, "/api/admin/telefonos/")
+	base = strings.Trim(base, "/")
+	if base == "" {
+		return 0, fmt.Errorf("missing telefono id")
+	}
+	return strconv.ParseInt(base, 10, 64)
+}
+
+func extractCompanyIDFromPath(path, prefix, suffix string) (int64, error) {
+	path = strings.TrimPrefix(path, prefix)
+	path = strings.TrimSuffix(path, suffix)
+	path = strings.Trim(path, "/")
+	if path == "" {
+		return 0, fmt.Errorf("missing id")
+	}
+	return strconv.ParseInt(path, 10, 64)
 }
 
 func getAdminHandler() *AdminHandler {
@@ -361,5 +633,5 @@ func getAdminHandler() *AdminHandler {
 	if err != nil {
 		return nil
 	}
-	return NewAdminHandler(db)
+	return NewAdminHandler(db, nil, nil)
 }

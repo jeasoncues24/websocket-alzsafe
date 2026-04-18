@@ -7,10 +7,11 @@ import (
 	"net/http"
 	"os"
 
-	_ "github.com/go-sql-driver/mysql"
 	"wsapi/internal/config"
 	apihttp "wsapi/internal/http"
 	"wsapi/internal/storage"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
@@ -59,7 +60,7 @@ func runMigrateCommand(migrateCmd *flag.FlagSet, verbose *bool) {
 		os.Exit(1)
 	}
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true",
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&multiStatements=true",
 		cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName))
 	if err != nil {
 		fmt.Printf("Error: Cannot connect to database: %v\n", err)
@@ -118,11 +119,25 @@ func runStatus(runner *storage.MigrationRunner, db *sql.DB, verbose bool) {
 func runUp(runner *storage.MigrationRunner, db *sql.DB, verbose bool) {
 	fmt.Println("Running migrations...")
 
+	// Force fresh connection settings
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	// Set session variables
+	db.Exec("SET autocommit = 1")
+	db.Exec("SET unique_checks = 1")
+	db.Exec("SET foreign_key_checks = 1")
+
 	err := runner.RunMigrations(db)
 	if err != nil {
 		fmt.Printf("Error running migrations: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Verify tables after
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name != 'schema_migrations'", "wsapi").Scan(&count)
+	fmt.Printf("Tables created (excluding schema_migrations): %d\n", count)
 
 	version, _ := runner.GetCurrentVersion(db)
 	fmt.Printf("Migrations applied. Current version: %d\n", version)

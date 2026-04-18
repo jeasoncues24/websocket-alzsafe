@@ -1,5 +1,5 @@
-generated: "2026-04-16T17:00:00Z"
-last_updated: "2026-04-16T17:00:00Z"
+generated: "2026-04-17T18:06:20Z"
+last_updated: "2026-04-17T18:06:20Z"
 project: "WSAPI - WhatsApp Multi-Empresa"
 project_key: "wsapi"
 tracking_system: "BMAD"
@@ -8,11 +8,12 @@ story_location: "_bmad-output/planning-artifacts/"
 development_status:
   # Epic 6: Backend JWT Auth System
   epic-6-jwt-auth-system:
-    status: "in-progress"
+    status: "done"
     description: "Sistema de Autenticación JWT por Empresa + Multi-Tenant"
     priority: "high"
     stories:
-      - "S-6.1: Schema DB: empresas + telefonos"
+      - "S-6.0: Reset schema DB + actualización structs Go (base multi-tenant)"
+      - "S-6.1: Schema DB: empresas + telefonos (reemplazado por S-6.0)"
       - "S-6.2: Modelo Empresa + Teléfono"
       - "S-6.3: Migración messages/broadcasts"
       - "S-6.4: Generación JWT empresa"
@@ -25,7 +26,7 @@ development_status:
 
   # Epic 7: Frontend Empresa (Panel Cliente)
   epic-7-frontend-empresa:
-    status: "backlog"
+    status: "done"
     description: "Frontend de Integración para Empresas"
     priority: "high"
     stories:
@@ -51,78 +52,199 @@ development_status:
     status: "done"
 
   # Stories Epic 6 - Backend
+  S-6.0:
+    status: "done"
+    epic: "epic-6-jwt-auth-system"
+    priority: "P0"
+    spec: "_bmad-output/implementation-artifacts/spec-6-0-reset-schema-structs.md"
   S-6.1:
     status: "backlog"
     epic: "epic-6-jwt-auth-system"
     priority: "P0"
+    note: "Absorbido por S-6.0 — ver spec-6-0"
   S-6.2:
-    status: "backlog"
+    status: "done"
     epic: "epic-6-jwt-auth-system"
     priority: "P0"
     depends_on: "S-6.1"
   S-6.3:
-    status: "backlog"
+    status: "done"
+    note: "Migración schema ruc_empresa→empresa_id/telefono_id completada en S-6.0"
     epic: "epic-6-jwt-auth-system"
     priority: "P0"
   S-6.4:
-    status: "backlog"
+    status: "done"
     epic: "epic-6-jwt-auth-system"
     priority: "P0"
   S-6.5:
-    status: "backlog"
+    status: "done"
     epic: "epic-6-jwt-auth-system"
     priority: "P0"
   S-6.6:
-    status: "backlog"
+    status: "done"
     epic: "epic-6-jwt-auth-system"
     priority: "P0"
+    story_file: "_bmad-output/implementation-artifacts/story-6-6-endpoints-v1.md"
   S-6.7:
-    status: "backlog"
+    status: "done"
     epic: "epic-6-jwt-auth-system"
     priority: "P0"
   S-6.8:
-    status: "backlog"
+    status: "done"
     epic: "epic-6-jwt-auth-system"
     priority: "P0"
   S-6.9:
-    status: "backlog"
+    status: "done"
     epic: "epic-6-jwt-auth-system"
     priority: "P0"
   S-6.10:
-    status: "backlog"
+    status: "done"
     epic: "epic-6-jwt-auth-system"
     priority: "P1"
 
   # Stories Epic 7 - Frontend
   S-7.1:
-    status: "backlog"
+    status: "done"
     epic: "epic-7-frontend-empresa"
     priority: "P0"
   S-7.2:
-    status: "backlog"
+    status: "done"
     epic: "epic-7-frontend-empresa"
     priority: "P0"
   S-7.3:
-    status: "backlog"
+    status: "done"
     epic: "epic-7-frontend-empresa"
     priority: "P0"
   S-7.4:
-    status: "backlog"
+    status: "done"
     epic: "epic-7-frontend-empresa"
     priority: "P0"
   S-7.5:
-    status: "backlog"
+    status: "done"
     epic: "epic-7-frontend-empresa"
     priority: "P0"
   S-7.6:
-    status: "backlog"
+    status: "done"
     epic: "epic-7-frontend-empresa"
     priority: "P1"
   S-7.7:
-    status: "backlog"
+    status: "done"
     epic: "epic-7-frontend-empresa"
     priority: "P0"
   S-7.8:
-    status: "backlog"
+    status: "done"
     epic: "epic-7-frontend-empresa"
     priority: "P1"
+
+  # Epic 8: Gestión de Empresas (Panel Admin)
+  epic-8-gestion-empresas:
+    status: "in-progress"
+    description: "Gestión de Empresas en Panel Admin - CRUD, Tokens, Documentación API"
+    priority: "high"
+    context: "_bmad-output/implementation-artifacts/epic-8-context.md"
+    stories:
+      - "S-8.1: Testing CRUD empresas (endpoints backend)"
+      - "S-8.2: Documentar endpoints de empresas"
+      - "S-8.3: Verificar/implementar endpoints faltantes"
+      - "S-8.4: Vista panel admin empresas (listado)"
+      - "S-8.5: Vista panel admin crear/editar empresa"
+      - "S-8.6: Generación y gestión de tokens API"
+      - "S-8.6.1: Fix intermedio API keys por teléfono"
+      - "S-8.7: Documentar proceso conexión API externo"
+      - "S-8.8: Documentar envío de mensajes vía API"
+      - "S-8.9: [FUTURO] Vista números telefónicos por empresa (party mode)"
+      - "S-8.10: [FUTURO] Ruta /soporte con documentación API"
+  S-8.1:
+    status: "done"
+    epic: "epic-8-gestion-empresas"
+    priority: "P0"
+    spec: "_bmad-output/implementation-artifacts/spec-8-1-testing-crud-empresas.md"
+    result: "CRUD backend validado con pruebas de handler"
+  S-8.2:
+    status: "done"
+    epic: "epic-8-gestion-empresas"
+    priority: "P0"
+    spec: "_bmad-output/implementation-artifacts/api-docs-empresas.md"
+    result: "Documentación alineada con el contrato real sin aliases de backend"
+  S-8.3:
+    status: "done"
+    epic: "epic-8-gestion-empresas"
+    priority: "P0"
+    result: "Endpoints /api/empresas implementados y validados"
+  S-8.4:
+    status: "done"
+    epic: "epic-8-gestion-empresas"
+    priority: "P0"
+    result: "Listado de empresas ya implementado y validado previamente"
+  S-8.5:
+    status: "done"
+    epic: "epic-8-gestion-empresas"
+    priority: "P0"
+    result: "Crear/editar/eliminar empresas ya implementado y validado previamente"
+  S-8.6:
+    status: "in-progress"
+    epic: "epic-8-gestion-empresas"
+    priority: "P0"
+    note: "Retomado tras revalidar S-8.6.2"
+  S-8.6.1:
+    status: "done"
+    epic: "epic-8-gestion-empresas"
+    priority: "P0"
+    spec: "_bmad-output/implementation-artifacts/spec-8-6-1-api-keys-telefono.md"
+    result: "Base de API keys por teléfono, auth, métricas y auditoría implementada"
+  S-8.6.2:
+    status: "done"
+    epic: "epic-8-gestion-empresas"
+    priority: "P0"
+    spec: "_bmad-output/planning-artifacts/api-key-ux-redesign.md"
+    result: "Rediseño UX/UI shadcn para API keys por teléfono implementado en páginas dedicadas"
+  S-8.7:
+    status: "done"
+    epic: "epic-8-gestion-empresas"
+    priority: "P0"
+    spec: "_bmad-output/implementation-artifacts/spec-8-7-conexion-api-externa.md"
+    result: "Proceso de conexión externa con API keys por teléfono documentado con ejemplos y diagrama"
+  S-8.8:
+    status: "done"
+    epic: "epic-8-gestion-empresas"
+    priority: "P0"
+    spec: "_bmad-output/implementation-artifacts/spec-8-8-envio-mensajes-api.md"
+    result: "Contrato de envío y consulta de mensajes vía API documentado con ejemplos y respuestas reales"
+  S-8.9:
+    status: "backlog"
+    epic: "epic-8-gestion-empresas"
+    priority: "P2"
+    note: "Pendiente debate en party mode"
+  S-8.10:
+    status: "backlog"
+    epic: "epic-8-gestion-empresas"
+    priority: "P2"
+    note: "Epic futuro - ruta /soporte"
+
+  # Epic 9: Migraciones y esquema maestro
+  epic-9-migraciones-esquema:
+    status: "done"
+    description: "Documento maestro del esquema, guia operativa del runner y plan de recreacion limpia"
+    priority: "high"
+    stories:
+      - "S-9.1: Documento maestro del esquema actual"
+      - "S-9.2: Guia operativa de la libreria de migraciones"
+      - "S-9.3: Plan de recreacion limpia de migraciones"
+  S-9.1:
+    status: "done"
+    epic: "epic-9-migraciones-esquema"
+    priority: "P0"
+    spec: "_bmad-output/implementation-artifacts/stories/migraciones-1-1-documento-maestro-esquema-actual.md"
+    result: "Documento maestro del esquema creado con nullability, defaults, indices y relaciones por tabla"
+  S-9.2:
+    status: "done"
+    epic: "epic-9-migraciones-esquema"
+    priority: "P0"
+    spec: "_bmad-output/implementation-artifacts/stories/migraciones-1-2-guia-operativa-libreria-migraciones.md"
+    result: "Guia operativa del runner y migraciones documentada"
+  S-9.3:
+    status: "done"
+    epic: "epic-9-migraciones-esquema"
+    priority: "P0"
+    spec: "_bmad-output/implementation-artifacts/stories/migraciones-1-3-plan-recreacion-limpia-migraciones.md"
+    result: "Plan de recreacion limpia documentado con prerequisitos, reglas y validaciones"

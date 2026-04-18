@@ -1,8 +1,10 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -66,22 +68,46 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(rec, r)
 
 		duration := time.Since(start)
+		body := strings.TrimSpace(rec.body.String())
 
-		logger.Info().
-			Int("status", rec.statusCode).
-			Str("duration", duration.String()).
-			Msg("request completed")
+		switch {
+		case rec.statusCode >= 500:
+			logger.Error().
+				Int("status", rec.statusCode).
+				Str("duration", duration.String()).
+				Str("response", body).
+				Msg("request completed with server error")
+		case rec.statusCode >= 400:
+			logger.Warn().
+				Int("status", rec.statusCode).
+				Str("duration", duration.String()).
+				Str("response", body).
+				Msg("request completed with client error")
+		default:
+			logger.Info().
+				Int("status", rec.statusCode).
+				Str("duration", duration.String()).
+				Msg("request completed")
+		}
 	})
 }
 
 type statusRecorder struct {
 	http.ResponseWriter
 	statusCode int
+	body       bytes.Buffer
 }
 
 func (w *statusRecorder) WriteHeader(code int) {
 	w.statusCode = code
 	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusRecorder) Write(b []byte) (int, error) {
+	if w.statusCode >= 400 {
+		w.body.Write(b)
+	}
+	return w.ResponseWriter.Write(b)
 }
 
 func GetCorrelationID(ctx context.Context) string {

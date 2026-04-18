@@ -43,7 +43,7 @@ func NewAuthorizationService(
 
 // CanAccess verifica si el usuario puede acceder a un módulo específico
 func (as *AuthorizationService) CanAccess(ctx context.Context, moduleSlug string) bool {
-	claims, ok := GetTokenClaims(ctx)
+	claims, ok := GetAdminJWTClaims(ctx)
 	if !ok {
 		return false
 	}
@@ -64,7 +64,7 @@ func (as *AuthorizationService) CanAccess(ctx context.Context, moduleSlug string
 
 // GetUserModules devuelve los módulos accesibles por el usuario
 func (as *AuthorizationService) GetUserModules(ctx context.Context) ([]Module, error) {
-	claims, ok := GetTokenClaims(ctx)
+	claims, ok := GetAdminJWTClaims(ctx)
 	if !ok {
 		return nil, errors.New("claims no encontrados en contexto")
 	}

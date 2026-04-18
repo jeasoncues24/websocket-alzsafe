@@ -31,6 +31,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
 ### Context
 
 - `project_context` = `**/project-context.md` (load if exists)
+- `epic_contexts` = `{implementation_artifacts}/epic-*-context.md` (load if the file exists)
 
 ---
 
@@ -56,6 +57,7 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
 
 <step n="1" goal="Locate sprint status file">
   <action>Load {project_context} for project-wide patterns and conventions (if exists)</action>
+  <action>Keep the epic context directory available for later resolution once sprint status is parsed.</action>
   <action>Try {sprint_status_file}</action>
   <check if="file not found">
     <output>❌ sprint-status.yaml not found.
@@ -68,6 +70,7 @@ Run `/bmad:bmm:workflows:sprint-planning` to generate it, then rerun sprint-stat
 <step n="2" goal="Read and parse sprint-status.yaml">
   <action>Read the FULL file: {sprint_status_file}</action>
   <action>Parse fields: generated, last_updated, project, project_key, tracking_system, story_location</action>
+  <action>Parse optional epic context references inside development_status entries (for example `context` or `context_file`).</action>
   <action>Parse development_status map. Classify keys:</action>
   - Epics: keys starting with "epic-" (and not ending with "-retrospective")
   - Retrospectives: keys ending with "-retrospective"
@@ -77,6 +80,9 @@ Run `/bmad:bmm:workflows:sprint-planning` to generate it, then rerun sprint-stat
   <action>Map legacy epic status "contexted" → "in-progress"</action>
   <action>Count epic statuses: backlog, in-progress, done</action>
   <action>Count retrospective statuses: optional, done</action>
+  <action>Record any epic context references found in the file and keep them available for later use.</action>
+  <action>If a `context` field exists on an epic, treat that file as the source of truth for that epic.</action>
+  <action>If no context field exists, fall back to a matching epic context file under `{implementation_artifacts}` for that epic.</action>
 
 <action>Validate all statuses against known values:</action>
 
@@ -118,6 +124,7 @@ Enter corrections (e.g., "1=in-progress, 2=backlog") or "skip" to continue witho
 - IF `last_updated` timestamp is more than 7 days old (or `last_updated` is missing, fall back to `generated`): warn "sprint-status.yaml may be stale"
 - IF any story key doesn't match an epic pattern (e.g., story "5-1-..." but no "epic-5"): warn "orphaned story detected"
 - IF any epic has status in-progress but has no associated stories: warn "in-progress epic has no stories"
+- IF any epic has a linked context file that does not exist: warn "epic context missing or stale"
   </step>
 
 <step n="3" goal="Select next action recommendation">
@@ -130,6 +137,7 @@ Enter corrections (e.g., "1=in-progress, 2=backlog") or "skip" to continue witho
   5. Else if any retrospective status == optional → recommend `retrospective`
   6. Else → All implementation items done; congratulate the user - you both did amazing work together!
   <action>Store selected recommendation as: next_story_id, next_workflow_id, next_agent (DEV)</action>
+  <action>Resolve and store `current_epic_context` for the epic that owns `next_story_id` when a matching context file exists.</action>
 </step>
 
 <step n="4" goal="Display summary">
@@ -139,6 +147,9 @@ Enter corrections (e.g., "1=in-progress, 2=backlog") or "skip" to continue witho
 - Project: {{project}} ({{project_key}})
 - Tracking: {{tracking_system}}
 - Status file: {sprint_status_file}
+{{#if current_epic_context}}
+- Epic context: {{current_epic_context}}
+{{/if}}
 
 **Stories:** backlog {{count_backlog}}, ready-for-dev {{count_ready}}, in-progress {{count_in_progress}}, review {{count_review}}, done {{count_done}}
 
@@ -197,6 +208,7 @@ If the command targets a story, set `story_key={{next_story_id}}` when prompted.
 <step n="20" goal="Data mode output">
   <action>Load and parse {sprint_status_file} same as Step 2</action>
   <action>Compute recommendation same as Step 3</action>
+  <action>Resolve `current_epic_context` for the recommended epic when a matching context file exists.</action>
   <template-output>next_workflow_id = {{next_workflow_id}}</template-output>
   <template-output>next_story_id = {{next_story_id}}</template-output>
   <template-output>count_backlog = {{count_backlog}}</template-output>
@@ -207,6 +219,7 @@ If the command targets a story, set `story_key={{next_story_id}}` when prompted.
   <template-output>epic_backlog = {{epic_backlog}}</template-output>
   <template-output>epic_in_progress = {{epic_in_progress}}</template-output>
   <template-output>epic_done = {{epic_done}}</template-output>
+  <template-output>epic_context = {{current_epic_context}}</template-output>
   <template-output>risks = {{risks}}</template-output>
   <action>Return to caller</action>
 </step>

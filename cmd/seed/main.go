@@ -29,7 +29,7 @@ func main() {
 
 	// Insert admin user
 	_, err = db.Exec(
-		"INSERT INTO admin_users (username, password_hash, email, role, is_active) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO admin_users (username, password_hash, email, rol, activo) VALUES (?, ?, ?, ?, ?)",
 		"admin", string(hash), "admin@wsapi.local", "super_admin", true,
 	)
 	if err != nil {

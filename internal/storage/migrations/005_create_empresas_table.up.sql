@@ -1,16 +1,21 @@
--- Migration 005: Create empresas table
-
+-- 005: Empresas table (multi-tenant)
 CREATE TABLE IF NOT EXISTS empresas (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    ruc VARCHAR(11) NOT NULL UNIQUE,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ruc VARCHAR(20) UNIQUE NOT NULL,
     nombre VARCHAR(255) NOT NULL,
     nombre_comercial VARCHAR(255),
-    telefono VARCHAR(20),
-    direccion TEXT,
+    telefono VARCHAR(30),
+    direccion VARCHAR(500),
+    token_version INT NOT NULL DEFAULT 1,
+    permissions JSON,
     activo BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_ruc (ruc),
-    INDEX idx_nombre (nombre),
-    INDEX idx_activo (activo)
+    INDEX idx_empresas_ruc (ruc),
+    INDEX idx_empresas_nombre (nombre),
+    INDEX idx_empresas_activo (activo)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Insert sample empresa
+INSERT INTO empresas (ruc, nombre, nombre_comercial, telefono, activo) VALUES
+('20100000001', 'Empresa Demo S.A.C.', 'Demo Company', '+51 999 000 001', TRUE);

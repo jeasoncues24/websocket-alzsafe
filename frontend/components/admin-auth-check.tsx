@@ -10,8 +10,10 @@ export function AdminAuthCheck({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     if (pathname === "/login") {
-      setChecking(false);
+      timeoutId = setTimeout(() => setChecking(false), 0);
       return;
     }
 
@@ -19,8 +21,12 @@ export function AdminAuthCheck({ children }: { children: React.ReactNode }) {
     if (!token) {
       router.push("/login");
     } else {
-      setChecking(false);
+      timeoutId = setTimeout(() => setChecking(false), 0);
     }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [router, pathname]);
 
   if (checking) {

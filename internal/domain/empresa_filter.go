@@ -29,7 +29,7 @@ type EmpresaFilter struct {
 }
 
 func GetEmpresaFilter(ctx context.Context, headerEmpresaID string) (*EmpresaFilter, bool) {
-	claims, ok := GetTokenClaims(ctx)
+	claims, ok := GetAdminJWTClaims(ctx)
 	if !ok {
 		return nil, false
 	}
@@ -78,6 +78,7 @@ type EmpresaStoreInterface interface {
 	Create(empresa *Empresa) (int64, error)
 	Update(empresa *Empresa) error
 	Delete(id int64) error
+	IncrementTokenVersion(id int64) (int, error)
 }
 
 func GetAllEmpresaRUCs(empresaStore EmpresaStoreInterface) ([]string, error) {

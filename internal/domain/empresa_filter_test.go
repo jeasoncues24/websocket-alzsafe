@@ -50,14 +50,18 @@ func (m *mockEmpresaStore) Delete(id int64) error {
 	return nil
 }
 
+func (m *mockEmpresaStore) IncrementTokenVersion(id int64) (int, error) {
+	return 2, nil
+}
+
 func TestGetEmpresaFilter_UsuarioNormal(t *testing.T) {
-	claims := &TokenClaims{
+	claims := &AdminJWTClaims{
 		UserID:    1,
 		Username:  "user1",
 		IsRoot:    false,
 		EmpresaID: int64Ptr(10),
 	}
-	ctx := WithTokenClaims(context.Background(), claims)
+	ctx := WithAdminJWTClaims(context.Background(), claims)
 
 	filter, ok := GetEmpresaFilter(ctx, "")
 
@@ -73,13 +77,13 @@ func TestGetEmpresaFilter_UsuarioNormal(t *testing.T) {
 }
 
 func TestGetEmpresaFilter_RootSinEmpresa(t *testing.T) {
-	claims := &TokenClaims{
+	claims := &AdminJWTClaims{
 		UserID:    1,
 		Username:  "root",
 		IsRoot:    true,
 		EmpresaID: nil,
 	}
-	ctx := WithTokenClaims(context.Background(), claims)
+	ctx := WithAdminJWTClaims(context.Background(), claims)
 
 	filter, ok := GetEmpresaFilter(ctx, "")
 
@@ -95,13 +99,13 @@ func TestGetEmpresaFilter_RootSinEmpresa(t *testing.T) {
 }
 
 func TestGetEmpresaFilter_RootConHeader(t *testing.T) {
-	claims := &TokenClaims{
+	claims := &AdminJWTClaims{
 		UserID:    1,
 		Username:  "root",
 		IsRoot:    true,
 		EmpresaID: nil,
 	}
-	ctx := WithTokenClaims(context.Background(), claims)
+	ctx := WithAdminJWTClaims(context.Background(), claims)
 
 	filter, ok := GetEmpresaFilter(ctx, "20")
 

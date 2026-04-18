@@ -23,7 +23,7 @@ const EMPTY: EmpresaCreateRequest = {
   ruc: "",
   nombre: "",
   nombre_comercial: "",
-  telefono: "",
+  telefono_contacto: "",
   direccion: "",
 };
 
@@ -34,13 +34,13 @@ export function EmpresaFormModal({ open, onClose, onSave, empresa }: Props) {
 
   useEffect(() => {
     if (empresa) {
-      setForm({
-        ruc: empresa.ruc,
-        nombre: empresa.nombre,
-        nombre_comercial: empresa.nombre_comercial ?? "",
-        telefono: empresa.telefono ?? "",
-        direccion: empresa.direccion ?? "",
-      });
+        setForm({
+          ruc: empresa.ruc,
+          nombre: empresa.nombre,
+          nombre_comercial: empresa.nombre_comercial ?? "",
+          telefono_contacto: empresa.telefono_contacto ?? "",
+          direccion: empresa.direccion ?? "",
+        });
     } else {
       setForm(EMPTY);
     }
@@ -105,10 +105,10 @@ export function EmpresaFormModal({ open, onClose, onSave, empresa }: Props) {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-sm font-medium">Teléfono</label>
+            <label className="text-sm font-medium">Teléfono de contacto</label>
             <Input
-              value={form.telefono}
-              onChange={(e) => set("telefono", e.target.value)}
+              value={form.telefono_contacto}
+              onChange={(e) => set("telefono_contacto", e.target.value)}
               placeholder="+51 999 999 999"
             />
           </div>

@@ -64,13 +64,13 @@ func (s *BroadcastStore) UpdateStatus(referenceID string, status domain.Broadcas
 	job.UpdatedAt = time.Now()
 }
 
-func (s *BroadcastStore) ListByRUC(ruc string) []*domain.BroadcastJob {
+func (s *BroadcastStore) ListByEmpresa(empresaID int64) []*domain.BroadcastJob {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var jobs []*domain.BroadcastJob
 	for _, job := range s.jobs {
-		if job.RUCEmpresa == ruc {
+		if job.EmpresaID == empresaID {
 			jobs = append(jobs, job)
 		}
 	}

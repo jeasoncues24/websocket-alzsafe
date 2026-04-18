@@ -26,14 +26,14 @@ type MessagesRepository interface {
 	UpdateEstado(referenceID string, estado domain.MessageState, errorReason string) error
 
 	// GetByEmpresa retorna mensajes de una empresa, ordenados por timestamp DESC, con paginación.
-	GetByEmpresa(rucEmpresa string, estado string, telefono string, limit, offset int) ([]domain.Message, int, error)
+	GetByEmpresa(empresaID int64, estado string, telefono string, limit, offset int) ([]domain.Message, int, error)
 
 	// GetByEmpresaAndDateRange filtra por empresa y rango de fechas, con paginación.
 	// [POR QUÉ] Permite auditoría temporal: "dame todos los mensajes de enero de empresa X".
-	GetByEmpresaAndDateRange(rucEmpresa string, start, end time.Time, estado string, telefono string, limit, offset int) ([]domain.Message, int, error)
+	GetByEmpresaAndDateRange(empresaID int64, start, end time.Time, estado string, telefono string, limit, offset int) ([]domain.Message, int, error)
 
 	// GetMessageMetricsByEmpresa retorna métricas de mensajes para una empresa específica
-	GetMessageMetricsByEmpresa(rucEmpresa string) (*MessageMetrics, error)
+	GetMessageMetricsByEmpresa(empresaID int64) (*MessageMetrics, error)
 
 	// GetAllMessageMetrics retorna métricas agregadas de todas las empresas
 	GetAllMessageMetrics() (*MessageMetrics, error)
@@ -65,12 +65,13 @@ func (r *mariaDBMessagesRepository) Create(msg *domain.Message) error {
 	// [APRENDE] NUNCA concatenes valores del usuario en queries SQL. Siempre usa ? o $N.
 	_, err = r.db.Exec(`
 		INSERT INTO messages
-			(reference_id, ruc_empresa, destino, contenido, adjuntos_json, estado, timestamp_created)
+			(reference_id, empresa_id, telefono_id, destino, contenido, adjuntos_json, estado, timestamp_created)
 		VALUES
-			(?, ?, ?, ?, ?, ?, ?)
+			(?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		msg.ReferenceID,
-		msg.RUCEmpresa,
+		msg.EmpresaID,
+		msg.TelefonoID,
 		msg.Destino,
 		msg.Contenido,
 		string(adjuntosJSON),
@@ -124,10 +125,10 @@ func (r *mariaDBMessagesRepository) UpdateEstado(referenceID string, estado doma
 // GetByEmpresa retorna mensajes paginados de una empresa, ordenados por timestamp_created DESC.
 // Retorna: lista de mensajes, total de registros (para calcular páginas), error.
 // [APRENDE] Se hacen 2 queries: una para COUNT (total) y otra para los datos paginados.
-func (r *mariaDBMessagesRepository) GetByEmpresa(rucEmpresa string, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
+func (r *mariaDBMessagesRepository) GetByEmpresa(empresaID int64, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
 	// Build WHERE clause dynamically
-	whereClause := "ruc_empresa = ?"
-	args := []interface{}{rucEmpresa}
+	whereClause := "empresa_id = ?"
+	args := []interface{}{empresaID}
 
 	if estado != "" {
 		whereClause += " AND estado = ?"
@@ -148,7 +149,7 @@ func (r *mariaDBMessagesRepository) GetByEmpresa(rucEmpresa string, estado strin
 
 	// Query 2: obtener página de datos
 	selectQuery := `
-		SELECT id, reference_id, ruc_empresa, destino, contenido,
+		SELECT id, reference_id, empresa_id, telefono_id, destino, contenido,
 		       adjuntos_json, estado, error_reason,
 		       timestamp_created, timestamp_sent, timestamp_confirmed
 		FROM messages
@@ -172,9 +173,9 @@ func (r *mariaDBMessagesRepository) GetByEmpresa(rucEmpresa string, estado strin
 }
 
 // GetByEmpresaAndDateRange filtra mensajes por empresa y rango de fechas con paginación.
-func (r *mariaDBMessagesRepository) GetByEmpresaAndDateRange(rucEmpresa string, start, end time.Time, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
-	whereClause := "ruc_empresa = ? AND timestamp_created BETWEEN ? AND ?"
-	args := []interface{}{rucEmpresa, start, end}
+func (r *mariaDBMessagesRepository) GetByEmpresaAndDateRange(empresaID int64, start, end time.Time, estado string, telefono string, limit, offset int) ([]domain.Message, int, error) {
+	whereClause := "empresa_id = ? AND timestamp_created BETWEEN ? AND ?"
+	args := []interface{}{empresaID, start, end}
 
 	if estado != "" {
 		whereClause += " AND estado = ?"
@@ -193,7 +194,7 @@ func (r *mariaDBMessagesRepository) GetByEmpresaAndDateRange(rucEmpresa string, 
 	}
 
 	selectQuery := `
-		SELECT id, reference_id, ruc_empresa, destino, contenido,
+		SELECT id, reference_id, empresa_id, telefono_id, destino, contenido,
 		       adjuntos_json, estado, error_reason,
 		       timestamp_created, timestamp_sent, timestamp_confirmed
 		FROM messages
@@ -228,7 +229,7 @@ type MessageMetrics struct {
 }
 
 // GetMessageMetricsByEmpresa retorna métricas de mensajes para una empresa específica
-func (r *mariaDBMessagesRepository) GetMessageMetricsByEmpresa(rucEmpresa string) (*MessageMetrics, error) {
+func (r *mariaDBMessagesRepository) GetMessageMetricsByEmpresa(empresaID int64) (*MessageMetrics, error) {
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	weekStart := todayStart.AddDate(0, 0, -7)
@@ -236,37 +237,37 @@ func (r *mariaDBMessagesRepository) GetMessageMetricsByEmpresa(rucEmpresa string
 	metrics := &MessageMetrics{}
 
 	// Total mensajes
-	err := r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE ruc_empresa = ?", rucEmpresa).Scan(&metrics.TotalMensajes)
+	err := r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE empresa_id = ?", empresaID).Scan(&metrics.TotalMensajes)
 	if err != nil {
 		return nil, fmt.Errorf("error contando total mensajes: %w", err)
 	}
 
 	// Mensajes de hoy
-	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND timestamp_created >= ?", rucEmpresa, todayStart).Scan(&metrics.MensajesHoy)
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE empresa_id = ? AND timestamp_created >= ?", empresaID, todayStart).Scan(&metrics.MensajesHoy)
 	if err != nil {
 		return nil, fmt.Errorf("error contando mensajes hoy: %w", err)
 	}
 
 	// Mensajes de la última semana
-	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND timestamp_created >= ?", rucEmpresa, weekStart).Scan(&metrics.MensajesSemana)
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE empresa_id = ? AND timestamp_created >= ?", empresaID, weekStart).Scan(&metrics.MensajesSemana)
 	if err != nil {
 		return nil, fmt.Errorf("error contando mensajes semana: %w", err)
 	}
 
 	// Mensajes exitosos (sent, delivered)
-	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND estado IN ('sent', 'delivered')", rucEmpresa).Scan(&metrics.MensajesExitosos)
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE empresa_id = ? AND estado IN ('sent', 'delivered')", empresaID).Scan(&metrics.MensajesExitosos)
 	if err != nil {
 		return nil, fmt.Errorf("error contando mensajes exitosos: %w", err)
 	}
 
 	// Mensajes fallidos (failed, rejected)
-	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE ruc_empresa = ? AND estado IN ('failed', 'rejected')", rucEmpresa).Scan(&metrics.MensajesFallidos)
+	err = r.db.QueryRow("SELECT COUNT(*) FROM messages WHERE empresa_id = ? AND estado IN ('failed', 'rejected')", empresaID).Scan(&metrics.MensajesFallidos)
 	if err != nil {
 		return nil, fmt.Errorf("error contando mensajes fallidos: %w", err)
 	}
 
 	// Broadcasts ejecutados
-	err = r.db.QueryRow("SELECT COUNT(*) FROM broadcast_jobs WHERE ruc_empresa = ?", rucEmpresa).Scan(&metrics.BroadcastsEjecutados)
+	err = r.db.QueryRow("SELECT COUNT(*) FROM broadcasts WHERE empresa_id = ?", empresaID).Scan(&metrics.BroadcastsEjecutados)
 	if err != nil {
 		return nil, fmt.Errorf("error contando broadcasts: %w", err)
 	}
@@ -313,7 +314,7 @@ func (r *mariaDBMessagesRepository) GetAllMessageMetrics() (*MessageMetrics, err
 	}
 
 	// Broadcasts ejecutados
-	err = r.db.QueryRow("SELECT COUNT(*) FROM broadcast_jobs").Scan(&metrics.BroadcastsEjecutados)
+	err = r.db.QueryRow("SELECT COUNT(*) FROM broadcasts").Scan(&metrics.BroadcastsEjecutados)
 	if err != nil {
 		return nil, fmt.Errorf("error counting broadcasts: %w", err)
 	}
@@ -339,7 +340,8 @@ func scanMessages(rows *sql.Rows) ([]domain.Message, error) {
 		err := rows.Scan(
 			&msg.ID,
 			&msg.ReferenceID,
-			&msg.RUCEmpresa,
+			&msg.EmpresaID,
+			&msg.TelefonoID,
 			&msg.Destino,
 			&msg.Contenido,
 			&adjuntosJSON,

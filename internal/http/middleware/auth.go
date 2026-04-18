@@ -21,7 +21,7 @@ func NewAuthMiddleware(jwtConfig *config.JWTConfig, blacklistStore *storage.Toke
 }
 
 // ValidateToken validates the JWT token and extracts claims
-func (m *AuthMiddleware) ValidateToken(tokenString string) (*domain.TokenClaims, error) {
+func (m *AuthMiddleware) ValidateToken(tokenString string) (*domain.AdminJWTClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrSignatureInvalid
@@ -92,7 +92,7 @@ func (m *AuthMiddleware) ValidateToken(tokenString string) (*domain.TokenClaims,
 		}
 	}
 
-	return &domain.TokenClaims{
+	return &domain.AdminJWTClaims{
 		JTI:           jti,
 		UserID:        userID,
 		Username:      username,
@@ -138,7 +138,7 @@ func (m *AuthMiddleware) RequireAuth() func(http.Handler) http.Handler {
 
 			// Store claims in context
 			ctx := r.Context()
-			ctx = domain.WithTokenClaims(ctx, claims)
+			ctx = domain.WithAdminJWTClaims(ctx, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -167,7 +167,7 @@ func (m *AuthMiddleware) OptionalAuth() func(http.Handler) http.Handler {
 			}
 
 			ctx := r.Context()
-			ctx = domain.WithTokenClaims(ctx, claims)
+			ctx = domain.WithAdminJWTClaims(ctx, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

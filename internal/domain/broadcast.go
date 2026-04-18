@@ -10,7 +10,7 @@ type BroadcastItem struct {
 
 // BroadcastRequest represents the HTTP POST /broadcast request payload.
 type BroadcastRequest struct {
-	RUCEmpresa    string          `json:"ruc_empresa"`
+	TelefonoID    int64           `json:"telefono_id"`
 	ListaDifusion []BroadcastItem `json:"lista_difusion"`
 }
 
@@ -19,7 +19,7 @@ type BroadcastResponse struct {
 	OK            bool   `json:"ok"`
 	ReferenceID   string `json:"reference_id,omitempty"`
 	Total         int    `json:"total,omitempty"`
-	RUCEmpresa    string `json:"ruc_empresa,omitempty"`
+	EmpresaID     int64  `json:"empresa_id,omitempty"`
 	EmpresaNombre string `json:"empresa_nombre,omitempty"`
 	Error         string `json:"error,omitempty"`
 	Details       string `json:"details,omitempty"`
@@ -36,18 +36,19 @@ const (
 
 // BroadcastResult represents the result of processing a single recipient.
 type BroadcastResult struct {
-	Index      int       `json:"index"`
-	Destino    string    `json:"destino"`
-	RUCEmpresa string    `json:"ruc_empresa,omitempty"`
-	State      string    `json:"state"`
-	Error      string    `json:"error,omitempty"`
-	Timestamp  time.Time `json:"timestamp"`
+	Index     int       `json:"index"`
+	Destino   string    `json:"destino"`
+	EmpresaID int64     `json:"empresa_id,omitempty"`
+	State     string    `json:"state"`
+	Error     string    `json:"error,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // BroadcastJob represents a broadcast job with its results.
 type BroadcastJob struct {
 	ReferenceID string            `json:"reference_id"`
-	RUCEmpresa  string            `json:"ruc_empresa"`
+	EmpresaID   int64             `json:"empresa_id"`
+	TelefonoID  int64             `json:"telefono_id"`
 	Total       int               `json:"total"`
 	Status      BroadcastStatus   `json:"status"`
 	Results     []BroadcastResult `json:"results,omitempty"`
@@ -59,7 +60,8 @@ type BroadcastJob struct {
 type BroadcastDetailResponse struct {
 	OK          bool              `json:"ok"`
 	ReferenceID string            `json:"reference_id"`
-	RUCEmpresa  string            `json:"ruc_empresa"`
+	EmpresaID   int64             `json:"empresa_id"`
+	TelefonoID  int64             `json:"telefono_id"`
 	Total       int               `json:"total"`
 	Status      string            `json:"status"`
 	Results     []BroadcastResult `json:"results,omitempty"`

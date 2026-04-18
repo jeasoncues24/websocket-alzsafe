@@ -1,22 +1,12 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Outfit } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AdminAuthCheck } from "@/components/admin-auth-check";
 
-const fontSans = Inter({
+const fontSans = Outfit({
   subsets: ["latin"],
   variable: "--font-sans",
-});
-
-const fontSerif = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-serif",
-});
-
-const fontMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
@@ -31,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning>
-      <body className={`${fontSans.variable} ${fontSerif.variable} ${fontMono.variable} antialiased`}>
+      <body className={`${fontSans.variable} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

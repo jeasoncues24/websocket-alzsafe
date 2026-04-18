@@ -25,7 +25,8 @@ type Message struct {
 	ID int64 `json:"-"`
 
 	ReferenceID string           `json:"reference_id"`
-	RUCEmpresa  string           `json:"ruc_empresa"`
+	EmpresaID   int64            `json:"empresa_id"`
+	TelefonoID  int64            `json:"telefono_id"`
 	Destino     string           `json:"destino"`
 	Contenido   string           `json:"contenido"`
 	TiempoEnvio time.Time        `json:"tiempo_envio"`
@@ -45,7 +46,7 @@ type Message struct {
 
 // MessageRequest represents the HTTP POST request payload for direct messages
 type MessageRequest struct {
-	RUCEmpresa string              `json:"ruc_empresa"`
+	TelefonoID int64               `json:"telefono_id"`
 	Destino    string              `json:"destino"`
 	Mensaje    string              `json:"mensaje"`
 	Adjuntos   []AttachmentPayload `json:"adjuntos,omitempty"`
@@ -56,8 +57,7 @@ type MessageResponse struct {
 	OK            bool   `json:"ok"`
 	Message       string `json:"message"`
 	ReferenceID   string `json:"reference_id,omitempty"`
-	UsuarioID     *int64 `json:"usuario_id,omitempty"`
-	RUCEmpresa    string `json:"ruc_empresa,omitempty"`
+	EmpresaID     int64  `json:"empresa_id,omitempty"`
 	EmpresaNombre string `json:"empresa_nombre,omitempty"`
 	SessionID     string `json:"session_id,omitempty"`
 	Error         string `json:"error,omitempty"`
@@ -65,10 +65,11 @@ type MessageResponse struct {
 }
 
 // NewMessage creates a new Message instance with default values
-func NewMessage(rucEmpresa, destino, contenido string) *Message {
+func NewMessage(empresaID, telefonoID int64, destino, contenido string) *Message {
 	return &Message{
 		ReferenceID: uuid.New().String(),
-		RUCEmpresa:  rucEmpresa,
+		EmpresaID:   empresaID,
+		TelefonoID:  telefonoID,
 		Destino:     destino,
 		Contenido:   contenido,
 		TiempoEnvio: time.Now(),
@@ -110,8 +111,7 @@ type MessagesListResponse struct {
 	Page          int       `json:"page"`
 	Limit         int       `json:"limit"`
 	TotalPages    int       `json:"total_pages"`
-	UsuarioID     *int64    `json:"usuario_id,omitempty"`
-	RUCEmpresa    string    `json:"ruc_empresa,omitempty"`
+	EmpresaID     int64     `json:"empresa_id,omitempty"`
 	EmpresaNombre string    `json:"empresa_nombre,omitempty"`
 	Error         string    `json:"error,omitempty"`
 	Details       string    `json:"details,omitempty"`

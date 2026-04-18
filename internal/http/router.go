@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ func NewRouter() http.Handler {
 
 	var msgRepo storage.MessagesRepository
 	var empresaStore domain.EmpresaStoreInterface
+	var telefonoStore *storage.TelefonoStore
 	var db *sql.DB
 	if cfg.DBHost != "" {
 		var err error
@@ -41,6 +43,7 @@ func NewRouter() http.Handler {
 		} else {
 			msgRepo = storage.NewMessagesRepository(db)
 			empresaStore = storage.NewEmpresaStore(db)
+			telefonoStore = storage.NewTelefonoStore(db)
 			fmt.Printf("[INFO] DB conectada a %s:%s/%s\n", cfg.DBHost, cfg.DBPort, cfg.DBName)
 		}
 	}
@@ -56,12 +59,27 @@ func NewRouter() http.Handler {
 	// Auth handler and middleware
 	var authHandler *httpHandlers.AuthHandler
 	var companiesHandler *httpHandlers.CompaniesHandler
+	var apiKeysHandler *httpHandlers.ApiKeysHandler
+	var empresaAuthMiddleware *middleware.EmpresaAuthMiddleware
+	var apiKeyAuthMiddleware *middleware.ApiKeyAuthMiddleware
+	var v1MessagesHandler *httpHandlers.V1MessagesHandler
+	var v1BroadcastsHandler *httpHandlers.V1BroadcastsHandler
+	var v1SessionsHandler *httpHandlers.V1SessionsHandler
+	var v1MetricsHandler *httpHandlers.V1MetricsHandler
 	var authMiddleware *middleware.AuthMiddleware
 	if db != nil {
 		userStore := storage.NewAdminUserStore(db)
 		blacklistStore := storage.NewTokenBlacklistStore(db)
+		apiKeyStore := storage.NewApiKeyStore(db)
 		authHandler = httpHandlers.NewAuthHandler(userStore, empresaStore, blacklistStore, jwtCfg)
-		companiesHandler = httpHandlers.NewCompaniesHandler(empresaStore)
+		companiesHandler = httpHandlers.NewCompaniesHandler(empresaStore, sessionStore, jwtCfg)
+		apiKeysHandler = httpHandlers.NewApiKeysHandler(apiKeyStore, telefonoStore, empresaStore)
+		empresaAuthMiddleware = middleware.NewEmpresaAuthMiddleware(jwtCfg, empresaStore, telefonoStore)
+		apiKeyAuthMiddleware = middleware.NewApiKeyAuthMiddleware(apiKeyStore, empresaStore, telefonoStore)
+		v1MessagesHandler = httpHandlers.NewV1MessagesHandler(msgRepo, telefonoStore)
+		v1BroadcastsHandler = httpHandlers.NewV1BroadcastsHandler(broadcastStore, telefonoStore)
+		v1SessionsHandler = httpHandlers.NewV1SessionsHandler(telefonoStore, sessionStore, manager)
+		v1MetricsHandler = httpHandlers.NewV1MetricsHandler(msgRepo, telefonoStore)
 		authMiddleware = middleware.NewAuthMiddleware(jwtCfg, blacklistStore)
 	}
 
@@ -70,7 +88,10 @@ func NewRouter() http.Handler {
 	// Admin users/roles/modules handler
 	var adminHandler *AdminHandler
 	if db != nil {
-		adminHandler = NewAdminHandler(db)
+		adminHandler = NewAdminHandler(db, sessionStore, manager)
+		if adminHandler != nil {
+			adminHandler.telefonoStore = telefonoStore
+		}
 	}
 
 	// Auth routes (no auth required)
@@ -95,31 +116,82 @@ func NewRouter() http.Handler {
 		mux.Handle("GET /api/admin/modules", protected(http.HandlerFunc(adminHandler.ListModules)))
 		mux.Handle("POST /api/admin/users/promote/", protected(http.HandlerFunc(adminHandler.PromoteUser)))
 		mux.Handle("PUT /api/admin/users/modules/", protected(http.HandlerFunc(adminHandler.AssignUserModules)))
+		mux.Handle("GET /api/admin/empresas/{id}/telefonos", protected(http.HandlerFunc(adminHandler.ListCompanyPhones)))
+		mux.Handle("POST /api/admin/empresas/{id}/telefonos", protected(http.HandlerFunc(adminHandler.CreateCompanyPhone)))
+		mux.Handle("PUT /api/admin/telefonos/{id}", protected(http.HandlerFunc(adminHandler.UpdateCompanyPhone)))
+		mux.Handle("DELETE /api/admin/telefonos/{id}", protected(http.HandlerFunc(adminHandler.DeleteCompanyPhone)))
 	}
 
-	// Companies routes (protected with auth middleware)
+	// Admin companies routes and company JWT endpoints kept for compatibility
 	if authMiddleware != nil && companiesHandler != nil {
-		protected := authMiddleware.RequireAuth()
-		mux.Handle("/api/companies", protected(http.HandlerFunc(companiesHandler.List)))
-		mux.Handle("/api/companies/", protected(http.HandlerFunc(companiesHandler.Get)))
-		mux.Handle("POST /api/companies", protected(http.HandlerFunc(companiesHandler.Create)))
-		mux.Handle("PUT /api/companies/", protected(http.HandlerFunc(companiesHandler.Update)))
-		mux.Handle("DELETE /api/companies/", protected(http.HandlerFunc(companiesHandler.Delete)))
+		adminProtected := authMiddleware.RequireAuth()
+		mux.Handle("GET /api/admin/empresas", adminProtected(http.HandlerFunc(companiesHandler.List)))
+		mux.Handle("GET /api/admin/empresas/", adminProtected(http.HandlerFunc(companiesHandler.Get)))
+		mux.Handle("POST /api/admin/empresas", adminProtected(http.HandlerFunc(companiesHandler.Create)))
+		mux.Handle("PUT /api/admin/empresas/", adminProtected(http.HandlerFunc(companiesHandler.Update)))
+		mux.Handle("DELETE /api/admin/empresas/", adminProtected(http.HandlerFunc(companiesHandler.Delete)))
+		mux.Handle("POST /api/admin/empresas/{id}/token", adminProtected(http.HandlerFunc(companiesHandler.GenerateToken)))
+		mux.Handle("POST /api/admin/empresas/{id}/token/revoke", adminProtected(http.HandlerFunc(companiesHandler.RevokeToken)))
+	}
 
-		// Protected message/session/broadcast endpoints
-		mux.Handle("POST /api/message", protected(http.HandlerFunc(h.HandlePostMessage)))
-		mux.Handle("GET /api/messages", protected(http.HandlerFunc(h.HandleGetMessages)))
-		mux.Handle("POST /api/broadcast", protected(http.HandlerFunc(h.HandlePostBroadcast)))
-		mux.Handle("GET /api/broadcast/", protected(http.HandlerFunc(h.HandleGetBroadcast)))
-		mux.Handle("GET /api/sessions", protected(http.HandlerFunc(HandleGetAdminSessions)))
-		mux.Handle("POST /api/sessions", protected(http.HandlerFunc(HandlePostAdminSessions)))
-		mux.Handle("GET /api/admin/messages", protected(http.HandlerFunc(HandleGetAdminMessages)))
-		mux.Handle("GET /api/admin/broadcasts", protected(http.HandlerFunc(HandleGetAdminBroadcasts)))
+	// Admin API keys routes
+	if authMiddleware != nil && apiKeysHandler != nil {
+		adminProtected := authMiddleware.RequireAuth()
+		mux.Handle("GET /api/admin/telefonos/{id}/api-keys", adminProtected(http.HandlerFunc(apiKeysHandler.ListByTelefono)))
+		mux.Handle("POST /api/admin/telefonos/{id}/api-keys", adminProtected(http.HandlerFunc(apiKeysHandler.CreateForTelefono)))
+		mux.Handle("GET /api/admin/api-keys/{id}", adminProtected(http.HandlerFunc(apiKeysHandler.Get)))
+		mux.Handle("POST /api/admin/api-keys/{id}/rotate", adminProtected(http.HandlerFunc(apiKeysHandler.Rotate)))
+		mux.Handle("POST /api/admin/api-keys/{id}/revoke", adminProtected(http.HandlerFunc(apiKeysHandler.Revoke)))
+		mux.Handle("GET /api/admin/api-keys/{id}/usage", adminProtected(http.HandlerFunc(apiKeysHandler.Usage)))
+		mux.Handle("GET /api/admin/api-keys/{id}/audit", adminProtected(http.HandlerFunc(apiKeysHandler.Audit)))
+	}
 
-		// Dashboard metrics endpoint
+	// Admin operational routes
+	if authMiddleware != nil {
+		adminProtected := authMiddleware.RequireAuth()
+		mux.Handle("GET /api/admin/mensajes", adminProtected(http.HandlerFunc(HandleGetAdminMessages)))
+		mux.Handle("GET /api/admin/sesiones", adminProtected(http.HandlerFunc(HandleGetAdminSessions)))
+		mux.Handle("POST /api/admin/sesiones", adminProtected(http.HandlerFunc(HandlePostAdminSessions)))
+		mux.Handle("GET /api/admin/difusiones", adminProtected(http.HandlerFunc(HandleGetAdminBroadcasts)))
 		if dashboardHandler != nil {
-			mux.Handle("GET /api/dashboard/metricas", protected(http.HandlerFunc(dashboardHandler.GetMetrics)))
+			mux.Handle("GET /api/admin/metricas", adminProtected(http.HandlerFunc(dashboardHandler.GetMetrics)))
 		}
+	}
+
+	// Empresa auth validation
+	if empresaAuthMiddleware != nil {
+		empresaProtected := empresaAuthMiddleware.RequireEmpresaAuth()
+		mux.Handle("POST /api/auth/empresa/validate", empresaProtected(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+		})))
+	}
+
+	// API key auth validation and public API routes
+	if apiKeyAuthMiddleware != nil && apiKeysHandler != nil && v1MessagesHandler != nil && v1BroadcastsHandler != nil {
+		apiKeyProtected := apiKeyAuthMiddleware.RequireApiKeyAuth()
+		mux.Handle("GET /api/v1/me", apiKeyProtected(http.HandlerFunc(apiKeysHandler.Me)))
+		mux.Handle("GET /api/v1/messages", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.GetMessages)))
+		mux.Handle("POST /api/v1/messages", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.PostMessage)))
+		mux.Handle("GET /api/v1/broadcasts", apiKeyProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcasts)))
+		mux.Handle("POST /api/v1/broadcasts", apiKeyProtected(http.HandlerFunc(v1BroadcastsHandler.PostBroadcast)))
+	}
+
+	// Empresa routes (/api/*)
+	if empresaAuthMiddleware != nil && v1MessagesHandler != nil && v1BroadcastsHandler != nil && v1SessionsHandler != nil && v1MetricsHandler != nil {
+		empresaProtected := empresaAuthMiddleware.RequireEmpresaAuth()
+		mux.Handle("GET /api/empresas", empresaProtected(http.HandlerFunc(companiesHandler.GetCurrent)))
+		mux.Handle("PUT /api/empresas", empresaProtected(http.HandlerFunc(companiesHandler.UpdateCurrent)))
+		mux.Handle("GET /api/mensajes", empresaProtected(http.HandlerFunc(v1MessagesHandler.GetMessages)))
+		mux.Handle("POST /api/mensajes", empresaProtected(http.HandlerFunc(v1MessagesHandler.PostMessage)))
+		mux.Handle("GET /api/difusiones", empresaProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcasts)))
+		mux.Handle("POST /api/difusiones", empresaProtected(http.HandlerFunc(v1BroadcastsHandler.PostBroadcast)))
+		mux.Handle("GET /api/difusiones/", empresaProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcast)))
+		mux.Handle("GET /api/telefonos", empresaProtected(http.HandlerFunc(v1SessionsHandler.GetSessions)))
+		mux.Handle("POST /api/telefonos", empresaProtected(http.HandlerFunc(v1SessionsHandler.PostSessions)))
+		mux.Handle("GET /api/telefonos/", empresaProtected(http.HandlerFunc(v1SessionsHandler.GetSession)))
+		mux.Handle("DELETE /api/telefonos/", empresaProtected(http.HandlerFunc(v1SessionsHandler.DeleteSession)))
+		mux.Handle("GET /api/metricas", empresaProtected(http.HandlerFunc(v1MetricsHandler.GetMetrics)))
 	}
 
 	// Public endpoints (no auth required for now)
@@ -129,11 +201,6 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("POST /broadcast", h.HandlePostBroadcast)
 	mux.HandleFunc("GET /broadcast/", h.HandleGetBroadcast)
 	mux.HandleFunc("GET /metrics", HandleGetMetrics)
-	mux.HandleFunc("GET /companies", HandleGetCompanies)
-	mux.HandleFunc("GET /admin/messages", HandleGetAdminMessages)
-	mux.HandleFunc("GET /admin/sessions", HandleGetAdminSessions)
-	mux.HandleFunc("POST /admin/sessions", HandlePostAdminSessions)
-	mux.HandleFunc("GET /admin/broadcasts", HandleGetAdminBroadcasts)
 	mux.HandleFunc("POST /admin/login", HandleAdminLogin)
 
 	// Health check endpoint
@@ -297,17 +364,43 @@ func HandleGetAdminMessages(w http.ResponseWriter, r *http.Request) {
 		db, err := storage.NewDB(cfg)
 		if err == nil {
 			msgRepo := storage.NewMessagesRepository(db)
-			msgs, _, err := msgRepo.GetByEmpresa(query.Get("account_id"), query.Get("status"), "", limit, 0)
-			if err == nil {
-				for _, m := range msgs {
+			empresaStore := storage.NewEmpresaStore(db)
+			accountID := strings.TrimSpace(query.Get("account_id"))
+			status := strings.TrimSpace(query.Get("status"))
+
+			appendMessages := func(empresaID int64, ruc string) {
+				items, _, err := msgRepo.GetByEmpresa(empresaID, status, "", limit, 0)
+				if err != nil {
+					return
+				}
+				for _, m := range items {
 					messages = append(messages, AdminMessage{
 						ID:        int(m.ID),
-						AccountID: m.RUCEmpresa,
+						AccountID: ruc,
 						To:        m.Destino,
 						Content:   m.Contenido,
 						Status:    string(m.Estado),
 						CreatedAt: m.TiempoEnvio,
 					})
+				}
+			}
+
+			if accountID != "" {
+				if empresa, err := empresaStore.GetByRUC(accountID); err == nil && empresa != nil {
+					appendMessages(empresa.ID, empresa.RUC)
+				}
+			} else {
+				empresas, _, err := empresaStore.GetAll(1, 1000, "", nil)
+				if err == nil {
+					for i := range empresas {
+						appendMessages(empresas[i].ID, empresas[i].RUC)
+					}
+					sort.Slice(messages, func(i, j int) bool {
+						return messages[i].CreatedAt.After(messages[j].CreatedAt)
+					})
+					if len(messages) > limit {
+						messages = messages[:limit]
+					}
 				}
 			}
 		}
@@ -329,27 +422,34 @@ type SessionInfo struct {
 func HandleGetAdminSessions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	sessionStore := storage.NewSessionStore()
-	manager := whatsapp.NewManager()
-
 	result := []SessionInfo{}
-
-	companies := manager.ListKeys()
-	for _, accountID := range companies {
-		state, ok := sessionStore.Get(accountID)
-		if !ok {
-			state = storage.SessionState{AccountID: accountID, Status: "inactive", UpdatedAt: time.Now()}
+	cfg := config.Load()
+	if cfg.DBHost != "" {
+		if db, err := storage.NewDB(cfg); err == nil {
+			empresaStore := storage.NewEmpresaStore(db)
+			telefonoStore := storage.NewTelefonoStore(db)
+			empresas, _, err := empresaStore.GetAll(1, 1000, "", nil)
+			if err == nil {
+				for i := range empresas {
+					telefonos, err := telefonoStore.GetByEmpresa(empresas[i].ID)
+					if err != nil {
+						continue
+					}
+					for _, t := range telefonos {
+						qr := ""
+						if t.Status == domain.TelefonoStatusQRPending {
+							qr = t.QRString
+						}
+						result = append(result, SessionInfo{
+							AccountID: t.NumeroCompleto,
+							Status:    string(t.Status),
+							QRString:  qr,
+							UpdatedAt: t.UpdatedAt,
+						})
+					}
+				}
+			}
 		}
-		qr := ""
-		if state.Status == "qr_pending" {
-			qr = state.QRString
-		}
-		result = append(result, SessionInfo{
-			AccountID: accountID,
-			Status:    state.Status,
-			QRString:  qr,
-			UpdatedAt: state.UpdatedAt,
-		})
 	}
 
 	json.NewEncoder(w).Encode(map[string][]SessionInfo{
@@ -369,12 +469,16 @@ func HandlePostAdminSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionStore := storage.NewSessionStore()
-
 	if req.Action == "disconnect" {
-		sessionStore.SetDisconnected(req.AccountID, "admin_disconnect")
-		manager := whatsapp.NewManager()
-		manager.Delete(req.AccountID)
+		cfg := config.Load()
+		if cfg.DBHost != "" {
+			if db, err := storage.NewDB(cfg); err == nil {
+				telefonoStore := storage.NewTelefonoStore(db)
+				if telefono, err := telefonoStore.GetByNumeroCompleto(req.AccountID); err == nil && telefono != nil {
+					_ = telefonoStore.SetDisconnected(telefono.ID)
+				}
+			}
+		}
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{
@@ -402,8 +506,28 @@ func HandleGetAdminBroadcasts(w http.ResponseWriter, r *http.Request) {
 
 	var jobs []*domain.BroadcastJob
 	if ruc != "" {
-		jobs = broadcastStore.ListByRUC(ruc)
+		cfg := config.Load()
+		if cfg.DBHost != "" {
+			if db, err := storage.NewDB(cfg); err == nil {
+				empresaStore := storage.NewEmpresaStore(db)
+				if empresa, err := empresaStore.GetByRUC(ruc); err == nil && empresa != nil {
+					jobs = broadcastStore.ListByEmpresa(empresa.ID)
+				}
+			}
+		}
 	} else {
+		cfg := config.Load()
+		if cfg.DBHost != "" {
+			if db, err := storage.NewDB(cfg); err == nil {
+				empresaStore := storage.NewEmpresaStore(db)
+				empresas, _, err := empresaStore.GetAll(1, 1000, "", nil)
+				if err == nil {
+					for i := range empresas {
+						jobs = append(jobs, broadcastStore.ListByEmpresa(empresas[i].ID)...)
+					}
+				}
+			}
+		}
 	}
 
 	result := make([]BroadcastInfo, 0, len(jobs))
@@ -419,7 +543,7 @@ func HandleGetAdminBroadcasts(w http.ResponseWriter, r *http.Request) {
 		}
 		result = append(result, BroadcastInfo{
 			ReferenceID: job.ReferenceID,
-			RUCEmpresa:  job.RUCEmpresa,
+			RUCEmpresa:  fmt.Sprintf("%d", job.EmpresaID),
 			Total:       job.Total,
 			Status:      string(job.Status),
 			Success:     success,
@@ -492,7 +616,7 @@ func (h *DashboardHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 					json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
 					return
 				}
-				metrics, err = h.msgRepo.GetMessageMetricsByEmpresa(empresa.RUC)
+				metrics, err = h.msgRepo.GetMessageMetricsByEmpresa(empresa.ID)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
@@ -511,7 +635,13 @@ func (h *DashboardHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
 			return
 		}
-		metrics, err = h.msgRepo.GetMessageMetricsByEmpresa(empresa)
+		if empresaID, ok := domain.GetEmpresaIDFromContext(r.Context(), filter); ok {
+			metrics, err = h.msgRepo.GetMessageMetricsByEmpresa(empresaID)
+		} else {
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
+			return
+		}
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})

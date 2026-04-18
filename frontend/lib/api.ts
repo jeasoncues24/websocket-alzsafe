@@ -20,30 +20,11 @@ export interface Alert {
 }
 
 export async function getMetrics(): Promise<DashboardMetrics> {
-  const res = await fetch(`${API_BASE}/api/dashboard/metricas`, {
+  const res = await fetch(`${API_BASE}/api/admin/metricas`, {
     headers: authHeaders(),
   });
   if (!res.ok) {
     throw new Error("Failed to fetch metrics");
-  }
-  return res.json();
-}
-
-export interface Company {
-  account_id: string;
-  status: string;
-  last_message?: string;
-  updated_at: string;
-}
-
-export interface CompaniesResponse {
-  companies: Company[];
-}
-
-export async function getCompanies(): Promise<CompaniesResponse> {
-  const res = await fetch(`${API_BASE}/companies`);
-  if (!res.ok) {
-    throw new Error("Failed to fetch companies");
   }
   return res.json();
 }
@@ -55,8 +36,9 @@ export interface Empresa {
   ruc: string;
   nombre: string;
   nombre_comercial?: string;
-  telefono?: string;
+  telefono_contacto?: string;
   direccion?: string;
+  token_version: number;
   activo: boolean;
   created_at: string;
   updated_at: string;
@@ -76,11 +58,94 @@ export interface EmpresaResponse {
   error?: string;
 }
 
+export interface AdminTelefono {
+  id: number;
+  empresa_id: number;
+  codigo_pais: string;
+  numero: string;
+  numero_completo: string;
+  status: string;
+  qr_string?: string;
+  last_connected?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TelefonosResponse {
+  ok: boolean;
+  telefonos: AdminTelefono[];
+  total: number;
+  error?: string;
+}
+
+export interface ApiKey {
+  id: number;
+  empresa_id: number;
+  telefono_id: number;
+  nombre: string;
+  key_prefix: string;
+  scopes?: string[];
+  activo: boolean;
+  created_by_user_id?: number | null;
+  created_at: string;
+  updated_at: string;
+  last_used_at?: string | null;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  rotated_from_id?: number | null;
+}
+
+export interface ApiKeyListResponse {
+  ok: boolean;
+  api_keys: ApiKey[];
+  error?: string;
+}
+
+export interface ApiKeyResponse {
+  ok: boolean;
+  api_key?: ApiKey;
+  error?: string;
+}
+
+export interface ApiKeyCreateResponse {
+  ok: boolean;
+  api_key?: ApiKey;
+  secret?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface ApiKeyUsageDaily {
+  day: string;
+  api_key_id: number;
+  empresa_id: number;
+  telefono_id: number;
+  request_count: number;
+  success_count: number;
+  error_count: number;
+  latency_avg_ms: number;
+  messages_sent: number;
+  broadcasts_sent: number;
+  bytes_in: number;
+  bytes_out: number;
+}
+
+export interface ApiKeyAuditEvent {
+  id: number;
+  api_key_id: number;
+  empresa_id: number;
+  telefono_id: number;
+  action: string;
+  actor_user_id?: number | null;
+  metadata?: unknown;
+  created_at: string;
+}
+
 export interface EmpresaCreateRequest {
   ruc: string;
   nombre: string;
   nombre_comercial?: string;
-  telefono?: string;
+  telefono_contacto?: string;
   direccion?: string;
 }
 
@@ -104,17 +169,57 @@ export async function getEmpresas(params?: {
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.busqueda) q.set("busqueda", params.busqueda);
   if (params?.estado) q.set("estado", params.estado);
-  const res = await fetch(`${API_BASE}/api/companies?${q}`, {
+  const res = await fetch(`${API_BASE}/api/admin/empresas?${q}`, {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error("Error al obtener empresas");
   return res.json();
 }
 
+export async function getEmpresa(id: number): Promise<EmpresaResponse> {
+  return fetchWithAuth(`${API_BASE}/api/admin/empresas/${id}`);
+}
+
+export async function getAdminEmpresaTelefonos(id: number): Promise<TelefonosResponse> {
+  return fetchWithAuth(`${API_BASE}/api/admin/empresas/${id}/telefonos`);
+}
+
+export interface AdminTelefonoRequest {
+  codigo_pais: string;
+  numero: string;
+  status?: string;
+}
+
+export async function createAdminTelefono(
+  empresaId: number,
+  data: AdminTelefonoRequest,
+): Promise<{ ok: boolean; telefono: AdminTelefono; error?: string }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/empresas/${empresaId}/telefonos`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateAdminTelefono(
+  telefonoId: number,
+  data: Partial<AdminTelefonoRequest>,
+): Promise<{ ok: boolean; telefono: AdminTelefono; error?: string }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteAdminTelefono(telefonoId: number): Promise<{ ok: boolean }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}`, {
+    method: "DELETE",
+  });
+}
+
 export async function createEmpresa(
   data: EmpresaCreateRequest,
 ): Promise<EmpresaResponse> {
-  const res = await fetch(`${API_BASE}/api/companies`, {
+  const res = await fetch(`${API_BASE}/api/admin/empresas`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -128,7 +233,7 @@ export async function updateEmpresa(
   id: number,
   data: Partial<EmpresaCreateRequest>,
 ): Promise<EmpresaResponse> {
-  const res = await fetch(`${API_BASE}/api/companies/?id=${id}`, {
+  const res = await fetch(`${API_BASE}/api/admin/empresas/${id}`, {
     method: "PUT",
     headers: authHeaders(),
     body: JSON.stringify(data),
@@ -139,7 +244,7 @@ export async function updateEmpresa(
 }
 
 export async function deleteEmpresa(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/companies/?id=${id}`, {
+  const res = await fetch(`${API_BASE}/api/admin/empresas/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -147,6 +252,50 @@ export async function deleteEmpresa(id: number): Promise<void> {
     const json = await res.json().catch(() => ({}));
     throw new Error(json.error || "Error al eliminar empresa");
   }
+}
+
+export async function getAdminTelefonoApiKeys(
+  telefonoId: number,
+): Promise<ApiKeyListResponse> {
+  return fetchWithAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}/api-keys`);
+}
+
+export async function createAdminTelefonoApiKey(
+  telefonoId: number,
+  data: { nombre: string; scopes: string[]; expires_at?: string },
+): Promise<ApiKeyCreateResponse> {
+  return fetchWithAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}/api-keys`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getAdminApiKey(id: number): Promise<ApiKeyResponse> {
+  return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}`);
+}
+
+export async function rotateAdminApiKey(id: number): Promise<ApiKeyCreateResponse> {
+  return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}/rotate`, {
+    method: "POST",
+  });
+}
+
+export async function revokeAdminApiKey(id: number): Promise<ApiKeyResponse> {
+  return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}/revoke`, {
+    method: "POST",
+  });
+}
+
+export async function getAdminApiKeyUsage(
+  id: number,
+): Promise<{ ok: boolean; usage: ApiKeyUsageDaily[] }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}/usage`);
+}
+
+export async function getAdminApiKeyAudit(
+  id: number,
+): Promise<{ ok: boolean; audit: ApiKeyAuditEvent[] }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}/audit`);
 }
 
 export interface AdminMessage {
@@ -173,11 +322,7 @@ export async function getAdminMessages(filters?: {
   if (filters?.status) params.set("status", filters.status);
   if (filters?.limit) params.set("limit", String(filters.limit));
 
-  const res = await fetch(`${API_BASE}/admin/messages?${params}`);
-  if (!res.ok) {
-    throw new Error("Failed to fetch messages");
-  }
-  return res.json();
+  return fetchWithAuth(`${API_BASE}/api/admin/mensajes?${params}`);
 }
 
 export interface SessionInfo {
@@ -192,26 +337,17 @@ export interface SessionsResponse {
 }
 
 export async function getAdminSessions(): Promise<SessionsResponse> {
-  const res = await fetch(`${API_BASE}/admin/sessions`);
-  if (!res.ok) {
-    throw new Error("Failed to fetch sessions");
-  }
-  return res.json();
+  return fetchWithAuth(`${API_BASE}/api/admin/sesiones`);
 }
 
 export async function postAdminSession(
   action: string,
   accountId: string,
 ): Promise<{ status: string }> {
-  const res = await fetch(`${API_BASE}/admin/sessions`, {
+  return fetchWithAuth(`${API_BASE}/api/admin/sesiones`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ account_id: accountId, action }),
   });
-  if (!res.ok) {
-    throw new Error("Failed to perform action");
-  }
-  return res.json();
 }
 
 export interface BroadcastInfo {
@@ -232,11 +368,7 @@ export async function getAdminBroadcasts(
   accountId?: string,
 ): Promise<BroadcastsResponse> {
   const params = accountId ? `?account_id=${accountId}` : "";
-  const res = await fetch(`${API_BASE}/admin/broadcasts${params}`);
-  if (!res.ok) {
-    throw new Error("Failed to fetch broadcasts");
-  }
-  return res.json();
+  return fetchWithAuth(`${API_BASE}/api/admin/difusiones${params}`);
 }
 
 // ---- Users Management ----

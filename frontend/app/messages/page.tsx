@@ -1,42 +1,42 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
-import { getAdminMessages, getCompanies, type AdminMessage, type Company } from "@/lib/api"
+import { getAdminMessages, getEmpresas, type AdminMessage, type Empresa } from "@/lib/api"
 
 export default function MessagesPage() {
   const [messages, setMessages] = useState<AdminMessage[]>([])
-  const [companies, setCompanies] = useState<Company[]>([])
+  const [companies, setCompanies] = useState<Empresa[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("all")
   const [filterAccount, setFilterAccount] = useState("")
   const [total, setTotal] = useState(0)
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     try {
       const statusFilter = activeTab === "all" ? "" : activeTab
       const [msgsData, compsData] = await Promise.all([
         getAdminMessages({ status: statusFilter, account_id: filterAccount, limit: 50 }),
-        getCompanies(),
+        getEmpresas({ limit: 1000 }),
       ])
       setMessages(msgsData.messages)
       setTotal(msgsData.total)
-      setCompanies(compsData.companies)
+      setCompanies(compsData.empresas)
     } catch (error) {
       console.error("Failed to load data:", error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeTab, filterAccount])
 
   useEffect(() => {
     loadData()
-  }, [activeTab, filterAccount])
+  }, [loadData])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -79,8 +79,8 @@ export default function MessagesPage() {
               >
                 <option value="">Todas las empresas</option>
                 {companies.map((c) => (
-                  <option key={c.account_id} value={c.account_id}>
-                    {c.account_id}
+                  <option key={c.ruc} value={c.ruc}>
+                    {c.ruc}
                   </option>
                 ))}
               </select>

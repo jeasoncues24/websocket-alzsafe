@@ -214,7 +214,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, ok := domain.GetTokenClaims(r.Context())
+	claims, ok := domain.GetAdminJWTClaims(r.Context())
 	if !ok {
 		http.Error(w, `{"ok": false, "error": "No autenticado"}`, http.StatusUnauthorized)
 		return

@@ -1,14 +1,14 @@
--- Migration: 003_create_broadcast_results_table
--- Created: 2026-04-15
-
+-- 003: Broadcast results table
 CREATE TABLE IF NOT EXISTS broadcast_results (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     broadcast_id BIGINT NOT NULL,
-    item_index INT NOT NULL,
-    destino VARCHAR(20) NOT NULL,
-    state VARCHAR(20) NOT NULL,
-    error TEXT,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_broadcast_results_broadcast_id (broadcast_id),
-    FOREIGN KEY (broadcast_id) REFERENCES broadcasts(id) ON DELETE CASCADE
-);
+    destino VARCHAR(50) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    error_message TEXT,
+    sent_at TIMESTAMP NULL,
+    delivered_at TIMESTAMP NULL,
+    read_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_results_broadcast (broadcast_id),
+    INDEX idx_results_destino (destino)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
