@@ -1,8 +1,11 @@
 package http
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -108,6 +111,16 @@ func (w *statusRecorder) Write(b []byte) (int, error) {
 		w.body.Write(b)
 	}
 	return w.ResponseWriter.Write(b)
+}
+
+// Hijack implements http.Hijacker so that WebSocket upgrades work correctly
+// through the logging middleware wrapper.
+func (w *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("underlying ResponseWriter does not implement http.Hijacker")
+	}
+	return hj.Hijack()
 }
 
 func GetCorrelationID(ctx context.Context) string {

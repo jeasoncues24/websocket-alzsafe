@@ -114,31 +114,31 @@ func (h *Handler) processInitSession(ctx context.Context, c *websocket.Conn, dat
 		return errors.New("ruc_empresa invalido")
 	}
 
-	if err := whatsapp.StartSession(h.manager, ruc); err != nil {
+	events, err := whatsapp.StartSession(h.manager, ruc)
+	if err != nil {
 		return err
 	}
 
 	h.sessionStore.SetInitializing(ruc)
+	go func() {
+		for {
+			select {
+			case event, ok := <-events:
+				if !ok {
+					return
+				}
+				if err := writeEvent(ctx, c, outboundPayload{Event: event.Event, Data: event.Data}); err != nil {
+					h.manager.Delete(ruc)
+					return
+				}
+			case <-ctx.Done():
+				h.manager.Delete(ruc)
+				return
+			}
+		}
+	}()
 
-	qr := whatsapp.GenerateQRCode(ruc)
-	h.sessionStore.SetQRPending(ruc, qr)
-	if err := writeEvent(ctx, c, outboundPayload{
-		Event: "qr-" + ruc,
-		Data: map[string]any{
-			"message":  "Escanee el codigo QR para iniciar sesion.",
-			"qrString": qr,
-		},
-	}); err != nil {
-		return err
-	}
-
-	return writeEvent(ctx, c, outboundPayload{
-		Event: "active-" + ruc,
-		Data: map[string]any{
-			"message":  "Sesion en proceso de inicializacion",
-			"isActive": false,
-		},
-	})
+	return nil
 }
 
 func (h *Handler) processSessionReady(ctx context.Context, c *websocket.Conn, data json.RawMessage) error {

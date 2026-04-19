@@ -1,5 +1,11 @@
 import type { NextConfig } from "next";
 
+const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+
+if (!backendUrl) {
+  throw new Error("NEXT_PUBLIC_API_URL is required in frontend/.env.local");
+}
+
 const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
@@ -8,19 +14,19 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:8080/api/:path*",
+        destination: `${backendUrl}/api/:path*`,
       },
       {
         source: "/admin/:path*",
-        destination: "http://localhost:8080/admin/:path*",
+        destination: `${backendUrl}/admin/:path*`,
       },
       {
         source: "/metrics",
-        destination: "http://localhost:8080/metrics",
+        destination: `${backendUrl}/metrics`,
       },
       {
         source: "/ws",
-        destination: "http://localhost:8080/ws",
+        destination: `${backendUrl}/ws`,
       },
     ];
   },

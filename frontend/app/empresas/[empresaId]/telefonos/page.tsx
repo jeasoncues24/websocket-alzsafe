@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Building2, KeyRound, Loader2, Phone, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Building2, KeyRound, Loader2, Phone, Pencil, Plus, QrCode, RefreshCw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -222,6 +222,12 @@ export default function CompanyPhonesPage() {
                     <KeyRound className="mr-2 h-4 w-4" />
                     Gestionar API Keys
                   </Button>
+                  {telefono.status !== "active" && (
+                    <Button variant="outline" onClick={() => router.push(`/empresas/${empresaId}/telefonos/${telefono.id}/connect`)}>
+                      <QrCode className="mr-2 h-4 w-4" />
+                      {telefono.status === "disconnected" ? "Conectar" : "Ver QR"}
+                    </Button>
+                  )}
                 </div>
               </div>
             ))

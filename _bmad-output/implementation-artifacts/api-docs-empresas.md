@@ -188,6 +188,24 @@ Revoca tokens incrementando `token_version`.
 }
 ```
 
+### GET `/api/admin/telefonos/{id}`
+
+Obtiene el detalle de un teléfono administrado.
+
+#### Reglas
+
+- Solo autenticación admin.
+- Un admin no-root solo puede ver teléfonos de su empresa.
+
+### POST `/api/admin/telefonos/{id}/connect`
+
+Inicia la conexión QR de un teléfono administrado.
+
+#### Reglas
+
+- Solo autenticación admin.
+- Un admin no-root solo puede iniciar conexión en teléfonos de su empresa.
+
 ### GET `/api/empresas`
 
 Obtiene la empresa autenticada con JWT de empresa.
@@ -208,16 +226,21 @@ Rutas actuales del panel empresa con JWT de empresa:
 - `GET /api/empresas`
 - `PUT /api/empresas`
 - `POST /api/auth/empresa/validate`
-- `GET /api/telefonos`
-- `POST /api/telefonos`
-- `GET /api/telefonos/{id}`
-- `DELETE /api/telefonos/{id}`
 - `GET /api/mensajes`
 - `POST /api/mensajes`
 - `GET /api/difusiones`
 - `POST /api/difusiones`
 - `GET /api/difusiones/{reference_id}`
 - `GET /api/metricas`
+
+Rutas actuales del panel admin para teléfonos:
+
+- `GET /api/admin/empresas/{id}/telefonos`
+- `POST /api/admin/empresas/{id}/telefonos`
+- `GET /api/admin/telefonos/{id}`
+- `PUT /api/admin/telefonos/{id}`
+- `DELETE /api/admin/telefonos/{id}`
+- `POST /api/admin/telefonos/{id}/connect`
 
 ## Errores comunes
 

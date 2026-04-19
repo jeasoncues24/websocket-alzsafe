@@ -16,6 +16,20 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Environment
+
+Copy `frontend/.env.example` to `frontend/.env.local` before running the app.
+
+| Variable | Purpose | Referenced in |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | Base URL of the Go backend API and WebSocket origin. | `frontend/next.config.ts`, `frontend/lib/api.ts`, `frontend/app/users_admin/page.tsx` |
+
+Rules:
+
+- Do not hardcode `localhost`, IPs, or ports in frontend source.
+- Keep local-only values in `frontend/.env.local` and documented defaults in `frontend/.env.example`.
+- If a new frontend env var is added, document it here and in the example file before using it.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

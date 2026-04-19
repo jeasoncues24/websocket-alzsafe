@@ -8,8 +8,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/coder/websocket"
+
 	"wsapi/internal/config"
 	"wsapi/internal/domain"
+	"wsapi/internal/http/middleware"
 	"wsapi/internal/storage"
 	"wsapi/internal/whatsapp"
 )
@@ -23,9 +26,10 @@ type AdminHandler struct {
 	apiKeyStore   *storage.ApiKeyStore
 	sessionStore  *storage.SessionStore
 	manager       *whatsapp.Manager
+	jwtCfg        *config.JWTConfig
 }
 
-func NewAdminHandler(db *sql.DB, sessionStore *storage.SessionStore, manager *whatsapp.Manager) *AdminHandler {
+func NewAdminHandler(db *sql.DB, sessionStore *storage.SessionStore, manager *whatsapp.Manager, jwtCfg *config.JWTConfig) *AdminHandler {
 	if db == nil {
 		return nil
 	}
@@ -38,6 +42,7 @@ func NewAdminHandler(db *sql.DB, sessionStore *storage.SessionStore, manager *wh
 		apiKeyStore:   storage.NewApiKeyStore(db),
 		sessionStore:  sessionStore,
 		manager:       manager,
+		jwtCfg:        jwtCfg,
 	}
 }
 
@@ -605,8 +610,179 @@ func (h *AdminHandler) DeleteCompanyPhone(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
 
+func (h *AdminHandler) GetCompanyPhone(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
+	if err != nil || telefonoID <= 0 {
+		http.Error(w, "invalid telefono ID", http.StatusBadRequest)
+		return
+	}
+
+	phone, err := h.telefonoStore.GetByID(telefonoID)
+	if err != nil || phone == nil {
+		http.Error(w, "teléfono no encontrado", http.StatusNotFound)
+		return
+	}
+
+	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	if claims != nil && !claims.IsRoot {
+		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
+			http.Error(w, "acceso denegado", http.StatusForbidden)
+			return
+		}
+	}
+
+	json.NewEncoder(w).Encode(domain.TelefonoResponse{OK: true, Telefono: phone})
+}
+
+func (h *AdminHandler) StartCompanyPhoneConnection(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
+	if err != nil || telefonoID <= 0 {
+		http.Error(w, "invalid telefono ID", http.StatusBadRequest)
+		return
+	}
+
+	phone, err := h.telefonoStore.GetByID(telefonoID)
+	if err != nil || phone == nil {
+		http.Error(w, "teléfono no encontrado", http.StatusNotFound)
+		return
+	}
+
+	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	if claims != nil && !claims.IsRoot {
+		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
+			http.Error(w, "acceso denegado", http.StatusForbidden)
+			return
+		}
+	}
+
+	if h.sessionStore != nil {
+		if state, ok := h.sessionStore.Get(phone.NumeroCompleto); ok && state.Status == "active" {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":             true,
+				"telefono_id":    phone.ID,
+				"numeroCompleto": phone.NumeroCompleto,
+				"status":         "active",
+				"lastConnected":  phone.LastConnected,
+				"qr_string":      phone.QRString,
+			})
+			return
+		}
+	}
+
+	if h.manager == nil {
+		http.Error(w, "whatsapp manager no disponible", http.StatusServiceUnavailable)
+		return
+	}
+
+	events, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
+	if err != nil {
+		http.Error(w, "error al iniciar conexión: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	go func() {
+		for range events {
+		}
+	}()
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":             true,
+		"telefono_id":    phone.ID,
+		"numeroCompleto": phone.NumeroCompleto,
+		"status":         "initializing",
+		"qr_string":      phone.QRString,
+		"expires_in":     300,
+	})
+}
+
+func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Request) {
+	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil {
+		return
+	}
+	defer wsConn.CloseNow()
+
+	if h.jwtCfg == nil {
+		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "configuracion JWT no disponible"}})
+		return
+	}
+
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+			token = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
+	if token == "" {
+		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "Token requerido"}})
+		return
+	}
+
+	claims, err := middleware.NewAuthMiddleware(h.jwtCfg, nil).ValidateToken(token)
+	if err != nil {
+		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "Token inválido"}})
+		return
+	}
+
+	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
+	if err != nil || telefonoID <= 0 {
+		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "ID de teléfono inválido"}})
+		return
+	}
+
+	phone, err := h.telefonoStore.GetByID(telefonoID)
+	if err != nil || phone == nil {
+		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "teléfono no encontrado"}})
+		return
+	}
+	if !claims.IsRoot {
+		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
+			_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "acceso denegado"}})
+			return
+		}
+	}
+
+	_ = writeEvent(r.Context(), wsConn, outboundPayload{
+		Event: "phone-info",
+		Data: map[string]any{
+			"telefono_id":    phone.ID,
+			"numeroCompleto": phone.NumeroCompleto,
+			"status":         phone.Status,
+			"qr_string":      phone.QRString,
+			"lastConnected":  phone.LastConnected,
+		},
+	})
+
+	events, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
+	if err != nil {
+		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "error al iniciar conexión: " + err.Error()}})
+		return
+	}
+
+	ctx := r.Context()
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			if err := writeEvent(ctx, wsConn, outboundPayload{Event: event.Event, Data: event.Data}); err != nil {
+				return
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 func extractTelefonoIDFromAdminPath(path string) (int64, error) {
 	base := strings.TrimPrefix(path, "/api/admin/telefonos/")
+	base = strings.TrimSuffix(base, "/connect/ws")
+	base = strings.TrimSuffix(base, "/connect")
 	base = strings.Trim(base, "/")
 	if base == "" {
 		return 0, fmt.Errorf("missing telefono id")
@@ -629,9 +805,10 @@ func getAdminHandler() *AdminHandler {
 	if cfg.DBHost == "" {
 		return nil
 	}
+	jwtCfg := config.LoadJWT()
 	db, err := storage.NewDB(cfg)
 	if err != nil {
 		return nil
 	}
-	return NewAdminHandler(db, nil, nil)
+	return NewAdminHandler(db, nil, nil, jwtCfg)
 }

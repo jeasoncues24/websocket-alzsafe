@@ -55,8 +55,8 @@ func runMigrateCommand(migrateCmd *flag.FlagSet, verbose *bool) {
 	}
 
 	cfg := config.Load()
-	if cfg.DBHost == "" {
-		fmt.Println("Error: Database not configured. Set DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME")
+	if cfg.DBHost == "" || cfg.DBPort == "" || cfg.DBName == "" || cfg.DBUser == "" {
+		fmt.Println("Error: Database not configured. Set DB_HOST, DB_PORT, DB_NAME, DB_USER in .env")
 		os.Exit(1)
 	}
 
@@ -79,7 +79,7 @@ func runMigrateCommand(migrateCmd *flag.FlagSet, verbose *bool) {
 	case "status":
 		runStatus(runner, db, *verbose)
 	case "up":
-		runUp(runner, db, *verbose)
+		runUp(runner, db, cfg.DBName, *verbose)
 	case "down":
 		runDown(runner, db, *verbose)
 	default:
@@ -116,7 +116,7 @@ func runStatus(runner *storage.MigrationRunner, db *sql.DB, verbose bool) {
 	}
 }
 
-func runUp(runner *storage.MigrationRunner, db *sql.DB, verbose bool) {
+func runUp(runner *storage.MigrationRunner, db *sql.DB, dbName string, verbose bool) {
 	fmt.Println("Running migrations...")
 
 	// Force fresh connection settings
@@ -136,7 +136,7 @@ func runUp(runner *storage.MigrationRunner, db *sql.DB, verbose bool) {
 
 	// Verify tables after
 	var count int
-	db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name != 'schema_migrations'", "wsapi").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name != 'schema_migrations'", dbName).Scan(&count)
 	fmt.Printf("Tables created (excluding schema_migrations): %d\n", count)
 
 	version, _ := runner.GetCurrentVersion(db)
@@ -160,7 +160,8 @@ func startServer() {
 	cfg := config.Load()
 	port := cfg.AppPort
 	if port == "" {
-		port = "8080"
+		fmt.Println("Error: APP_PORT not configured. Set APP_PORT in .env")
+		os.Exit(1)
 	}
 	fmt.Printf("Servidor WhatsApp API iniciado en el puerto %s\n", port)
 	router := apihttp.NewRouter()

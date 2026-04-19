@@ -33,6 +33,7 @@ import {
   type Module,
   type CreateUserRequest,
   type UpdateUserRequest,
+  API_BASE,
 } from "@/lib/api";
 
 function UserFormModal({
@@ -232,14 +233,11 @@ function UserFormModal({
 
 async function loadUserModules(userId: number): Promise<number[]> {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || ""}/admin/users/${userId}/modules`,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("admin_token")}`,
-        },
+    const res = await fetch(`${API_BASE}/admin/users/${userId}/modules`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("admin_token")}`,
       },
-    );
+    });
     if (!res.ok) return [];
     const json = await res.json();
     return json.module_ids || [];

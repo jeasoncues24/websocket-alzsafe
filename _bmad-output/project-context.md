@@ -75,6 +75,7 @@ _Este archivo contiene reglas y patrones criticos que los agentes AI deben segui
 - Definir estructuras de request/response explicitas para endpoints en lugar de mapas dinamicos.
 - No introducir dependencias nuevas sin justificar su necesidad para la migracion funcional.
 - Mantener comentarios solo donde aclaren decisiones no obvias de concurrencia, reconexion o compatibilidad.
+- No hardcodear `localhost`, IPs o puertos en codigo fuente. El backend debe leer valores de `.env` desde `internal/config/config.go`; el frontend debe leer su base URL desde `frontend/.env.local` y `frontend/.env.example`.
 
 ### Development Workflow Rules
 
@@ -83,6 +84,7 @@ _Este archivo contiene reglas y patrones criticos que los agentes AI deben segui
 - Validar cada capability migrada con evidencia minima: endpoint funcional, caso de error, y persistencia esperada.
 - Mantener trazabilidad Node -> Go por caso de uso, citando el baseline usqay cuando aplique.
 - Usar rama actual para implementacion Go sin reintroducir archivos del stack TypeScript eliminado.
+- Si se agrega una variable de entorno nueva, documentarla en el `.env.example` correspondiente y en el README del proyecto afectado antes de usarla en codigo.
 
 ### Critical Don't-Miss Rules
 

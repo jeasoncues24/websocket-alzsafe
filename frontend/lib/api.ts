@@ -1,4 +1,19 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
+
+if (!API_BASE) {
+  throw new Error("NEXT_PUBLIC_API_URL is required in frontend/.env.local");
+}
+
+export function buildAdminWsUrl(path: string, token?: string) {
+  const url = new URL(API_BASE);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.pathname = path;
+  url.search = "";
+  if (token) {
+    url.searchParams.set("token", token);
+  }
+  return url.toString();
+}
 
 export interface DashboardMetrics {
   active_companies: number;
@@ -338,6 +353,74 @@ export interface SessionsResponse {
 
 export async function getAdminSessions(): Promise<SessionsResponse> {
   return fetchWithAuth(`${API_BASE}/api/admin/sesiones`);
+}
+
+export interface EmpresaTelefonoSessionData {
+  telefono_id: number;
+  numeroCompleto: string;
+  status: string;
+  lastConnected?: string | null;
+  qr_string?: string;
+  expires_in?: number;
+}
+
+export interface EmpresaTelefonoResponse {
+  ok: boolean;
+  data?: EmpresaTelefonoSessionData;
+  message?: string;
+  error?: string;
+}
+
+async function fetchWithEmpresaAuth(url: string, options?: RequestInit) {
+  const headers: HeadersInit = {
+    ...authHeaders(),
+    ...options?.headers,
+  };
+  const res = await fetch(url, { ...options, headers });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(error.error || error.message || "Request failed");
+  }
+  return res.json();
+}
+
+export async function getEmpresaTelefono(telefonoId: number): Promise<EmpresaTelefonoResponse> {
+  const json = await fetchWithEmpresaAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}`);
+  return {
+    ok: !!json.ok,
+    data: json.telefono
+      ? {
+          telefono_id: json.telefono.id,
+          numeroCompleto: json.telefono.numero_completo,
+          status: json.telefono.status,
+          lastConnected: json.telefono.last_connected ?? null,
+          qr_string: json.telefono.qr_string,
+        }
+      : undefined,
+    message: json.message,
+    error: json.error,
+  };
+}
+
+export async function connectEmpresaTelefono(telefonoId: number): Promise<EmpresaTelefonoResponse> {
+  const json = await fetchWithEmpresaAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}/connect`, {
+    method: "POST",
+  });
+  return {
+    ok: !!json.ok,
+    data: json.ok
+      ? {
+          telefono_id: json.telefono_id,
+          numeroCompleto: json.numeroCompleto,
+          status: json.status,
+          lastConnected: json.lastConnected ?? null,
+          qr_string: json.qr_string,
+          expires_in: json.expires_in,
+        }
+      : undefined,
+    message: json.message,
+    error: json.error,
+  };
 }
 
 export async function postAdminSession(

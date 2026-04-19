@@ -10,12 +10,19 @@ import (
 type Manager struct {
 	mu      sync.RWMutex
 	clients map[string]*whatsmeow.Client
+	service *Service
 }
 
 func NewManager() *Manager {
 	return &Manager{
 		clients: make(map[string]*whatsmeow.Client),
 	}
+}
+
+func (m *Manager) attachService(service *Service) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.service = service
 }
 
 func (m *Manager) Get(accountID string) (*whatsmeow.Client, bool) {
@@ -47,6 +54,13 @@ func (m *Manager) Delete(accountID string) {
 		return
 	}
 
+	m.mu.RLock()
+	service := m.service
+	m.mu.RUnlock()
+	if service != nil {
+		service.StopSession(accountID)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.clients, accountID)
@@ -72,6 +86,34 @@ func (m *Manager) ListKeys() []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+func (m *Manager) clearClient(accountID string) {
+	accountID = NormalizeAccountID(accountID)
+	if accountID == "" {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.clients, accountID)
+}
+
+func (m *Manager) registerClient(accountID string, client *whatsmeow.Client) {
+	accountID = NormalizeAccountID(accountID)
+	if accountID == "" {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.clients[accountID] = client
+}
+
+func (m *Manager) getService() *Service {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.service
 }
 
 // NormalizeAccountID normalizes account ID by trimming whitespace

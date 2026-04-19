@@ -48,6 +48,8 @@ func NewRouter() http.Handler {
 		}
 	}
 
+	whatsapp.NewService(manager, sessionStore, telefonoStore, cfg.WhatsAppSQLiteDir)
+
 	h := NewHandlerWithBroadcast(manager, sessionStore, msgRepo, empresaStore, broadcastWorker, broadcastStore)
 
 	// Dashboard handler
@@ -64,7 +66,6 @@ func NewRouter() http.Handler {
 	var apiKeyAuthMiddleware *middleware.ApiKeyAuthMiddleware
 	var v1MessagesHandler *httpHandlers.V1MessagesHandler
 	var v1BroadcastsHandler *httpHandlers.V1BroadcastsHandler
-	var v1SessionsHandler *httpHandlers.V1SessionsHandler
 	var v1MetricsHandler *httpHandlers.V1MetricsHandler
 	var authMiddleware *middleware.AuthMiddleware
 	if db != nil {
@@ -78,7 +79,6 @@ func NewRouter() http.Handler {
 		apiKeyAuthMiddleware = middleware.NewApiKeyAuthMiddleware(apiKeyStore, empresaStore, telefonoStore)
 		v1MessagesHandler = httpHandlers.NewV1MessagesHandler(msgRepo, telefonoStore)
 		v1BroadcastsHandler = httpHandlers.NewV1BroadcastsHandler(broadcastStore, telefonoStore)
-		v1SessionsHandler = httpHandlers.NewV1SessionsHandler(telefonoStore, sessionStore, manager)
 		v1MetricsHandler = httpHandlers.NewV1MetricsHandler(msgRepo, telefonoStore)
 		authMiddleware = middleware.NewAuthMiddleware(jwtCfg, blacklistStore)
 	}
@@ -88,7 +88,7 @@ func NewRouter() http.Handler {
 	// Admin users/roles/modules handler
 	var adminHandler *AdminHandler
 	if db != nil {
-		adminHandler = NewAdminHandler(db, sessionStore, manager)
+		adminHandler = NewAdminHandler(db, sessionStore, manager, jwtCfg)
 		if adminHandler != nil {
 			adminHandler.telefonoStore = telefonoStore
 		}
@@ -118,8 +118,11 @@ func NewRouter() http.Handler {
 		mux.Handle("PUT /api/admin/users/modules/", protected(http.HandlerFunc(adminHandler.AssignUserModules)))
 		mux.Handle("GET /api/admin/empresas/{id}/telefonos", protected(http.HandlerFunc(adminHandler.ListCompanyPhones)))
 		mux.Handle("POST /api/admin/empresas/{id}/telefonos", protected(http.HandlerFunc(adminHandler.CreateCompanyPhone)))
+		mux.Handle("GET /api/admin/telefonos/{id}", protected(http.HandlerFunc(adminHandler.GetCompanyPhone)))
 		mux.Handle("PUT /api/admin/telefonos/{id}", protected(http.HandlerFunc(adminHandler.UpdateCompanyPhone)))
 		mux.Handle("DELETE /api/admin/telefonos/{id}", protected(http.HandlerFunc(adminHandler.DeleteCompanyPhone)))
+		mux.Handle("POST /api/admin/telefonos/{id}/connect", protected(http.HandlerFunc(adminHandler.StartCompanyPhoneConnection)))
+		mux.Handle("GET /api/admin/telefonos/{id}/connect/ws", http.HandlerFunc(adminHandler.ConnectCompanyPhoneWS))
 	}
 
 	// Admin companies routes and company JWT endpoints kept for compatibility
@@ -178,7 +181,7 @@ func NewRouter() http.Handler {
 	}
 
 	// Empresa routes (/api/*)
-	if empresaAuthMiddleware != nil && v1MessagesHandler != nil && v1BroadcastsHandler != nil && v1SessionsHandler != nil && v1MetricsHandler != nil {
+	if empresaAuthMiddleware != nil && v1MessagesHandler != nil && v1BroadcastsHandler != nil && v1MetricsHandler != nil {
 		empresaProtected := empresaAuthMiddleware.RequireEmpresaAuth()
 		mux.Handle("GET /api/empresas", empresaProtected(http.HandlerFunc(companiesHandler.GetCurrent)))
 		mux.Handle("PUT /api/empresas", empresaProtected(http.HandlerFunc(companiesHandler.UpdateCurrent)))
@@ -187,10 +190,6 @@ func NewRouter() http.Handler {
 		mux.Handle("GET /api/difusiones", empresaProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcasts)))
 		mux.Handle("POST /api/difusiones", empresaProtected(http.HandlerFunc(v1BroadcastsHandler.PostBroadcast)))
 		mux.Handle("GET /api/difusiones/", empresaProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcast)))
-		mux.Handle("GET /api/telefonos", empresaProtected(http.HandlerFunc(v1SessionsHandler.GetSessions)))
-		mux.Handle("POST /api/telefonos", empresaProtected(http.HandlerFunc(v1SessionsHandler.PostSessions)))
-		mux.Handle("GET /api/telefonos/", empresaProtected(http.HandlerFunc(v1SessionsHandler.GetSession)))
-		mux.Handle("DELETE /api/telefonos/", empresaProtected(http.HandlerFunc(v1SessionsHandler.DeleteSession)))
 		mux.Handle("GET /api/metricas", empresaProtected(http.HandlerFunc(v1MetricsHandler.GetMetrics)))
 	}
 
