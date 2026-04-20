@@ -2,6 +2,8 @@ package config
 
 import (
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -15,6 +17,15 @@ type Config struct {
 	DBUser            string
 	DBPass            string
 	WhatsAppSQLiteDir string
+
+	WhatsAppBootstrapEnabled        bool
+	WhatsAppBootstrapMaxConcurrency int
+	WhatsAppBootstrapTimeoutSec     int
+
+	WhatsAppDebugLogDir        string
+	WhatsAppDebugLogPerAccount bool
+	WhatsAppDebugLogLevel      string
+	WhatsAppConsoleLogLevel    string
 }
 
 func Load() *Config {
@@ -28,6 +39,15 @@ func Load() *Config {
 		DBUser:            getEnv("DB_USER", ""),
 		DBPass:            getEnv("DB_PASS", ""),
 		WhatsAppSQLiteDir: getEnv("WHATSAPP_SQLITE_DIR", "sessions/whatsappmeow"),
+
+		WhatsAppBootstrapEnabled:        getEnvBool("WHATSAPP_BOOTSTRAP_ENABLED", true),
+		WhatsAppBootstrapMaxConcurrency: getEnvInt("WHATSAPP_BOOTSTRAP_MAX_CONCURRENCY", 4),
+		WhatsAppBootstrapTimeoutSec:     getEnvInt("WHATSAPP_BOOTSTRAP_TIMEOUT_SEC", 60),
+
+		WhatsAppDebugLogDir:        getEnv("WHATSAPP_DEBUG_LOG_DIR", "debug_log"),
+		WhatsAppDebugLogPerAccount: getEnvBool("WHATSAPP_DEBUG_LOG_PER_ACCOUNT", true),
+		WhatsAppDebugLogLevel:      strings.ToUpper(getEnv("WHATSAPP_DEBUG_LOG_LEVEL", "DEBUG")),
+		WhatsAppConsoleLogLevel:    strings.ToUpper(getEnv("WHATSAPP_CONSOLE_LOG_LEVEL", "INFO")),
 	}
 }
 
@@ -36,4 +56,28 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getEnvBool(key string, defaultValue bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
 }

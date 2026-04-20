@@ -591,6 +591,18 @@ func (f *fakeMessagesRepo) GetMessageMetricsByEmpresa(empresaID int64) (*storage
 	return &storage.MessageMetrics{}, nil
 }
 
+func (f *fakeMessagesRepo) GetByReferenceID(referenceID string) (*domain.Message, error) {
+	return nil, nil
+}
+
+func (f *fakeMessagesRepo) UpdateContenido(referenceID string, contenido string) error {
+	return nil
+}
+
+func (f *fakeMessagesRepo) IncrementRetryCount(referenceID string) error {
+	return nil
+}
+
 func TestHandleGetMessagesServiceUnavailableWithoutRepo(t *testing.T) {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()

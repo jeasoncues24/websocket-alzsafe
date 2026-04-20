@@ -1,4 +1,5 @@
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
 
 if (!API_BASE) {
   throw new Error("NEXT_PUBLIC_API_URL is required in frontend/.env.local");
@@ -84,6 +85,9 @@ export interface AdminTelefono {
   last_connected?: string | null;
   created_at: string;
   updated_at: string;
+  runtime_connected?: boolean;
+  mismatch?: boolean;
+  mismatch_reason?: string;
 }
 
 export interface TelefonosResponse {
@@ -195,7 +199,9 @@ export async function getEmpresa(id: number): Promise<EmpresaResponse> {
   return fetchWithAuth(`${API_BASE}/api/admin/empresas/${id}`);
 }
 
-export async function getAdminEmpresaTelefonos(id: number): Promise<TelefonosResponse> {
+export async function getAdminEmpresaTelefonos(
+  id: number,
+): Promise<TelefonosResponse> {
   return fetchWithAuth(`${API_BASE}/api/admin/empresas/${id}/telefonos`);
 }
 
@@ -209,10 +215,13 @@ export async function createAdminTelefono(
   empresaId: number,
   data: AdminTelefonoRequest,
 ): Promise<{ ok: boolean; telefono: AdminTelefono; error?: string }> {
-  return fetchWithAuth(`${API_BASE}/api/admin/empresas/${empresaId}/telefonos`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+  return fetchWithAuth(
+    `${API_BASE}/api/admin/empresas/${empresaId}/telefonos`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
 }
 
 export async function updateAdminTelefono(
@@ -225,7 +234,9 @@ export async function updateAdminTelefono(
   });
 }
 
-export async function deleteAdminTelefono(telefonoId: number): Promise<{ ok: boolean }> {
+export async function deleteAdminTelefono(
+  telefonoId: number,
+): Promise<{ ok: boolean }> {
   return fetchWithAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}`, {
     method: "DELETE",
   });
@@ -272,24 +283,31 @@ export async function deleteEmpresa(id: number): Promise<void> {
 export async function getAdminTelefonoApiKeys(
   telefonoId: number,
 ): Promise<ApiKeyListResponse> {
-  return fetchWithAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}/api-keys`);
+  return fetchWithAuth(
+    `${API_BASE}/api/admin/telefonos/${telefonoId}/api-keys`,
+  );
 }
 
 export async function createAdminTelefonoApiKey(
   telefonoId: number,
   data: { nombre: string; scopes: string[]; expires_at?: string },
 ): Promise<ApiKeyCreateResponse> {
-  return fetchWithAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}/api-keys`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+  return fetchWithAuth(
+    `${API_BASE}/api/admin/telefonos/${telefonoId}/api-keys`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
 }
 
 export async function getAdminApiKey(id: number): Promise<ApiKeyResponse> {
   return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}`);
 }
 
-export async function rotateAdminApiKey(id: number): Promise<ApiKeyCreateResponse> {
+export async function rotateAdminApiKey(
+  id: number,
+): Promise<ApiKeyCreateResponse> {
   return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}/rotate`, {
     method: "POST",
   });
@@ -315,10 +333,13 @@ export async function getAdminApiKeyAudit(
 
 export interface AdminMessage {
   id: number;
+  reference_id?: string;
   account_id: string;
   to: string;
   content: string;
   status: string;
+  error_reason?: string;
+  retry_count?: number;
   created_at: string;
 }
 
@@ -355,6 +376,57 @@ export async function getAdminSessions(): Promise<SessionsResponse> {
   return fetchWithAuth(`${API_BASE}/api/admin/sesiones`);
 }
 
+export interface MessageRetryResponse {
+  ok: boolean;
+  reference_id: string;
+  estado?: string;
+  error?: string;
+}
+
+// export async function retryMessage(referenceId: string): Promise<MessageRetryResponse> {
+//   const res = await fetchWithAuth(`${API_BASE}/api/mensajes/${referenceId}/reintentar`, {
+//     method: "POST",
+//   });
+//   if (!res.ok) {
+//     const data = await res.json();
+//     throw new Error(data.error || "Error al reintentar mensaje");
+//   }
+//   return res.json();
+// }
+
+export async function retryMessageAdmin(
+  referenceId: string,
+): Promise<MessageRetryResponse> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/admin/mensajes/${referenceId}/reintentar`,
+    {
+      method: "POST",
+    },
+  );
+
+  console.log("Retry response status:", res);
+  if (!res.ok) {
+    throw new Error(res.error || "Error al reintentar mensaje");
+  }
+  return res;
+}
+
+export async function updateMessage(
+  referenceId: string,
+  data: { contenido?: string; destino?: string },
+): Promise<{ ok: boolean; reference_id: string }> {
+  const res = await fetchWithAuth(`${API_BASE}/api/mensajes/${referenceId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Error al actualizar mensaje");
+  }
+  return res.json();
+}
+
 export interface EmpresaTelefonoSessionData {
   telefono_id: number;
   numeroCompleto: string;
@@ -384,8 +456,12 @@ async function fetchWithEmpresaAuth(url: string, options?: RequestInit) {
   return res.json();
 }
 
-export async function getEmpresaTelefono(telefonoId: number): Promise<EmpresaTelefonoResponse> {
-  const json = await fetchWithEmpresaAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}`);
+export async function getEmpresaTelefono(
+  telefonoId: number,
+): Promise<EmpresaTelefonoResponse> {
+  const json = await fetchWithEmpresaAuth(
+    `${API_BASE}/api/admin/telefonos/${telefonoId}`,
+  );
   return {
     ok: !!json.ok,
     data: json.telefono
@@ -402,10 +478,15 @@ export async function getEmpresaTelefono(telefonoId: number): Promise<EmpresaTel
   };
 }
 
-export async function connectEmpresaTelefono(telefonoId: number): Promise<EmpresaTelefonoResponse> {
-  const json = await fetchWithEmpresaAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}/connect`, {
-    method: "POST",
-  });
+export async function connectEmpresaTelefono(
+  telefonoId: number,
+): Promise<EmpresaTelefonoResponse> {
+  const json = await fetchWithEmpresaAuth(
+    `${API_BASE}/api/admin/telefonos/${telefonoId}/connect`,
+    {
+      method: "POST",
+    },
+  );
   return {
     ok: !!json.ok,
     data: json.ok

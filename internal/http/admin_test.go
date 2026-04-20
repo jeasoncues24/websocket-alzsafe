@@ -101,6 +101,46 @@ func TestAdminPhoneAccessDeniedForOtherCompany(t *testing.T) {
 	}
 }
 
+func TestBuildAdminSessionDiagnosticMismatch(t *testing.T) {
+	phone := &domain.Telefono{
+		ID:             11,
+		EmpresaID:      2,
+		NumeroCompleto: "+51999888777",
+		Status:         domain.TelefonoStatusActive,
+	}
+
+	diag := buildAdminSessionDiagnostic(phone, false)
+	if !diag.Mismatch {
+		t.Fatalf("expected mismatch to be true")
+	}
+	if diag.MismatchReason != "db_active_runtime_disconnected" {
+		t.Fatalf("unexpected mismatch reason: %s", diag.MismatchReason)
+	}
+	if diag.RecommendedAction != "reanudar_conexion" {
+		t.Fatalf("unexpected action: %s", diag.RecommendedAction)
+	}
+}
+
+func TestBuildAdminSessionDiagnosticHealthy(t *testing.T) {
+	phone := &domain.Telefono{
+		ID:             12,
+		EmpresaID:      3,
+		NumeroCompleto: "51977596225",
+		Status:         domain.TelefonoStatusActive,
+	}
+
+	diag := buildAdminSessionDiagnostic(phone, true)
+	if diag.Mismatch {
+		t.Fatalf("expected mismatch false")
+	}
+	if diag.StatusRuntime != "connected" {
+		t.Fatalf("expected connected runtime status, got %s", diag.StatusRuntime)
+	}
+	if diag.RecommendedAction != "none" {
+		t.Fatalf("unexpected action: %s", diag.RecommendedAction)
+	}
+}
+
 func newAdminPhoneTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite", "file:admin-phone-test?mode=memory&cache=shared")

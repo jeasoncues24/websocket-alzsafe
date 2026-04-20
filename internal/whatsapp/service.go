@@ -13,7 +13,7 @@ import (
 	"wsapi/internal/storage"
 )
 
-var logger = waLog.Stdout("Service", "INFO", true)
+var logger waLog.Logger = NewModuleLogger("Service")
 
 type SessionEvent struct {
 	Event string
@@ -28,6 +28,7 @@ type Service struct {
 
 	mu       sync.Mutex
 	runtimes map[string]*sessionRuntime
+	starting map[string]bool
 }
 
 type sessionRuntime struct {
@@ -39,12 +40,15 @@ type sessionRuntime struct {
 }
 
 func NewService(manager *Manager, sessionStore *storage.SessionStore, telefonoStore *storage.TelefonoStore, baseDir string) *Service {
+	logger = NewModuleLogger("Service")
+
 	s := &Service{
 		manager:       manager,
 		sessionStore:  sessionStore,
 		telefonoStore: telefonoStore,
 		baseDir:       baseDir,
 		runtimes:      make(map[string]*sessionRuntime),
+		starting:      make(map[string]bool),
 	}
 	if manager != nil {
 		manager.attachService(s)
@@ -86,7 +90,36 @@ func (s *Service) StartSession(accountID string) (<-chan SessionEvent, error) {
 		s.mu.Unlock()
 		return ch, nil
 	}
+	if s.starting[accountID] {
+		ch := make(chan SessionEvent, 2)
+		if s.sessionStore != nil {
+			if state, ok := s.sessionStore.Get(accountID); ok {
+				ch <- s.eventFromState(accountID, state)
+			} else {
+				ch <- SessionEvent{
+					Event: "active-" + accountID,
+					Data: map[string]any{
+						"message":  "Sesion en proceso de inicializacion",
+						"isActive": false,
+					},
+				}
+			}
+		} else {
+			ch <- SessionEvent{
+				Event: "active-" + accountID,
+				Data: map[string]any{
+					"message":  "Sesion en proceso de inicializacion",
+					"isActive": false,
+				},
+			}
+		}
+		close(ch)
+		s.mu.Unlock()
+		return ch, nil
+	}
+	s.starting[accountID] = true
 	s.mu.Unlock()
+	defer s.clearStarting(accountID)
 
 	container, err := openSQLiteContainer(context.Background(), s.baseDir, accountID)
 	if err != nil {
@@ -102,7 +135,7 @@ func (s *Service) StartSession(accountID string) (<-chan SessionEvent, error) {
 		device = container.NewDevice()
 	}
 
-	clientLog := waLog.Stdout("WA-"+accountID, "DEBUG", true)
+	clientLog := NewWhatsAppClientLogger(accountID)
 	client := whatsmeow.NewClient(device, clientLog)
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan SessionEvent, 8)
@@ -127,6 +160,12 @@ func (s *Service) StartSession(accountID string) (<-chan SessionEvent, error) {
 
 	go s.runSession(accountID, runtime)
 	return ch, nil
+}
+
+func (s *Service) clearStarting(accountID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.starting, accountID)
 }
 
 func (s *Service) StopSession(accountID string) {
@@ -331,7 +370,7 @@ func (s *Service) syncTelefonoQR(accountID, qr string) {
 	if s.telefonoStore == nil {
 		return
 	}
-	phone, err := s.telefonoStore.GetByNumeroCompleto(accountID)
+	phone, err := s.telefonoStore.GetByNumeroCompletoNormalized(accountID)
 	if err != nil || phone == nil {
 		return
 	}
@@ -342,7 +381,7 @@ func (s *Service) syncTelefonoConnected(accountID string) {
 	if s.telefonoStore == nil {
 		return
 	}
-	phone, err := s.telefonoStore.GetByNumeroCompleto(accountID)
+	phone, err := s.telefonoStore.GetByNumeroCompletoNormalized(accountID)
 	if err != nil || phone == nil {
 		return
 	}
@@ -353,7 +392,7 @@ func (s *Service) syncTelefonoDisconnected(accountID string) {
 	if s.telefonoStore == nil {
 		return
 	}
-	phone, err := s.telefonoStore.GetByNumeroCompleto(accountID)
+	phone, err := s.telefonoStore.GetByNumeroCompletoNormalized(accountID)
 	if err != nil || phone == nil {
 		return
 	}

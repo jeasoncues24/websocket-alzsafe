@@ -37,6 +37,16 @@ type MessagesRepository interface {
 
 	// GetAllMessageMetrics retorna métricas agregadas de todas las empresas
 	GetAllMessageMetrics() (*MessageMetrics, error)
+
+	// GetByReferenceID retrieve a single message by its reference_id
+	GetByReferenceID(referenceID string) (*domain.Message, error)
+
+	// UpdateContenido updates the contenido of a message (for edit feature)
+	// Returns error if message is already sent/delivered
+	UpdateContenido(referenceID string, contenido string) error
+
+	// IncrementRetryCount increments the retry_count and updates last_attempt_at
+	IncrementRetryCount(referenceID string) error
 }
 
 // mariaDBMessagesRepository implementa MessagesRepository contra MariaDB/MySQL.
@@ -151,7 +161,8 @@ func (r *mariaDBMessagesRepository) GetByEmpresa(empresaID int64, estado string,
 	selectQuery := `
 		SELECT id, reference_id, empresa_id, telefono_id, destino, contenido,
 		       adjuntos_json, estado, error_reason,
-		       timestamp_created, timestamp_sent, timestamp_confirmed
+		       timestamp_created, timestamp_sent, timestamp_confirmed,
+		       retry_count, last_attempt_at
 		FROM messages
 		WHERE ` + whereClause + `
 		ORDER BY timestamp_created DESC
@@ -196,7 +207,8 @@ func (r *mariaDBMessagesRepository) GetByEmpresaAndDateRange(empresaID int64, st
 	selectQuery := `
 		SELECT id, reference_id, empresa_id, telefono_id, destino, contenido,
 		       adjuntos_json, estado, error_reason,
-		       timestamp_created, timestamp_sent, timestamp_confirmed
+		       timestamp_created, timestamp_sent, timestamp_confirmed,
+		       retry_count, last_attempt_at
 		FROM messages
 		WHERE ` + whereClause + `
 		ORDER BY timestamp_created DESC
@@ -322,6 +334,109 @@ func (r *mariaDBMessagesRepository) GetAllMessageMetrics() (*MessageMetrics, err
 	return metrics, nil
 }
 
+// GetByReferenceID retrieves a single message by its reference_id
+func (r *mariaDBMessagesRepository) GetByReferenceID(referenceID string) (*domain.Message, error) {
+	var msg domain.Message
+
+	var adjuntosJSON string
+	var errorReason sql.NullString
+	var timestampSent, timestampConfirmed, lastAttemptAt sql.NullTime
+
+	err := r.db.QueryRow(`
+		SELECT id, reference_id, empresa_id, telefono_id, destino, contenido,
+		       adjuntos_json, estado, error_reason,
+		       timestamp_created, timestamp_sent, timestamp_confirmed,
+		       retry_count, last_attempt_at
+		FROM messages
+		WHERE reference_id = ?
+	`, referenceID).Scan(
+		&msg.ID,
+		&msg.ReferenceID,
+		&msg.EmpresaID,
+		&msg.TelefonoID,
+		&msg.Destino,
+		&msg.Contenido,
+		&adjuntosJSON,
+		&msg.Estado,
+		&errorReason,
+		&msg.TiempoEnvio,
+		&timestampSent,
+		&timestampConfirmed,
+		&msg.RetryCount,
+		&lastAttemptAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error fetching message by reference_id: %w", err)
+	}
+
+	if adjuntosJSON != "" && adjuntosJSON != "null" {
+		if err := json.Unmarshal([]byte(adjuntosJSON), &msg.Adjuntos); err != nil {
+			return nil, fmt.Errorf("error deserializando adjuntos_json: %w", err)
+		}
+	}
+
+	if errorReason.Valid {
+		msg.ErrorReason = errorReason.String
+	}
+	if timestampSent.Valid {
+		t := timestampSent.Time
+		msg.TimestampSent = &t
+	}
+	if timestampConfirmed.Valid {
+		t := timestampConfirmed.Time
+		msg.TimestampConfirmed = &t
+	}
+	if lastAttemptAt.Valid {
+		t := lastAttemptAt.Time
+		msg.LastAttemptAt = &t
+	}
+
+	return &msg, nil
+}
+
+// UpdateContenido updates the contenido of a message
+// Returns error if message is already sent/delivered
+func (r *mariaDBMessagesRepository) UpdateContenido(referenceID string, contenido string) error {
+	result, err := r.db.Exec(`
+		UPDATE messages
+		SET contenido = ?, updated_at = NOW()
+		WHERE reference_id = ? AND estado IN ('pending', 'failed', 'rejected')
+	`, contenido, referenceID)
+	if err != nil {
+		return fmt.Errorf("error updating message contenido: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("message not found or already sent/delivered")
+	}
+
+	return nil
+}
+
+// IncrementRetryCount increments the retry_count and updates last_attempt_at
+func (r *mariaDBMessagesRepository) IncrementRetryCount(referenceID string) error {
+	_, err := r.db.Exec(`
+		UPDATE messages
+		SET retry_count = retry_count + 1,
+		    last_attempt_at = NOW(),
+		    estado = 'pending',
+		    error_reason = NULL,
+		    updated_at = NOW()
+		WHERE reference_id = ?
+	`, referenceID)
+	if err != nil {
+		return fmt.Errorf("error incrementing retry count: %w", err)
+	}
+	return nil
+}
+
 // scanMessages convierte las filas de un *sql.Rows en un slice de domain.Message.
 // [QUÉ] Función de utilidad interna (minúscula = privada al paquete).
 // [POR QUÉ] Reutilizar el escaneo evita duplicar lógica de conversión de tipos SQL → Go.
@@ -336,6 +451,7 @@ func scanMessages(rows *sql.Rows) ([]domain.Message, error) {
 		var adjuntosJSON string
 		var errorReason sql.NullString
 		var timestampSent, timestampConfirmed sql.NullTime
+		var lastAttemptAt sql.NullTime
 
 		err := rows.Scan(
 			&msg.ID,
@@ -350,6 +466,8 @@ func scanMessages(rows *sql.Rows) ([]domain.Message, error) {
 			&msg.TiempoEnvio,
 			&timestampSent,
 			&timestampConfirmed,
+			&msg.RetryCount,
+			&lastAttemptAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error escaneando fila de mensaje: %w", err)
@@ -373,6 +491,10 @@ func scanMessages(rows *sql.Rows) ([]domain.Message, error) {
 		if timestampConfirmed.Valid {
 			t := timestampConfirmed.Time
 			msg.TimestampConfirmed = &t
+		}
+		if lastAttemptAt.Valid {
+			t := lastAttemptAt.Time
+			msg.LastAttemptAt = &t
 		}
 
 		messages = append(messages, msg)

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"wsapi/internal/config"
@@ -19,17 +21,43 @@ import (
 	"wsapi/internal/whatsapp"
 )
 
+type startupAwareRouter struct {
+	handler http.Handler
+	startFn func(context.Context)
+	once    sync.Once
+}
+
+func (r *startupAwareRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.handler.ServeHTTP(w, req)
+}
+
+func (r *startupAwareRouter) RunStartupTasks(ctx context.Context) {
+	if r == nil || r.startFn == nil {
+		return
+	}
+	r.once.Do(func() {
+		go r.startFn(ctx)
+	})
+}
+
 func NewRouter() http.Handler {
 	manager := whatsapp.NewManager()
 	sessionStore := storage.NewSessionStore()
 
-	broadcastWorker := whatsapp.NewBroadcastWorker(whatsapp.DefaultWorkerConfig)
+	broadcastWorker := whatsapp.NewBroadcastWorker(whatsapp.DefaultWorkerConfig, manager)
 	broadcastWorker.Start(whatsapp.DefaultWorkerConfig.MaxWorkersGlobal)
 
 	broadcastStore := storage.NewBroadcastStore()
 
 	cfg := config.Load()
 	jwtCfg := config.LoadJWT()
+
+	whatsapp.ConfigureLogging(whatsapp.LoggingOptions{
+		DebugLogDir:        cfg.WhatsAppDebugLogDir,
+		DebugLogPerAccount: cfg.WhatsAppDebugLogPerAccount,
+		DebugLogLevel:      cfg.WhatsAppDebugLogLevel,
+		ConsoleLogLevel:    cfg.WhatsAppConsoleLogLevel,
+	})
 
 	var msgRepo storage.MessagesRepository
 	var empresaStore domain.EmpresaStoreInterface
@@ -74,11 +102,11 @@ func NewRouter() http.Handler {
 		apiKeyStore := storage.NewApiKeyStore(db)
 		authHandler = httpHandlers.NewAuthHandler(userStore, empresaStore, blacklistStore, jwtCfg)
 		companiesHandler = httpHandlers.NewCompaniesHandler(empresaStore, sessionStore, jwtCfg)
-		apiKeysHandler = httpHandlers.NewApiKeysHandler(apiKeyStore, telefonoStore, empresaStore)
+		apiKeysHandler = httpHandlers.NewApiKeysHandler(apiKeyStore, telefonoStore, empresaStore, manager)
 		empresaAuthMiddleware = middleware.NewEmpresaAuthMiddleware(jwtCfg, empresaStore, telefonoStore)
 		apiKeyAuthMiddleware = middleware.NewApiKeyAuthMiddleware(apiKeyStore, empresaStore, telefonoStore)
-		v1MessagesHandler = httpHandlers.NewV1MessagesHandler(msgRepo, telefonoStore)
-		v1BroadcastsHandler = httpHandlers.NewV1BroadcastsHandler(broadcastStore, telefonoStore)
+		v1MessagesHandler = httpHandlers.NewV1MessagesHandler(msgRepo, telefonoStore, manager)
+		v1BroadcastsHandler = httpHandlers.NewV1BroadcastsHandler(broadcastStore, telefonoStore, broadcastWorker)
 		v1MetricsHandler = httpHandlers.NewV1MetricsHandler(msgRepo, telefonoStore)
 		authMiddleware = middleware.NewAuthMiddleware(jwtCfg, blacklistStore)
 	}
@@ -153,8 +181,12 @@ func NewRouter() http.Handler {
 	if authMiddleware != nil {
 		adminProtected := authMiddleware.RequireAuth()
 		mux.Handle("GET /api/admin/mensajes", adminProtected(http.HandlerFunc(HandleGetAdminMessages)))
+		mux.Handle("POST /api/admin/mensajes/", adminProtected(http.HandlerFunc(HandleAdminRetryMessage)))
 		mux.Handle("GET /api/admin/sesiones", adminProtected(http.HandlerFunc(HandleGetAdminSessions)))
 		mux.Handle("POST /api/admin/sesiones", adminProtected(http.HandlerFunc(HandlePostAdminSessions)))
+		if adminHandler != nil {
+			mux.Handle("GET /api/admin/sesiones/diagnostico", adminProtected(http.HandlerFunc(adminHandler.GetSessionsDiagnostics)))
+		}
 		mux.Handle("GET /api/admin/difusiones", adminProtected(http.HandlerFunc(HandleGetAdminBroadcasts)))
 		if dashboardHandler != nil {
 			mux.Handle("GET /api/admin/metricas", adminProtected(http.HandlerFunc(dashboardHandler.GetMetrics)))
@@ -173,32 +205,29 @@ func NewRouter() http.Handler {
 	// API key auth validation and public API routes
 	if apiKeyAuthMiddleware != nil && apiKeysHandler != nil && v1MessagesHandler != nil && v1BroadcastsHandler != nil {
 		apiKeyProtected := apiKeyAuthMiddleware.RequireApiKeyAuth()
+		mux.Handle("GET /api/me", apiKeyProtected(http.HandlerFunc(apiKeysHandler.Me)))
 		mux.Handle("GET /api/v1/me", apiKeyProtected(http.HandlerFunc(apiKeysHandler.Me)))
-		mux.Handle("GET /api/v1/messages", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.GetMessages)))
-		mux.Handle("POST /api/v1/messages", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.PostMessage)))
-		mux.Handle("GET /api/v1/broadcasts", apiKeyProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcasts)))
-		mux.Handle("POST /api/v1/broadcasts", apiKeyProtected(http.HandlerFunc(v1BroadcastsHandler.PostBroadcast)))
+		mux.Handle("GET /api/sesion", apiKeyProtected(http.HandlerFunc(apiKeysHandler.Session)))
+		mux.Handle("GET /api/mensajes", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.GetMessages)))
+		mux.Handle("POST /api/mensajes", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.PostMessage)))
+		mux.Handle("GET /api/mensajes/", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.GetMessageByReference)))
+		mux.Handle("PATCH /api/mensajes/", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.UpdateMessage)))
+		mux.Handle("POST /api/mensajes/", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.RetryMessage)))
+		mux.Handle("GET /api/difusiones", apiKeyProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcasts)))
+		mux.Handle("POST /api/difusiones", apiKeyProtected(http.HandlerFunc(v1BroadcastsHandler.PostBroadcast)))
+		mux.Handle("GET /api/difusiones/", apiKeyProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcast)))
 	}
 
-	// Empresa routes (/api/*)
-	if empresaAuthMiddleware != nil && v1MessagesHandler != nil && v1BroadcastsHandler != nil && v1MetricsHandler != nil {
+	// Empresa routes (/api/*) - empresa JWT protected
+	if empresaAuthMiddleware != nil && v1MetricsHandler != nil && companiesHandler != nil {
 		empresaProtected := empresaAuthMiddleware.RequireEmpresaAuth()
 		mux.Handle("GET /api/empresas", empresaProtected(http.HandlerFunc(companiesHandler.GetCurrent)))
 		mux.Handle("PUT /api/empresas", empresaProtected(http.HandlerFunc(companiesHandler.UpdateCurrent)))
-		mux.Handle("GET /api/mensajes", empresaProtected(http.HandlerFunc(v1MessagesHandler.GetMessages)))
-		mux.Handle("POST /api/mensajes", empresaProtected(http.HandlerFunc(v1MessagesHandler.PostMessage)))
-		mux.Handle("GET /api/difusiones", empresaProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcasts)))
-		mux.Handle("POST /api/difusiones", empresaProtected(http.HandlerFunc(v1BroadcastsHandler.PostBroadcast)))
-		mux.Handle("GET /api/difusiones/", empresaProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcast)))
 		mux.Handle("GET /api/metricas", empresaProtected(http.HandlerFunc(v1MetricsHandler.GetMetrics)))
 	}
 
 	// Public endpoints (no auth required for now)
 	mux.HandleFunc("/ws", h.HandleWS)
-	mux.HandleFunc("POST /message", h.HandlePostMessage)
-	mux.HandleFunc("GET /messages", h.HandleGetMessages)
-	mux.HandleFunc("POST /broadcast", h.HandlePostBroadcast)
-	mux.HandleFunc("GET /broadcast/", h.HandleGetBroadcast)
 	mux.HandleFunc("GET /metrics", HandleGetMetrics)
 	mux.HandleFunc("POST /admin/login", HandleAdminLogin)
 
@@ -236,20 +265,62 @@ func NewRouter() http.Handler {
 		mux.ServeHTTP(w, r)
 	})
 
-	return LoggingMiddleware(CorrelationIDMiddleware(CORSMiddleware(wrappedMux)))
+	baseHandler := LoggingMiddleware(CorrelationIDMiddleware(CORSMiddleware(wrappedMux)))
+	return &startupAwareRouter{
+		handler: baseHandler,
+		startFn: buildStartupBootstrap(cfg, manager, sessionStore, telefonoStore),
+	}
+}
+
+func buildStartupBootstrap(cfg *config.Config, manager *whatsapp.Manager, sessionStore *storage.SessionStore, telefonoStore *storage.TelefonoStore) func(context.Context) {
+	if cfg == nil || manager == nil || telefonoStore == nil || !cfg.WhatsAppBootstrapEnabled {
+		return nil
+	}
+
+	return func(ctx context.Context) {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		timeout := time.Duration(cfg.WhatsAppBootstrapTimeoutSec) * time.Second
+		if timeout <= 0 {
+			timeout = 60 * time.Second
+		}
+		bootstrapCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+
+		bootstrap := whatsapp.NewStartupBootstrapper(manager, sessionStore, telefonoStore, whatsapp.StartupBootstrapConfig{
+			MaxConcurrency: cfg.WhatsAppBootstrapMaxConcurrency,
+		})
+		summary := bootstrap.Run(bootstrapCtx)
+
+		fmt.Printf("[INFO] startup bootstrap sesiones: total=%d activos_db=%d runtime_activos=%d mismatches=%d intentos_start=%d errores_start=%d duracion=%s\n",
+			summary.TotalTelefonos,
+			summary.ActivosEnDB,
+			summary.RuntimeActivos,
+			summary.MismatchesDetectados,
+			summary.IntentosStart,
+			summary.ErroresStart,
+			summary.Duracion,
+		)
+	}
 }
 
 type DashboardMetrics struct {
-	ActiveCompanies   int     `json:"active_companies"`
-	MessagesToday     int     `json:"messages_today"`
-	BroadcastsToday   int     `json:"broadcasts_today"`
-	SuccessRate       float64 `json:"success_rate"`
-	LastUpdate        string  `json:"last_update"`
-	SessionsActive    int     `json:"sessions_active"`
-	MessagesSent      int     `json:"messages_sent"`
-	MessagesFailed    int     `json:"messages_failed"`
-	BroadcastsCreated int     `json:"broadcasts_created"`
-	Alerts            []Alert `json:"alerts,omitempty"`
+	ActiveCompanies                int     `json:"active_companies"`
+	MessagesToday                  int     `json:"messages_today"`
+	BroadcastsToday                int     `json:"broadcasts_today"`
+	SuccessRate                    float64 `json:"success_rate"`
+	LastUpdate                     string  `json:"last_update"`
+	SessionsActive                 int     `json:"sessions_active"`
+	MessagesSent                   int     `json:"messages_sent"`
+	MessagesFailed                 int     `json:"messages_failed"`
+	BroadcastsCreated              int     `json:"broadcasts_created"`
+	StartupBootstrapRuns           int     `json:"startup_bootstrap_runs"`
+	StartupBootstrapMismatches     int     `json:"startup_bootstrap_mismatches"`
+	StartupBootstrapStartAttempts  int     `json:"startup_bootstrap_start_attempts"`
+	StartupBootstrapStartErrors    int     `json:"startup_bootstrap_start_errors"`
+	StartupBootstrapLastDurationMs int64   `json:"startup_bootstrap_last_duration_ms"`
+	Alerts                         []Alert `json:"alerts,omitempty"`
 }
 
 type Alert struct {
@@ -263,15 +334,20 @@ func HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
 	c := metrics.GetCounters()
 
 	m := DashboardMetrics{
-		ActiveCompanies:   int(c.SessionsActive),
-		MessagesToday:     int(c.MessagesSent),
-		BroadcastsToday:   int(c.BroadcastsCreated),
-		SessionsActive:    int(c.SessionsActive),
-		MessagesSent:      int(c.MessagesSent),
-		MessagesFailed:    int(c.MessagesFailed),
-		BroadcastsCreated: int(c.BroadcastsCreated),
-		LastUpdate:        time.Now().Format(time.RFC3339),
-		Alerts:            []Alert{},
+		ActiveCompanies:                int(c.SessionsActive),
+		MessagesToday:                  int(c.MessagesSent),
+		BroadcastsToday:                int(c.BroadcastsCreated),
+		SessionsActive:                 int(c.SessionsActive),
+		MessagesSent:                   int(c.MessagesSent),
+		MessagesFailed:                 int(c.MessagesFailed),
+		BroadcastsCreated:              int(c.BroadcastsCreated),
+		StartupBootstrapRuns:           int(c.StartupBootstrapRuns),
+		StartupBootstrapMismatches:     int(c.StartupBootstrapMismatches),
+		StartupBootstrapStartAttempts:  int(c.StartupBootstrapStartAttempts),
+		StartupBootstrapStartErrors:    int(c.StartupBootstrapStartErrors),
+		StartupBootstrapLastDurationMs: c.StartupBootstrapLastDurationMs,
+		LastUpdate:                     time.Now().Format(time.RFC3339),
+		Alerts:                         []Alert{},
 	}
 
 	totalMsgs := c.MessagesSent + c.MessagesFailed
@@ -298,6 +374,14 @@ func HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
 			Type:    "messages",
 			Level:   "warning",
 			Message: fmt.Sprintf("%d mensajes fallidos", c.MessagesFailed),
+		})
+	}
+
+	if c.StartupBootstrapStartErrors > 0 {
+		m.Alerts = append(m.Alerts, Alert{
+			Type:    "bootstrap",
+			Level:   "warning",
+			Message: fmt.Sprintf("bootstrap con %d errores de inicio de sesion", c.StartupBootstrapStartErrors),
 		})
 	}
 
@@ -339,12 +423,15 @@ func HandleGetCompanies(w http.ResponseWriter, r *http.Request) {
 }
 
 type AdminMessage struct {
-	ID        int       `json:"id"`
-	AccountID string    `json:"account_id"`
-	To        string    `json:"to"`
-	Content   string    `json:"content"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          int        `json:"id"`
+	ReferenceID string    `json:"reference_id,omitempty"`
+	AccountID  string    `json:"account_id"`
+	To         string    `json:"to"`
+	Content    string    `json:"content"`
+	Status     string    `json:"status"`
+	ErrorReason *string   `json:"error_reason,omitempty"`
+	RetryCount *int      `json:"retry_count,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
 }
 
 func HandleGetAdminMessages(w http.ResponseWriter, r *http.Request) {
@@ -373,14 +460,22 @@ func HandleGetAdminMessages(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				for _, m := range items {
-					messages = append(messages, AdminMessage{
-						ID:        int(m.ID),
-						AccountID: ruc,
-						To:        m.Destino,
-						Content:   m.Contenido,
-						Status:    string(m.Estado),
-						CreatedAt: m.TiempoEnvio,
-					})
+					msg := AdminMessage{
+						ID:         int(m.ID),
+						ReferenceID: m.ReferenceID,
+						AccountID:  ruc,
+						To:         m.Destino,
+						Content:    m.Contenido,
+						Status:     string(m.Estado),
+						CreatedAt:  m.TiempoEnvio,
+					}
+					if m.ErrorReason != "" {
+						msg.ErrorReason = &m.ErrorReason
+					}
+					if m.RetryCount > 0 {
+						msg.RetryCount = &m.RetryCount
+					}
+					messages = append(messages, msg)
 				}
 			}
 
@@ -409,6 +504,101 @@ func HandleGetAdminMessages(w http.ResponseWriter, r *http.Request) {
 		"messages": messages,
 		"total":    len(messages),
 	})
+}
+
+func HandleAdminRetryMessage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	claims, ok := domain.GetAdminJWTClaims(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	refID := extractReferenceID(r.URL.Path)
+	if refID == "" {
+		http.Error(w, "missing reference_id", http.StatusBadRequest)
+		return
+	}
+
+	cfg := config.Load()
+	if cfg.DBHost == "" {
+		http.Error(w, "database not configured", http.StatusInternalServerError)
+		return
+	}
+
+	db, err := storage.NewDB(cfg)
+	if err != nil {
+		http.Error(w, "database error", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	msgRepo := storage.NewMessagesRepository(db)
+	telefonoStore := storage.NewTelefonoStore(db)
+
+	msg, err := msgRepo.GetByReferenceID(refID)
+	if err != nil || msg == nil {
+		http.Error(w, "message not found", http.StatusNotFound)
+		return
+	}
+
+	if claims.EmpresaID != nil && msg.EmpresaID != *claims.EmpresaID && !claims.IsRoot {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if msg.Estado == domain.MessageStateSent || msg.Estado == domain.MessageStateDelivered {
+		http.Error(w, "message already sent", http.StatusBadRequest)
+		return
+	}
+
+	telefono, err := telefonoStore.GetByID(msg.TelefonoID)
+	if err != nil || telefono == nil {
+		http.Error(w, "telefono not found", http.StatusNotFound)
+		return
+	}
+
+	if telefono.Status != domain.TelefonoStatusActive {
+		http.Error(w, "session not active", http.StatusBadRequest)
+		return
+	}
+
+	if err := msgRepo.IncrementRetryCount(refID); err != nil {
+		http.Error(w, "error preparing retry", http.StatusInternalServerError)
+		return
+	}
+
+	manager := whatsapp.NewManager()
+	err = whatsapp.SendTextMessage(r.Context(), manager, telefono.NumeroCompleto, msg.Destino, msg.Contenido)
+	if err != nil {
+		_ = msgRepo.UpdateEstado(refID, domain.MessageStateFailed, err.Error())
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":          false,
+			"reference_id": refID,
+			"estado":       string(domain.MessageStateFailed),
+			"error":       err.Error(),
+		})
+		return
+	}
+
+	_ = msgRepo.UpdateEstado(refID, domain.MessageStateSent, "")
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":          true,
+		"reference_id": refID,
+		"estado":      string(domain.MessageStateSent),
+	})
+}
+
+func extractReferenceID(path string) string {
+	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
+	for i, p := range parts {
+		if p == "mensajes" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
 }
 
 type SessionInfo struct {
@@ -765,37 +955,40 @@ func handleOtherMethods(w http.ResponseWriter, r *http.Request) {
 }
 
 var registeredRoutes = map[string][]string{
-	"/api/auth/login":           {"POST"},
-	"/api/auth/logout":          {"POST"},
-	"/api/auth/refresh":         {"POST"},
-	"/api/auth/me":              {"GET"},
-	"/api/companies":            {"GET", "POST"},
-	"/api/companies/":           {"GET", "PUT", "DELETE"},
-	"/api/message":              {"POST"},
-	"/api/messages":             {"GET"},
-	"/api/broadcast":            {"POST"},
-	"/api/broadcast/":           {"GET"},
-	"/api/sessions":             {"GET", "POST"},
-	"/api/admin/messages":       {"GET"},
-	"/api/admin/broadcasts":     {"GET"},
-	"/api/admin/users":          {"GET", "POST"},
-	"/api/admin/users/":         {"GET", "PUT", "DELETE"},
-	"/api/admin/users/promote/": {"POST"},
-	"/api/admin/users/modules/": {"PUT"},
-	"/api/admin/roles":          {"GET"},
-	"/api/admin/modules":        {"GET"},
-	"/api/dashboard/metricas":   {"GET"},
-	"/message":                  {"POST"},
-	"/messages":                 {"GET"},
-	"/broadcast":                {"POST"},
-	"/broadcast/":               {"GET"},
-	"/metrics":                  {"GET"},
-	"/companies":                {"GET"},
-	"/admin/messages":           {"GET"},
-	"/admin/sessions":           {"GET", "POST"},
-	"/admin/broadcasts":         {"GET"},
-	"/admin/login":              {"POST"},
-	"/ws":                       {"GET"},
+	"/api/auth/login":                 {"POST"},
+	"/api/auth/logout":                {"POST"},
+	"/api/auth/refresh":               {"POST"},
+	"/api/auth/me":                    {"GET"},
+	"/api/me":                         {"GET"},
+	"/api/sesion":                     {"GET"},
+	"/api/companies":                  {"GET", "POST"},
+	"/api/companies/":                 {"GET", "PUT", "DELETE"},
+	"/api/message":                    {"POST"},
+	"/api/messages":                   {"GET"},
+	"/api/broadcast":                  {"POST"},
+	"/api/broadcast/":                 {"GET"},
+	"/api/sessions":                   {"GET", "POST"},
+	"/api/admin/messages":             {"GET"},
+	"/api/admin/sesiones/diagnostico": {"GET"},
+	"/api/admin/broadcasts":           {"GET"},
+	"/api/admin/users":                {"GET", "POST"},
+	"/api/admin/users/":               {"GET", "PUT", "DELETE"},
+	"/api/admin/users/promote/":       {"POST"},
+	"/api/admin/users/modules/":       {"PUT"},
+	"/api/admin/roles":                {"GET"},
+	"/api/admin/modules":              {"GET"},
+	"/api/dashboard/metricas":         {"GET"},
+	"/message":                        {"POST"},
+	"/messages":                       {"GET"},
+	"/broadcast":                      {"POST"},
+	"/broadcast/":                     {"GET"},
+	"/metrics":                        {"GET"},
+	"/companies":                      {"GET"},
+	"/admin/messages":                 {"GET"},
+	"/admin/sessions":                 {"GET", "POST"},
+	"/admin/broadcasts":               {"GET"},
+	"/admin/login":                    {"POST"},
+	"/ws":                             {"GET"},
 }
 
 func routeExists(path, method string) bool {

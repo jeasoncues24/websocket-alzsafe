@@ -26,6 +26,7 @@ var DefaultWorkerConfig = WorkerConfig{
 type BroadcastJob struct {
 	ReferenceID string
 	RUCEmpresa  string
+	AccountID   string // NumeroCompleto del teléfono emisor (usado para SendTextMessage)
 	Items       []domain.BroadcastItem
 	ResultChan  chan BroadcastResult
 }
@@ -40,6 +41,7 @@ type BroadcastResult struct {
 
 type BroadcastWorker struct {
 	config    WorkerConfig
+	manager   *Manager
 	inputChan chan BroadcastJob
 
 	empresaMu     sync.Mutex
@@ -52,7 +54,7 @@ type BroadcastWorker struct {
 	wg sync.WaitGroup
 }
 
-func NewBroadcastWorker(config WorkerConfig) *BroadcastWorker {
+func NewBroadcastWorker(config WorkerConfig, manager *Manager) *BroadcastWorker {
 	if config.MaxWorkersPerEmpresa == 0 {
 		config.MaxWorkersPerEmpresa = DefaultWorkerConfig.MaxWorkersPerEmpresa
 	}
@@ -68,6 +70,7 @@ func NewBroadcastWorker(config WorkerConfig) *BroadcastWorker {
 
 	return &BroadcastWorker{
 		config:        config,
+		manager:       manager,
 		inputChan:     make(chan BroadcastJob, config.MaxWorkersGlobal*2),
 		empresaQueues: make(map[string]chan domain.BroadcastItem),
 		empresaCount:  make(map[string]int),
@@ -109,7 +112,7 @@ func (w *BroadcastWorker) processJob(job BroadcastJob) {
 			Timestamp: time.Now(),
 		}
 
-		err := w.processItemWithRetry(item, ruc)
+		err := w.processItemWithRetry(item, job.AccountID)
 		if err != nil {
 			result.State = "failed"
 			result.Error = err.Error()
@@ -127,7 +130,7 @@ func (w *BroadcastWorker) processJob(job BroadcastJob) {
 	w.cleanupEmpresaQueue(ruc)
 }
 
-func (w *BroadcastWorker) processItemWithRetry(item domain.BroadcastItem, ruc string) error {
+func (w *BroadcastWorker) processItemWithRetry(item domain.BroadcastItem, accountID string) error {
 	var lastErr error
 
 	for attempt := 0; attempt <= w.config.MaxRetries; attempt++ {
@@ -135,7 +138,7 @@ func (w *BroadcastWorker) processItemWithRetry(item domain.BroadcastItem, ruc st
 			time.Sleep(w.config.RetryDelay)
 		}
 
-		err := w.processItem(item, ruc)
+		err := w.processItem(item, accountID)
 		if err == nil {
 			return nil
 		}
@@ -150,8 +153,13 @@ func (w *BroadcastWorker) processItemWithRetry(item domain.BroadcastItem, ruc st
 	return lastErr
 }
 
-func (w *BroadcastWorker) processItem(item domain.BroadcastItem, ruc string) error {
-	return nil
+func (w *BroadcastWorker) processItem(item domain.BroadcastItem, accountID string) error {
+	if w.manager == nil {
+		return ErrClientNotConnected
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return SendTextMessage(ctx, w.manager, accountID, item.Destino, item.Mensaje)
 }
 
 func isTransientError(err error) bool {
@@ -243,6 +251,4 @@ func (e *BroadcastError) Error() string {
 	return e.Message
 }
 
-func init() {
-	_ = context.Background()
-}
+

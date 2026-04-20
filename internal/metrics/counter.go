@@ -13,6 +13,12 @@ type Counters struct {
 	SessionsActive      int64
 	RequestsTotal       int64
 	RequestsError       int64
+
+	StartupBootstrapRuns           int64
+	StartupBootstrapMismatches     int64
+	StartupBootstrapStartAttempts  int64
+	StartupBootstrapStartErrors    int64
+	StartupBootstrapLastDurationMs int64
 }
 
 var counters Counters
@@ -53,6 +59,26 @@ func IncrementRequestsError() {
 	atomic.AddInt64(&counters.RequestsError, 1)
 }
 
+func IncrementStartupBootstrapRuns() {
+	atomic.AddInt64(&counters.StartupBootstrapRuns, 1)
+}
+
+func AddStartupBootstrapMismatches(n int) {
+	atomic.AddInt64(&counters.StartupBootstrapMismatches, int64(n))
+}
+
+func AddStartupBootstrapStartAttempts(n int) {
+	atomic.AddInt64(&counters.StartupBootstrapStartAttempts, int64(n))
+}
+
+func AddStartupBootstrapStartErrors(n int) {
+	atomic.AddInt64(&counters.StartupBootstrapStartErrors, int64(n))
+}
+
+func SetStartupBootstrapLastDurationMs(durationMs int64) {
+	atomic.StoreInt64(&counters.StartupBootstrapLastDurationMs, durationMs)
+}
+
 func GetCounters() Counters {
 	return Counters{
 		MessagesSent:        atomic.LoadInt64(&counters.MessagesSent),
@@ -63,6 +89,12 @@ func GetCounters() Counters {
 		SessionsActive:      atomic.LoadInt64(&counters.SessionsActive),
 		RequestsTotal:       atomic.LoadInt64(&counters.RequestsTotal),
 		RequestsError:       atomic.LoadInt64(&counters.RequestsError),
+
+		StartupBootstrapRuns:           atomic.LoadInt64(&counters.StartupBootstrapRuns),
+		StartupBootstrapMismatches:     atomic.LoadInt64(&counters.StartupBootstrapMismatches),
+		StartupBootstrapStartAttempts:  atomic.LoadInt64(&counters.StartupBootstrapStartAttempts),
+		StartupBootstrapStartErrors:    atomic.LoadInt64(&counters.StartupBootstrapStartErrors),
+		StartupBootstrapLastDurationMs: atomic.LoadInt64(&counters.StartupBootstrapLastDurationMs),
 	}
 }
 
@@ -75,4 +107,9 @@ func ResetCounters() {
 	atomic.StoreInt64(&counters.SessionsActive, 0)
 	atomic.StoreInt64(&counters.RequestsTotal, 0)
 	atomic.StoreInt64(&counters.RequestsError, 0)
+	atomic.StoreInt64(&counters.StartupBootstrapRuns, 0)
+	atomic.StoreInt64(&counters.StartupBootstrapMismatches, 0)
+	atomic.StoreInt64(&counters.StartupBootstrapStartAttempts, 0)
+	atomic.StoreInt64(&counters.StartupBootstrapStartErrors, 0)
+	atomic.StoreInt64(&counters.StartupBootstrapLastDurationMs, 0)
 }

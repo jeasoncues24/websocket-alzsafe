@@ -44,6 +44,14 @@ func TestManagerNormalizesAccountID(t *testing.T) {
 	if m.Count() != 1 {
 		t.Fatalf("expected count to be 1, got %d", m.Count())
 	}
+
+	m.Set("+20123456789", c)
+	if m.Count() != 1 {
+		t.Fatalf("expected plus and non-plus to map same account, got %d", m.Count())
+	}
+	if _, ok := m.Get("+20123456789"); !ok {
+		t.Fatalf("expected get with plus prefix to be normalized")
+	}
 }
 
 func TestManagerListKeys(t *testing.T) {

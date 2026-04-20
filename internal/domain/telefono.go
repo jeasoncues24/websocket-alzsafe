@@ -17,17 +17,20 @@ func (s TelefonoStatus) String() string {
 
 // Telefono representa un número WhatsApp asociado a una empresa
 type Telefono struct {
-	ID             int64          `json:"id"`
-	EmpresaID      int64          `json:"empresa_id"`
-	CodigoPais     string         `json:"codigo_pais"`
-	Numero         string         `json:"numero"`
-	NumeroCompleto string         `json:"numero_completo"`
-	Status         TelefonoStatus `json:"status"`
-	SessionData    []byte         `json:"-"`
-	QRString       string         `json:"qr_string,omitempty"`
-	LastConnected  *time.Time     `json:"last_connected,omitempty"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
+	ID               int64          `json:"id"`
+	EmpresaID        int64          `json:"empresa_id"`
+	CodigoPais       string         `json:"codigo_pais"`
+	Numero           string         `json:"numero"`
+	NumeroCompleto   string         `json:"numero_completo"`
+	Status           TelefonoStatus `json:"status"`
+	SessionData      []byte         `json:"-"`
+	QRString         string         `json:"qr_string,omitempty"`
+	LastConnected    *time.Time     `json:"last_connected,omitempty"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	RuntimeConnected bool          `json:"runtime_connected,omitempty"`
+	Mismatch         bool          `json:"mismatch,omitempty"`
+	MismatchReason  string        `json:"mismatch_reason,omitempty"`
 }
 
 // TelefonoResponse representa la respuesta HTTP para operaciones de teléfono

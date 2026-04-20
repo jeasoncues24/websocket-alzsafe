@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"wsapi/internal/domain"
@@ -95,12 +96,58 @@ func (s *TelefonoStore) GetByEmpresa(empresaID int64) ([]domain.Telefono, error)
 	return telefonos, nil
 }
 
+// ListAll lista todos los teléfonos registrados (todas las empresas).
+func (s *TelefonoStore) ListAll() ([]domain.Telefono, error) {
+	query := `SELECT id, empresa_id, codigo_pais, numero, numero_completo, status, session_data, qr_string, last_connected, created_at, updated_at
+			  FROM telefonos ORDER BY id ASC`
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("error al listar telefonos: %w", err)
+	}
+	defer rows.Close()
+
+	var telefonos []domain.Telefono
+	for rows.Next() {
+		t, err := s.scanRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		telefonos = append(telefonos, *t)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterando telefonos: %w", err)
+	}
+
+	if telefonos == nil {
+		telefonos = []domain.Telefono{}
+	}
+
+	return telefonos, nil
+}
+
 // GetByNumeroCompleto busca un teléfono por numero_completo (ej. "51999888777")
 func (s *TelefonoStore) GetByNumeroCompleto(numeroCompleto string) (*domain.Telefono, error) {
 	query := `SELECT id, empresa_id, codigo_pais, numero, numero_completo, status, session_data, qr_string, last_connected, created_at, updated_at
 			  FROM telefonos WHERE numero_completo = ?`
 
 	return s.scanOne(s.db.QueryRow(query, numeroCompleto))
+}
+
+// GetByNumeroCompletoNormalized busca teléfono tolerando formatos legacy con/sin prefijo '+'.
+func (s *TelefonoStore) GetByNumeroCompletoNormalized(numeroCompleto string) (*domain.Telefono, error) {
+	normalized := normalizeNumeroCompleto(numeroCompleto)
+	if normalized == "" {
+		return nil, nil
+	}
+
+	if t, err := s.GetByNumeroCompleto(normalized); err != nil || t != nil {
+		return t, err
+	}
+
+	withPlus := "+" + normalized
+	return s.GetByNumeroCompleto(withPlus)
 }
 
 // UpdateStatus actualiza el estado de un teléfono
@@ -223,4 +270,10 @@ func (s *TelefonoStore) scanRow(row scannable) (*domain.Telefono, error) {
 		t.LastConnected = &lastConnected.Time
 	}
 	return t, nil
+}
+
+func normalizeNumeroCompleto(numero string) string {
+	numero = strings.TrimSpace(numero)
+	numero = strings.TrimPrefix(numero, "+")
+	return numero
 }

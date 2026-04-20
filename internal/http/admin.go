@@ -52,6 +52,18 @@ type adminTelefonoRequest struct {
 	Status     string `json:"status,omitempty"`
 }
 
+type AdminSessionDiagnostic struct {
+	TelefonoID        int64  `json:"telefono_id"`
+	EmpresaID         int64  `json:"empresa_id"`
+	AccountID         string `json:"account_id"`
+	StatusDB          string `json:"status_db"`
+	StatusRuntime     string `json:"status_runtime"`
+	RuntimeConnected  bool   `json:"runtime_connected"`
+	Mismatch          bool   `json:"mismatch"`
+	MismatchReason    string `json:"mismatch_reason"`
+	RecommendedAction string `json:"recommended_action"`
+}
+
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -437,9 +449,32 @@ func (h *AdminHandler) ListCompanyPhones(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	enriched := make([]domain.Telefono, len(phones))
+	for i, phone := range phones {
+		enriched[i] = phone
+		runtimeConnected := false
+		if h.manager != nil {
+			accountID := whatsapp.NormalizeAccountID(phone.NumeroCompleto)
+			if client, ok := h.manager.Get(accountID); ok && client != nil {
+				runtimeConnected = client.IsConnected()
+			}
+		}
+		enriched[i].RuntimeConnected = runtimeConnected
+
+		expectedActive := phone.Status == domain.TelefonoStatusActive
+		if expectedActive != runtimeConnected {
+			enriched[i].Mismatch = true
+			if expectedActive {
+				enriched[i].MismatchReason = "db_active_runtime_disconnected"
+			} else {
+				enriched[i].MismatchReason = "db_not_active_runtime_connected"
+			}
+		}
+	}
+
 	json.NewEncoder(w).Encode(domain.TelefonosListResponse{
 		OK:        true,
-		Telefonos: phones,
+		Telefonos: enriched,
 		Total:     len(phones),
 	})
 }
@@ -634,6 +669,136 @@ func (h *AdminHandler) GetCompanyPhone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(domain.TelefonoResponse{OK: true, Telefono: phone})
+}
+
+func (h *AdminHandler) GetSessionsDiagnostics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "metodo no permitido", http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	if claims == nil {
+		http.Error(w, "token requerido", http.StatusUnauthorized)
+		return
+	}
+
+	mismatchOnly, _ := strconv.ParseBool(strings.TrimSpace(r.URL.Query().Get("mismatch_only")))
+
+	var (
+		telefonos []domain.Telefono
+		err       error
+	)
+
+	if claims.IsRoot {
+		empresaIDRaw := strings.TrimSpace(r.URL.Query().Get("empresa_id"))
+		if empresaIDRaw != "" {
+			empresaID, parseErr := strconv.ParseInt(empresaIDRaw, 10, 64)
+			if parseErr != nil || empresaID <= 0 {
+				http.Error(w, "empresa_id invalido", http.StatusBadRequest)
+				return
+			}
+			telefonos, err = h.telefonoStore.GetByEmpresa(empresaID)
+		} else {
+			telefonos, err = h.telefonoStore.ListAll()
+		}
+	} else {
+		if claims.EmpresaID == nil || *claims.EmpresaID <= 0 {
+			http.Error(w, "acceso denegado", http.StatusForbidden)
+			return
+		}
+		telefonos, err = h.telefonoStore.GetByEmpresa(*claims.EmpresaID)
+	}
+	if err != nil {
+		http.Error(w, "error al obtener sesiones", http.StatusInternalServerError)
+		return
+	}
+
+	diagnostics := make([]AdminSessionDiagnostic, 0, len(telefonos))
+	totalMismatch := 0
+	runtimeConnectedTotal := 0
+	dbActiveTotal := 0
+
+	for _, phone := range telefonos {
+		runtimeConnected := false
+		accountID := whatsapp.NormalizeAccountID(phone.NumeroCompleto)
+		if h.manager != nil {
+			if client, ok := h.manager.Get(accountID); ok && client != nil && client.IsConnected() {
+				runtimeConnected = true
+			}
+		}
+
+		diag := buildAdminSessionDiagnostic(&phone, runtimeConnected)
+		if diag.Mismatch {
+			totalMismatch++
+		}
+		if diag.RuntimeConnected {
+			runtimeConnectedTotal++
+		}
+		if diag.StatusDB == string(domain.TelefonoStatusActive) {
+			dbActiveTotal++
+		}
+
+		if mismatchOnly && !diag.Mismatch {
+			continue
+		}
+		diagnostics = append(diagnostics, diag)
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"ok": true,
+		"summary": map[string]any{
+			"total_telefonos":       len(telefonos),
+			"runtime_connected":     runtimeConnectedTotal,
+			"db_active":             dbActiveTotal,
+			"mismatches":            totalMismatch,
+			"mismatch_only_applied": mismatchOnly,
+		},
+		"sessions": diagnostics,
+	})
+}
+
+func buildAdminSessionDiagnostic(phone *domain.Telefono, runtimeConnected bool) AdminSessionDiagnostic {
+	accountID := whatsapp.NormalizeAccountID(phone.NumeroCompleto)
+	statusRuntime := "disconnected"
+	if runtimeConnected {
+		statusRuntime = "connected"
+	}
+
+	dbActive := phone.Status == domain.TelefonoStatusActive
+	mismatch := dbActive != runtimeConnected
+	reason := ""
+	if mismatch {
+		if dbActive {
+			reason = "db_active_runtime_disconnected"
+		} else {
+			reason = "db_not_active_runtime_connected"
+		}
+	}
+
+	return AdminSessionDiagnostic{
+		TelefonoID:        phone.ID,
+		EmpresaID:         phone.EmpresaID,
+		AccountID:         accountID,
+		StatusDB:          string(phone.Status),
+		StatusRuntime:     statusRuntime,
+		RuntimeConnected:  runtimeConnected,
+		Mismatch:          mismatch,
+		MismatchReason:    reason,
+		RecommendedAction: recommendedAdminSessionAction(string(phone.Status), runtimeConnected),
+	}
+}
+
+func recommendedAdminSessionAction(statusDB string, runtimeConnected bool) string {
+	if runtimeConnected {
+		return "none"
+	}
+	if statusDB == string(domain.TelefonoStatusActive) {
+		return "reanudar_conexion"
+	}
+	return "iniciar_conexion"
 }
 
 func (h *AdminHandler) StartCompanyPhoneConnection(w http.ResponseWriter, r *http.Request) {

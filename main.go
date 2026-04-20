@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 
@@ -165,7 +167,21 @@ func startServer() {
 	}
 	fmt.Printf("Servidor WhatsApp API iniciado en el puerto %s\n", port)
 	router := apihttp.NewRouter()
-	if err := http.ListenAndServe(":"+port, router); err != nil {
+
+	listener, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		fmt.Printf("error exponiendo puerto %s: %v", port, err)
+		os.Exit(1)
+	}
+
+	type startupRunner interface {
+		RunStartupTasks(context.Context)
+	}
+	if runner, ok := router.(startupRunner); ok {
+		runner.RunStartupTasks(context.Background())
+	}
+
+	if err := http.Serve(listener, router); err != nil {
 		fmt.Printf("error iniciando servidor: %v", err)
 	}
 }

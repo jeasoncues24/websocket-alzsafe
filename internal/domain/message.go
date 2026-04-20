@@ -42,6 +42,11 @@ type Message struct {
 	// [QUÉ] Razón de fallo para mensajes en estado 'failed' o 'rejected'.
 	// [POR QUÉ] Permite al operador saber exactamente qué falló (número inválido, ban, etc.)
 	ErrorReason string `json:"error_reason,omitempty"`
+
+	// [QUÉ] Campos para control de reintentos.
+	// [POR QUÉ] Permite saber cuántos intentos se han hecho y cuándo fue el último.
+	RetryCount     int        `json:"retry_count,omitempty"`
+	LastAttemptAt  *time.Time `json:"last_attempt_at,omitempty"`
 }
 
 // MessageRequest represents the HTTP POST request payload for direct messages

@@ -118,5 +118,7 @@ func (m *Manager) getService() *Service {
 
 // NormalizeAccountID normalizes account ID by trimming whitespace
 func NormalizeAccountID(accountID string) string {
-	return strings.TrimSpace(accountID)
+	accountID = strings.TrimSpace(accountID)
+	accountID = strings.TrimPrefix(accountID, "+")
+	return accountID
 }

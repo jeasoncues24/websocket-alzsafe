@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,6 +26,7 @@ func NewSessionStore() *SessionStore {
 }
 
 func (s *SessionStore) SetInitializing(accountID string) {
+	accountID = normalizeSessionAccountID(accountID)
 	s.set(SessionState{
 		AccountID: accountID,
 		Status:    "initializing",
@@ -34,6 +36,7 @@ func (s *SessionStore) SetInitializing(accountID string) {
 }
 
 func (s *SessionStore) SetQRPending(accountID, qr string) {
+	accountID = normalizeSessionAccountID(accountID)
 	s.set(SessionState{
 		AccountID: accountID,
 		Status:    "qr_pending",
@@ -44,6 +47,7 @@ func (s *SessionStore) SetQRPending(accountID, qr string) {
 }
 
 func (s *SessionStore) SetActive(accountID string) {
+	accountID = normalizeSessionAccountID(accountID)
 	s.set(SessionState{
 		AccountID: accountID,
 		Status:    "active",
@@ -53,6 +57,7 @@ func (s *SessionStore) SetActive(accountID string) {
 }
 
 func (s *SessionStore) SetDisconnected(accountID, reason string) {
+	accountID = normalizeSessionAccountID(accountID)
 	s.set(SessionState{
 		AccountID: accountID,
 		Status:    "disconnected",
@@ -63,6 +68,7 @@ func (s *SessionStore) SetDisconnected(accountID, reason string) {
 }
 
 func (s *SessionStore) Get(accountID string) (SessionState, bool) {
+	accountID = normalizeSessionAccountID(accountID)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	v, ok := s.state[accountID]
@@ -70,6 +76,7 @@ func (s *SessionStore) Get(accountID string) (SessionState, bool) {
 }
 
 func (s *SessionStore) set(v SessionState) {
+	v.AccountID = normalizeSessionAccountID(v.AccountID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state[v.AccountID] = v
@@ -95,4 +102,10 @@ func (s *SessionStore) CountByStatus() map[string]int {
 		result[v.Status]++
 	}
 	return result
+}
+
+func normalizeSessionAccountID(accountID string) string {
+	accountID = strings.TrimSpace(accountID)
+	accountID = strings.TrimPrefix(accountID, "+")
+	return accountID
 }

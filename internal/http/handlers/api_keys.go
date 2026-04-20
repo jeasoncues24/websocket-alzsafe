@@ -11,16 +11,18 @@ import (
 	"wsapi/internal/auth"
 	"wsapi/internal/domain"
 	"wsapi/internal/storage"
+	"wsapi/internal/whatsapp"
 )
 
 type ApiKeysHandler struct {
 	apiKeyStore   *storage.ApiKeyStore
 	telefonoStore *storage.TelefonoStore
 	empresaStore  domain.EmpresaStoreInterface
+	manager       *whatsapp.Manager
 }
 
-func NewApiKeysHandler(apiKeyStore *storage.ApiKeyStore, telefonoStore *storage.TelefonoStore, empresaStore domain.EmpresaStoreInterface) *ApiKeysHandler {
-	return &ApiKeysHandler{apiKeyStore: apiKeyStore, telefonoStore: telefonoStore, empresaStore: empresaStore}
+func NewApiKeysHandler(apiKeyStore *storage.ApiKeyStore, telefonoStore *storage.TelefonoStore, empresaStore domain.EmpresaStoreInterface, manager *whatsapp.Manager) *ApiKeysHandler {
+	return &ApiKeysHandler{apiKeyStore: apiKeyStore, telefonoStore: telefonoStore, empresaStore: empresaStore, manager: manager}
 }
 
 type createApiKeyRequest struct {
@@ -385,13 +387,93 @@ func (h *ApiKeysHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	runtime := h.runtimeSessionInfo(phone)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"ok":       true,
-		"api_key":  apiKey,
-		"empresa":  company,
-		"telefono": phone,
+		"ok":              true,
+		"api_key":         apiKey,
+		"empresa":         company,
+		"telefono":        phone,
+		"session_runtime": runtime,
 	})
+}
+
+func (h *ApiKeysHandler) Session(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	claims, ok := domain.GetApiKeyClaims(r.Context())
+	if !ok {
+		http.Error(w, `{"ok": false, "error": "API key requerida"}`, http.StatusUnauthorized)
+		return
+	}
+
+	phone, err := h.telefonoStore.GetByID(claims.TelefonoID)
+	if err != nil || phone == nil {
+		http.Error(w, `{"ok": false, "error": "Teléfono no encontrado"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"ok":   true,
+		"data": h.runtimeSessionInfo(phone),
+	})
+}
+
+func (h *ApiKeysHandler) runtimeSessionInfo(phone *domain.Telefono) map[string]any {
+	accountID := whatsapp.NormalizeAccountID(phone.NumeroCompleto)
+	runtimeConnected := false
+	if h.manager != nil {
+		if client, ok := h.manager.Get(accountID); ok && client != nil && client.IsConnected() {
+			runtimeConnected = true
+		}
+	}
+
+	return buildSessionRuntimeInfo(phone, accountID, runtimeConnected)
+}
+
+func buildSessionRuntimeInfo(phone *domain.Telefono, accountID string, runtimeConnected bool) map[string]any {
+	dbStatus := string(phone.Status)
+	runtimeStatus := "disconnected"
+	if runtimeConnected {
+		runtimeStatus = "connected"
+	}
+
+	expectedActive := phone.Status == domain.TelefonoStatusActive
+	mismatch := expectedActive != runtimeConnected
+	reason := ""
+	if mismatch {
+		if expectedActive {
+			reason = "db_active_runtime_disconnected"
+		} else {
+			reason = "db_not_active_runtime_connected"
+		}
+	}
+
+	return map[string]any{
+		"telefono_id":        phone.ID,
+		"account_id":         accountID,
+		"status_db":          dbStatus,
+		"status_runtime":     runtimeStatus,
+		"runtime_connected":  runtimeConnected,
+		"mismatch":           mismatch,
+		"mismatch_reason":    reason,
+		"recommended_action": recommendedSessionAction(dbStatus, runtimeConnected),
+	}
+}
+
+func recommendedSessionAction(dbStatus string, runtimeConnected bool) string {
+	if runtimeConnected {
+		return "none"
+	}
+	if dbStatus == string(domain.TelefonoStatusActive) {
+		return "reanudar_conexion"
+	}
+	return "iniciar_conexion"
 }
 
 func (h *ApiKeysHandler) canAccessTelefono(r *http.Request, empresaID int64) bool {

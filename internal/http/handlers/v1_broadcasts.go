@@ -3,21 +3,26 @@ package http
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
+	"time"
+
+	"github.com/google/uuid"
 
 	"wsapi/internal/domain"
 	"wsapi/internal/storage"
+	"wsapi/internal/whatsapp"
 )
 
 type V1BroadcastsHandler struct {
-	broadcastStore *storage.BroadcastStore
-	telefonoStore  *storage.TelefonoStore
+	broadcastStore  *storage.BroadcastStore
+	telefonoStore   *storage.TelefonoStore
+	broadcastWorker *whatsapp.BroadcastWorker
 }
 
-func NewV1BroadcastsHandler(broadcastStore *storage.BroadcastStore, telefonoStore *storage.TelefonoStore) *V1BroadcastsHandler {
+func NewV1BroadcastsHandler(broadcastStore *storage.BroadcastStore, telefonoStore *storage.TelefonoStore, broadcastWorker *whatsapp.BroadcastWorker) *V1BroadcastsHandler {
 	return &V1BroadcastsHandler{
-		broadcastStore: broadcastStore,
-		telefonoStore:  telefonoStore,
+		broadcastStore:  broadcastStore,
+		telefonoStore:   telefonoStore,
+		broadcastWorker: broadcastWorker,
 	}
 }
 
@@ -27,23 +32,17 @@ func (h *V1BroadcastsHandler) GetBroadcasts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	claims, ok := domain.GetEmpresaJWTClaims(r.Context())
-	apiClaims := (*domain.ApiKeyClaims)(nil)
+	apiClaims, ok := domain.GetApiKeyClaims(r.Context())
 	if !ok {
-		if keyClaims, ok2 := domain.GetApiKeyClaims(r.Context()); ok2 {
-			apiClaims = keyClaims
-			claims = &domain.EmpresaJWTClaims{EmpresaID: keyClaims.EmpresaID, Permissions: keyClaims.Scopes}
-		} else {
-			writeV1Error(w, http.StatusUnauthorized, "TOKEN_REQUIRED", "JWT de empresa requerido")
-			return
-		}
+		writeV1Error(w, http.StatusUnauthorized, "API_KEY_REQUIRED", "API key requerida")
+		return
 	}
 
-	jobs := h.broadcastStore.ListByEmpresa(claims.EmpresaID)
+	jobs := h.broadcastStore.ListByEmpresa(apiClaims.EmpresaID)
 
 	result := make([]map[string]interface{}, 0, len(jobs))
 	for _, job := range jobs {
-		if apiClaims != nil && job.TelefonoID != apiClaims.TelefonoID {
+		if job.TelefonoID != apiClaims.TelefonoID {
 			continue
 		}
 		result = append(result, map[string]interface{}{
@@ -58,7 +57,7 @@ func (h *V1BroadcastsHandler) GetBroadcasts(w http.ResponseWriter, r *http.Reque
 	writeV1Success(w, map[string]interface{}{
 		"broadcasts": result,
 		"total":      len(result),
-	}, claims.EmpresaID)
+	}, apiClaims.EmpresaID)
 }
 
 func (h *V1BroadcastsHandler) GetBroadcast(w http.ResponseWriter, r *http.Request) {
@@ -67,14 +66,10 @@ func (h *V1BroadcastsHandler) GetBroadcast(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	claims, ok := domain.GetEmpresaJWTClaims(r.Context())
+	apiClaims, ok := domain.GetApiKeyClaims(r.Context())
 	if !ok {
-		if keyClaims, ok2 := domain.GetApiKeyClaims(r.Context()); ok2 {
-			claims = &domain.EmpresaJWTClaims{EmpresaID: keyClaims.EmpresaID, Permissions: keyClaims.Scopes}
-		} else {
-			writeV1Error(w, http.StatusUnauthorized, "TOKEN_REQUIRED", "JWT de empresa requerido")
-			return
-		}
+		writeV1Error(w, http.StatusUnauthorized, "API_KEY_REQUIRED", "API key requerida")
+		return
 	}
 
 	refID := extractBroadcastID(r)
@@ -89,6 +84,11 @@ func (h *V1BroadcastsHandler) GetBroadcast(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if job.TelefonoID != apiClaims.TelefonoID {
+		writeV1Error(w, http.StatusForbidden, "FORBIDDEN", "La difusión no pertenece a esta API key")
+		return
+	}
+
 	writeV1Success(w, map[string]interface{}{
 		"reference_id": job.ReferenceID,
 		"empresa_id":   job.EmpresaID,
@@ -97,7 +97,7 @@ func (h *V1BroadcastsHandler) GetBroadcast(w http.ResponseWriter, r *http.Reques
 		"status":       job.Status,
 		"results":      job.Results,
 		"created_at":   job.CreatedAt,
-	}, claims.EmpresaID)
+	}, apiClaims.EmpresaID)
 }
 
 func (h *V1BroadcastsHandler) PostBroadcast(w http.ResponseWriter, r *http.Request) {
@@ -106,71 +106,87 @@ func (h *V1BroadcastsHandler) PostBroadcast(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	claims, ok := domain.GetEmpresaJWTClaims(r.Context())
-	apiClaims := (*domain.ApiKeyClaims)(nil)
+	apiClaims, ok := domain.GetApiKeyClaims(r.Context())
 	if !ok {
-		if keyClaims, ok2 := domain.GetApiKeyClaims(r.Context()); ok2 {
-			apiClaims = keyClaims
-			claims = &domain.EmpresaJWTClaims{EmpresaID: keyClaims.EmpresaID, Permissions: keyClaims.Scopes}
-		} else {
-			writeV1Error(w, http.StatusUnauthorized, "TOKEN_REQUIRED", "JWT de empresa requerido")
-			return
-		}
+		writeV1Error(w, http.StatusUnauthorized, "API_KEY_REQUIRED", "API key requerida")
+		return
 	}
 
 	var req struct {
-		TelefonoID int64    `json:"telefono_id"`
-		Destinos   []string `json:"destinos"`
-		Mensaje    string   `json:"mensaje"`
+		Destinos []string `json:"destinos"`
+		Mensaje  string   `json:"mensaje"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeV1Error(w, http.StatusBadRequest, "INVALID_JSON", "JSON inválido")
 		return
 	}
 
-	if apiClaims != nil {
-		if req.TelefonoID == 0 {
-			req.TelefonoID = apiClaims.TelefonoID
-		} else if req.TelefonoID != apiClaims.TelefonoID {
-			writeV1Error(w, http.StatusForbidden, "FORBIDDEN", "La API key solo puede usarse con su teléfono asignado")
-			return
-		}
-	}
-
-	if req.TelefonoID == 0 || len(req.Destinos) == 0 || req.Mensaje == "" {
-		writeV1Error(w, http.StatusBadRequest, "MISSING_FIELDS", "telefono_id, destinos y mensaje requeridos")
+	if len(req.Destinos) == 0 || req.Mensaje == "" {
+		writeV1Error(w, http.StatusBadRequest, "MISSING_FIELDS", "destinos y mensaje son requeridos")
 		return
 	}
 
-	belongs, _ := h.telefonoStore.BelongsToEmpresa(req.TelefonoID, claims.EmpresaID)
-	if !belongs {
-		writeV1Error(w, http.StatusForbidden, "FORBIDDEN", "El teléfono no pertenece a esta empresa")
+	phone, err := h.telefonoStore.GetByID(apiClaims.TelefonoID)
+	if err != nil || phone == nil {
+		writeV1Error(w, http.StatusNotFound, "TELEFONO_NOT_FOUND", "Teléfono no encontrado")
 		return
 	}
 
-	refID := "BC_" + strconv.FormatInt(claims.EmpresaID, 10) + "_" + strconv.FormatInt(int64(len(req.Destinos)), 10)
+	if phone.Status != domain.TelefonoStatusActive {
+		writeV1Error(w, http.StatusBadRequest, "SESSION_NOT_ACTIVE", "El teléfono no está activo")
+		return
+	}
+
+	refID := uuid.New().String()
 
 	job := &domain.BroadcastJob{
 		ReferenceID: refID,
-		EmpresaID:   claims.EmpresaID,
-		TelefonoID:  req.TelefonoID,
+		EmpresaID:   apiClaims.EmpresaID,
+		TelefonoID:  apiClaims.TelefonoID,
 		Total:       len(req.Destinos),
 		Status:      domain.BroadcastStatusPending,
+		CreatedAt:   time.Now(),
 	}
 	h.broadcastStore.Create(job)
 
-	writeV1Success(w, map[string]interface{}{
-		"reference_id": refID,
-		"total":        len(req.Destinos),
-		"status":       "pending",
-	}, claims.EmpresaID)
+	// Build items and submit to worker for async real sending
+	items := make([]domain.BroadcastItem, len(req.Destinos))
+	for i, d := range req.Destinos {
+		items[i] = domain.BroadcastItem{
+			Destino: d,
+			Mensaje: req.Mensaje,
+		}
+	}
+
+	workerJob := whatsapp.BroadcastJob{
+		ReferenceID: refID,
+		RUCEmpresa:  phone.NumeroCompleto,
+		AccountID:   phone.NumeroCompleto,
+		Items:       items,
+		ResultChan:  make(chan whatsapp.BroadcastResult, len(items)+1),
+	}
+	h.broadcastWorker.SubmitAsync(workerJob)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok": true,
+		"data": map[string]interface{}{
+			"reference_id": refID,
+			"total":        len(req.Destinos),
+			"estado":       string(domain.BroadcastStatusPending),
+		},
+		"meta": map[string]interface{}{
+			"empresa_id": apiClaims.EmpresaID,
+		},
+	})
 }
 
 func extractBroadcastID(r *http.Request) string {
 	path := r.URL.Path
 	segments := splitPathSegments(path)
 	for i := len(segments) - 1; i >= 0; i-- {
-		if segments[i] != "" && segments[i] != "broadcast" {
+		if segments[i] != "" && segments[i] != "broadcast" && segments[i] != "difusiones" {
 			return segments[i]
 		}
 	}

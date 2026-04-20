@@ -1,5 +1,5 @@
 generated: "2026-04-17T18:06:20Z"
-last_updated: "2026-04-18T19:27:46Z"
+last_updated: "2026-04-19T14:10:00Z"
 project: "WSAPI - WhatsApp Multi-Empresa"
 project_key: "wsapi"
 tracking_system: "BMAD"
@@ -292,3 +292,129 @@ development_status:
     epic: "epic-11-whatsappmeow-core"
     priority: "P0"
     story_file: "_bmad-output/implementation-artifacts/11-1-whatsappmeow-sqlite-lifecycle.md"
+
+  # Epic 12: Mensajería Real vía WhatsApp (API Key)
+  epic-12-mensajeria-real-apikey:
+    status: "done"
+    description: "Envío real de mensajes y difusiones via whatsmeow + unificación de endpoints bajo api_token"
+    priority: "high"
+    completed: "2026-04-19"
+    stories:
+      - "12.1: SendTextMessage en internal/whatsapp/send.go"
+      - "12.2: BroadcastWorker.processItem conectado a SendTextMessage"
+      - "12.3: POST /api/mensajes - envío real, sin telefono_id en body, error handling, 202 Accepted"
+      - "12.4: POST /api/difusiones - envío async real, sin telefono_id en body, UUID reference_id"
+      - "12.5: Router unificado - /api/mensajes y /api/difusiones solo api_token, rutas legacy eliminadas"
+      - "12.6: Documentación api-key-token-por-numero-endpoints.md actualizada"
+  12-1-send-text-message:
+    status: "done"
+    epic: "epic-12-mensajeria-real-apikey"
+    priority: "P0"
+    summary: "internal/whatsapp/send.go - SendTextMessage(ctx, manager, accountID, destino, contenido)"
+  12-2-broadcast-worker-real-send:
+    status: "done"
+    epic: "epic-12-mensajeria-real-apikey"
+    priority: "P0"
+    summary: "BroadcastWorker con manager inyectado; processItem llama SendTextMessage; AccountID en BroadcastJob"
+  12-3-post-mensajes-real:
+    status: "done"
+    epic: "epic-12-mensajeria-real-apikey"
+    priority: "P0"
+    summary: "v1_messages.go reescrito: solo apiKey, sin telefono_id en body, real send, UpdateEstado, 202 Accepted"
+  12-4-post-difusiones-real:
+    status: "done"
+    epic: "epic-12-mensajeria-real-apikey"
+    priority: "P0"
+    summary: "v1_broadcasts.go reescrito: solo apiKey, sin telefono_id en body, UUID refID, SubmitAsync al worker"
+  12-5-router-unificado:
+    status: "done"
+    epic: "epic-12-mensajeria-real-apikey"
+    priority: "P0"
+    summary: "router.go: legacy routes eliminadas, /api/v1/messages y /api/v1/broadcasts eliminadas, /api/mensajes y /api/difusiones movidas a apiKeyProtected"
+  12-6-documentacion:
+    status: "done"
+    epic: "epic-12-mensajeria-real-apikey"
+    priority: "P1"
+    summary: "api-key-token-por-numero-endpoints.md actualizado con endpoints /api/mensajes y /api/difusiones, sin telefono_id, respuestas 202 reales"
+
+  # Epic 13: Mensajeria Confiable, Reintentos y Edicion (Backend -> Frontend)
+  epic-13-mensajeria-confiable-reintentos:
+    status: "done"
+    description: "Conectividad runtime real, trazabilidad de errores y flujos de editar/reintentar mensajes"
+    priority: "high"
+    completed: "2026-04-19"
+    context: "_bmad-output/planning-artifacts/epic-13-mensajeria-confiable-reintentos.md"
+    stories:
+      - "13.1: Bootstrap de sesiones post-start (DB lista + puerto expuesto)"
+      - "13.2: Reconciliacion de estado DB vs runtime real"
+      - "13.3: Persistencia fuerte de errores de envio"
+      - "13.4: Endpoints GET/PATCH/RETRY para ciclo de vida de mensajes"
+      - "13.5: Contrato API de errores consistente"
+      - "13.6: Observabilidad y rollout seguro"
+      - "13.7: Testing backend"
+      - "13.8: Frontend estado de sesion confiable"
+      - "13.9: Frontend bandeja de errores y detalle"
+      - "13.10: Frontend editar y reintentar"
+      - "13.11: Frontend telemetria UX"
+  13-1-startup-bootstrap-post-start:
+    status: "in-progress"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P0"
+    phase: "backend"
+  13-2-db-runtime-reconciliation:
+    status: "in-progress"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P0"
+    phase: "backend"
+  13-3-message-error-persistence:
+    status: "done"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P0"
+    phase: "backend"
+    result: "error_reason, retry_count, last_attempt_at implementados en domain y repository"
+  13-4-message-lifecycle-endpoints:
+    status: "done"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P0"
+    phase: "backend"
+    result: "GET/PATCH/POST retry para mensajes implementados en /api/mensajes/{id}"
+  13-5-api-error-contract:
+    status: "done"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P1"
+    phase: "backend"
+    result: "Contrato de errores consistente ya existe"
+  13-6-observability-rollout:
+    status: "in-progress"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P1"
+    phase: "backend"
+  13-7-backend-tests:
+    status: "backlog"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P1"
+    phase: "backend"
+  13-8-frontend-session-runtime-status:
+    status: "done"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P1"
+    phase: "frontend"
+    result: "SessionStatusBadge con estado dual (DB/runtime) implementado"
+  13-9-frontend-message-error-detail:
+    status: "done"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P1"
+    phase: "frontend"
+    result: "error_reason visible en listado de mensajes"
+  13-10-frontend-edit-retry:
+    status: "done"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P1"
+    phase: "frontend"
+    result: "Boton retry implementado en mensajes page"
+  13-11-frontend-ux-telemetry:
+    status: "done"
+    epic: "epic-13-mensajeria-confiable-reintentos"
+    priority: "P2"
+    phase: "frontend"
+    result: "Logging de reintentos en console del browser"

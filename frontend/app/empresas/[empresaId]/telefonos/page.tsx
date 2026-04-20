@@ -17,6 +17,7 @@ import {
   type Empresa,
 } from "@/lib/api";
 import { TelefonoFormModal, type TelefonoFormData } from "@/components/companies/telefono-form-modal";
+import { SessionStatusBadge } from "@/components/session/session-status-badge";
 
 export default function CompanyPhonesPage() {
   const router = useRouter();
@@ -197,9 +198,12 @@ export default function CompanyPhonesPage() {
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-muted-foreground" />
                     <span className="font-medium">{telefono.numero_completo}</span>
-                    <Badge variant={telefono.status === "active" ? "default" : "secondary"}>
-                      {formatStatus(telefono.status)}
-                    </Badge>
+                    <SessionStatusBadge
+                      statusDb={telefono.status}
+                      runtimeConnected={telefono.runtime_connected}
+                      mismatch={telefono.mismatch}
+                      mismatchReason={telefono.mismatch_reason}
+                    />
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {telefono.codigo_pais} {telefono.numero}
