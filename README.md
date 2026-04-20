@@ -1,19 +1,16 @@
-# Producción WSAPI
+# WSAPI Producción
 
-Guía mínima para desplegar WSAPI con Docker Compose en producción.
+Guía rápida para desplegar WSAPI con Docker Compose y `Makefile`.
 
-## Requisitos
+## Flujo Recomendado
 
-- Docker y Docker Compose instalados.
-- MariaDB/MySQL accesible desde el contenedor backend.
-- Puertos libres para `APP_PORT` y `FRONTEND_PORT`.
+1. Verifica puertos ocupados:
 
-Si la base de datos corre en el mismo host, usa `DB_HOST=host.docker.internal` en `.env`.
+```bash
+make check-ports
+```
 
-## Variables
-
-1. Copia `.env.example` a `.env` y completa:
-
+2. Copia `.env.example` a `.env` y completa:
 - `DB_HOST`
 - `DB_PORT`
 - `DB_NAME`
@@ -22,42 +19,40 @@ Si la base de datos corre en el mismo host, usa `DB_HOST=host.docker.internal` e
 - `APP_PORT`
 - `FRONTEND_PORT`
 
-2. Si vas a usar frontend local fuera de Compose, copia `frontend/.env.example` a `frontend/.env.local`.
-
-## Verificar puertos
-
-Ejecuta:
-
-```bash
-bash docker/check-ports.sh
-```
-
-Si alguno está ocupado, cambia manualmente `APP_PORT` o `FRONTEND_PORT` en `.env` y vuelve a correr el script.
-
-## Build y arranque
-
-```bash
-docker compose build
-docker compose up -d
-```
-
-## Validación
-
-- Backend: `http://localhost:${APP_PORT}`
-- Frontend: `http://localhost:${FRONTEND_PORT}`
-
-## Operación
-
-- Logs: `docker compose logs -f backend frontend`
-- Estado: `docker compose ps`
-- Detener: `docker compose down`
-
-## Builds con Makefile
+3. Compila artefactos de producción locales:
 
 ```bash
 make build-prod
+```
+
+4. Construye las imágenes Docker:
+
+```bash
 make docker-build
 ```
 
-- `build-prod` genera artefactos de producción locales.
-- `docker-build` construye las imágenes de Compose.
+5. Levanta la solución:
+
+```bash
+docker compose up -d
+```
+
+## Qué Hace Cada Comando
+
+- `make check-ports`: revisa si `APP_PORT` y `FRONTEND_PORT` están ocupados y sugiere alternativas.
+- `make build-prod`: compila el backend en `dist/wsapi` y ejecuta el build de producción del frontend.
+- `make docker-build`: construye las imágenes definidas en `docker-compose.yml`.
+- `docker compose up -d`: levanta backend y frontend en segundo plano.
+
+## Validación
+
+```bash
+docker compose ps
+docker compose logs -f backend frontend
+```
+
+## Notas
+
+- Si la base de datos corre en el host, usa `DB_HOST=host.docker.internal` en `.env`.
+- El frontend usa `NEXT_PUBLIC_API_URL` para apuntar al backend.
+- La documentación más completa está en `docker/production.md`.
