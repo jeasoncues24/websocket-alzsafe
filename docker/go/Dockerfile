@@ -1,40 +1,26 @@
-# --- ETAPA DE CONSTRUCCIÓN ---
+# --- BUILD STAGE ---
 FROM golang:1.22-alpine AS builder
 
-# Instalar dependencias necesarias para CGO (necesario para SQLite en Go)
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 
-WORKDIR /app
+WORKDIR /src
 
-# Copiamos solo el go.mod primero. 
-# Usamos un comodín para go.sum para que no falle si aún no existe.
-COPY go.mod go.sum* ./
-
-# Descargar dependencias
+COPY go.mod go.sum ./
 RUN go mod download
 
-# Copiar el resto del código
 COPY . .
+RUN CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/wsapi .
 
-# Construir el binario
-# Nota: CGO_ENABLED=1 es necesario si usas librerías como Whatsmeow que usan SQLite
-RUN CGO_ENABLED=1 GOOS=linux go build -o whatsapp-api
+# --- RUNTIME STAGE ---
+FROM alpine:3.20
 
-# --- ETAPA DE EJECUCIÓN ---
-FROM alpine:3.19
-
-WORKDIR /app
-
-# ca-certificates es vital para conexiones TLS con WhatsApp
-# sqlite-libs es necesario si tu app usa bases de datos locales para la sesión
 RUN apk add --no-cache ca-certificates sqlite-libs tzdata
 
-# Crear carpeta de sesiones por si no existe
-RUN mkdir ./sessions
+WORKDIR /app
+RUN mkdir -p /app/sessions /app/debug_log
 
-# Copiar el binario y asegurar permisos
-COPY --from=builder /app/whatsapp-api .
+COPY --from=builder /out/wsapi /usr/local/bin/wsapi
 
 EXPOSE 8080
 
-CMD ["./whatsapp-api"]
+CMD ["wsapi"]

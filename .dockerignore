@@ -1,0 +1,17 @@
+.git
+.github
+.opencode
+_bmad-output
+frontend/
+docker/
+sessions/
+debug_log/
+dist/
+*.md
+*.log
+*.test
+coverage.txt
+.env
+.env.*
+*.swp
+*.swo

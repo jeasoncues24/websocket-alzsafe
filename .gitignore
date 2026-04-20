@@ -27,6 +27,8 @@ frontend/.pnp
 frontend/.pnp.*
 frontend/yarn.lock
 frontend/package-lock.json
+frontend/.env.production
+frontend/.env.production.local
 
 # ============================================
 # IDE
@@ -49,6 +51,11 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.env.production
+.env.production.local
+frontend/.env.local
+frontend/.env.production
+frontend/.env.production.local
 *.pem
 
 # ============================================
@@ -68,6 +75,10 @@ _bmad/tea/
 # ============================================
 internal/http/static/
 dist/
+sessions/
+debug_log/
+docker-compose.override.yml
+docker-compose.local.yml
 
 # ============================================
 # Test
