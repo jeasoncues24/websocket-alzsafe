@@ -71,6 +71,7 @@ func (h *V1MessagesHandler) GetMessages(w http.ResponseWriter, r *http.Request) 
 				"telefono_id":  msg.TelefonoID,
 				"destino":      msg.Destino,
 				"contenido":    msg.Contenido,
+				"adjuntos":     msg.Adjuntos,
 				"estado":       msg.Estado,
 				"tiempo":       msg.TiempoEnvio,
 			})
@@ -96,16 +97,12 @@ func (h *V1MessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		Destino   string `json:"destino"`
-		Contenido string `json:"contenido"`
+		Destino   string                     `json:"destino"`
+		Contenido string                     `json:"contenido"`
+		Adjuntos  []domain.AttachmentPayload `json:"adjuntos,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeV1Error(w, http.StatusBadRequest, "INVALID_JSON", "JSON inválido")
-		return
-	}
-
-	if req.Destino == "" || req.Contenido == "" {
-		writeV1Error(w, http.StatusBadRequest, "MISSING_FIELDS", "destino y contenido son requeridos")
 		return
 	}
 
@@ -120,14 +117,31 @@ func (h *V1MessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	validationReq := domain.MessageRequest{
+		TelefonoID: apiClaims.TelefonoID,
+		Destino:    req.Destino,
+		Mensaje:    req.Contenido,
+		Adjuntos:   req.Adjuntos,
+	}
+	if err := domain.ValidateMessageRequest(&validationReq); err != nil {
+		writeV1Error(w, http.StatusBadRequest, err.Code, err.Message)
+		return
+	}
+
 	msg := domain.NewMessage(apiClaims.EmpresaID, apiClaims.TelefonoID, req.Destino, req.Contenido)
+	infos, infoErr := buildAttachmentInfos(req.Adjuntos)
+	if infoErr != nil {
+		writeV1Error(w, http.StatusBadRequest, "INVALID_ATTACHMENT", "Adjunto inválido")
+		return
+	}
+	msg.Adjuntos = infos
 
 	if err := h.msgRepo.Create(msg); err != nil {
 		writeV1Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Error al registrar el mensaje")
 		return
 	}
 
-	sendErr := whatsapp.SendTextMessage(r.Context(), h.manager, phone.NumeroCompleto, req.Destino, req.Contenido)
+	sendErr := whatsapp.SendRichMessage(r.Context(), h.manager, phone.NumeroCompleto, req.Destino, req.Contenido, req.Adjuntos)
 
 	if sendErr != nil {
 		_ = h.msgRepo.UpdateEstado(msg.ReferenceID, domain.MessageStateFailed, sendErr.Error())
@@ -199,15 +213,16 @@ func (h *V1MessagesHandler) GetMessageByReference(w http.ResponseWriter, r *http
 	writeV1Success(w, map[string]interface{}{
 		"message": map[string]interface{}{
 			"reference_id":   msg.ReferenceID,
-			"telefono_id":   msg.TelefonoID,
-			"destino":       msg.Destino,
-			"contenido":     msg.Contenido,
-			"estado":        string(msg.Estado),
-			"error_reason":  msg.ErrorReason,
-			"retry_count":   msg.RetryCount,
-			"created_at":    msg.TiempoEnvio,
+			"telefono_id":    msg.TelefonoID,
+			"destino":        msg.Destino,
+			"contenido":      msg.Contenido,
+			"adjuntos":       msg.Adjuntos,
+			"estado":         string(msg.Estado),
+			"error_reason":   msg.ErrorReason,
+			"retry_count":    msg.RetryCount,
+			"created_at":     msg.TiempoEnvio,
 			"timestamp_sent": msg.TimestampSent,
-			"last_attempt":  msg.LastAttemptAt,
+			"last_attempt":   msg.LastAttemptAt,
 		},
 	}, apiClaims.EmpresaID)
 }
@@ -268,7 +283,7 @@ func (h *V1MessagesHandler) UpdateMessage(w http.ResponseWriter, r *http.Request
 	}
 
 	writeV1Success(w, map[string]interface{}{
-		"ok":          true,
+		"ok":           true,
 		"reference_id": referenceID,
 		"message":      "Mensaje actualizado",
 	}, apiClaims.EmpresaID)
@@ -307,6 +322,10 @@ func (h *V1MessagesHandler) RetryMessage(w http.ResponseWriter, r *http.Request)
 		writeV1Error(w, http.StatusBadRequest, "INVALID_STATE", "El mensaje ya fue enviado")
 		return
 	}
+	if len(msg.Adjuntos) > 0 {
+		writeV1Error(w, http.StatusBadRequest, "MEDIA_RETRY_UNSUPPORTED", "Los mensajes con adjuntos todavía no soportan reintento")
+		return
+	}
 
 	phone, err := h.telefonoStore.GetByID(apiClaims.TelefonoID)
 	if err != nil || phone == nil {
@@ -324,7 +343,7 @@ func (h *V1MessagesHandler) RetryMessage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	sendErr := whatsapp.SendTextMessage(r.Context(), h.manager, phone.NumeroCompleto, msg.Destino, msg.Contenido)
+	sendErr := whatsapp.SendRichMessage(r.Context(), h.manager, phone.NumeroCompleto, msg.Destino, msg.Contenido, nil)
 
 	if sendErr != nil {
 		_ = h.msgRepo.UpdateEstado(referenceID, domain.MessageStateFailed, sendErr.Error())
@@ -335,7 +354,7 @@ func (h *V1MessagesHandler) RetryMessage(w http.ResponseWriter, r *http.Request)
 			"data": map[string]interface{}{
 				"reference_id": referenceID,
 				"estado":       string(domain.MessageStateFailed),
-				"error":         sendErr.Error(),
+				"error":        sendErr.Error(),
 			},
 			"meta": map[string]interface{}{
 				"empresa_id": apiClaims.EmpresaID,

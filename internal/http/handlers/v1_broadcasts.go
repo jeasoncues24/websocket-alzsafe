@@ -49,6 +49,7 @@ func (h *V1BroadcastsHandler) GetBroadcasts(w http.ResponseWriter, r *http.Reque
 			"reference_id": job.ReferenceID,
 			"telefono_id":  job.TelefonoID,
 			"total":        job.Total,
+			"adjuntos":     job.Adjuntos,
 			"status":       job.Status,
 			"created_at":   job.CreatedAt,
 		})
@@ -94,6 +95,7 @@ func (h *V1BroadcastsHandler) GetBroadcast(w http.ResponseWriter, r *http.Reques
 		"empresa_id":   job.EmpresaID,
 		"telefono_id":  job.TelefonoID,
 		"total":        job.Total,
+		"adjuntos":     job.Adjuntos,
 		"status":       job.Status,
 		"results":      job.Results,
 		"created_at":   job.CreatedAt,
@@ -113,16 +115,32 @@ func (h *V1BroadcastsHandler) PostBroadcast(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req struct {
-		Destinos []string `json:"destinos"`
-		Mensaje  string   `json:"mensaje"`
+		Destinos []string                   `json:"destinos"`
+		Mensaje  string                     `json:"mensaje"`
+		Adjuntos []domain.AttachmentPayload `json:"adjuntos,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeV1Error(w, http.StatusBadRequest, "INVALID_JSON", "JSON inválido")
 		return
 	}
 
-	if len(req.Destinos) == 0 || req.Mensaje == "" {
-		writeV1Error(w, http.StatusBadRequest, "MISSING_FIELDS", "destinos y mensaje son requeridos")
+	if len(req.Destinos) == 0 {
+		writeV1Error(w, http.StatusBadRequest, "MISSING_FIELDS", "destinos son requeridos")
+		return
+	}
+
+	items := make([]domain.BroadcastItem, len(req.Destinos))
+	for i, d := range req.Destinos {
+		items[i] = domain.BroadcastItem{Destino: d, Mensaje: req.Mensaje}
+	}
+
+	broadcastReq := domain.BroadcastRequest{
+		TelefonoID:    apiClaims.TelefonoID,
+		Adjuntos:      req.Adjuntos,
+		ListaDifusion: items,
+	}
+	if err := domain.ValidateBroadcastRequest(&broadcastReq); err != nil {
+		writeV1Error(w, http.StatusBadRequest, err.Code, err.Message)
 		return
 	}
 
@@ -143,25 +161,25 @@ func (h *V1BroadcastsHandler) PostBroadcast(w http.ResponseWriter, r *http.Reque
 		ReferenceID: refID,
 		EmpresaID:   apiClaims.EmpresaID,
 		TelefonoID:  apiClaims.TelefonoID,
-		Total:       len(req.Destinos),
+		Adjuntos:    nil,
+		Total:       len(items),
 		Status:      domain.BroadcastStatusPending,
 		CreatedAt:   time.Now(),
 	}
+	infos, infoErr := buildAttachmentInfos(req.Adjuntos)
+	if infoErr != nil {
+		writeV1Error(w, http.StatusBadRequest, "INVALID_ATTACHMENT", "Adjunto inválido")
+		return
+	}
+	job.Adjuntos = infos
 	h.broadcastStore.Create(job)
 
 	// Build items and submit to worker for async real sending
-	items := make([]domain.BroadcastItem, len(req.Destinos))
-	for i, d := range req.Destinos {
-		items[i] = domain.BroadcastItem{
-			Destino: d,
-			Mensaje: req.Mensaje,
-		}
-	}
-
 	workerJob := whatsapp.BroadcastJob{
 		ReferenceID: refID,
 		RUCEmpresa:  phone.NumeroCompleto,
 		AccountID:   phone.NumeroCompleto,
+		Attachments: req.Adjuntos,
 		Items:       items,
 		ResultChan:  make(chan whatsapp.BroadcastResult, len(items)+1),
 	}

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	wa "go.mau.fi/whatsmeow"
+
 	"wsapi/internal/domain"
 )
 
@@ -27,6 +29,7 @@ type BroadcastJob struct {
 	ReferenceID string
 	RUCEmpresa  string
 	AccountID   string // NumeroCompleto del teléfono emisor (usado para SendTextMessage)
+	Attachments []domain.AttachmentPayload
 	Items       []domain.BroadcastItem
 	ResultChan  chan BroadcastResult
 }
@@ -102,6 +105,65 @@ func (w *BroadcastWorker) processJob(job BroadcastJob) {
 	ruc := NormalizeAccountID(job.RUCEmpresa)
 
 	w.ensureEmpresaQueue(ruc)
+	defer w.cleanupEmpresaQueue(ruc)
+
+	if w.manager == nil {
+		for i, item := range job.Items {
+			result := BroadcastResult{
+				Index:     i,
+				Destino:   item.Destino,
+				State:     "failed",
+				Error:     ErrClientNotConnected.Error(),
+				Timestamp: time.Now(),
+			}
+			select {
+			case job.ResultChan <- result:
+			default:
+			}
+		}
+		close(job.ResultChan)
+		return
+	}
+
+	client, ok := w.manager.Get(job.AccountID)
+	if !ok || client == nil || !client.IsConnected() {
+		for i, item := range job.Items {
+			result := BroadcastResult{
+				Index:     i,
+				Destino:   item.Destino,
+				State:     "failed",
+				Error:     ErrClientNotConnected.Error(),
+				Timestamp: time.Now(),
+			}
+			select {
+			case job.ResultChan <- result:
+			default:
+			}
+		}
+		close(job.ResultChan)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	prepared, err := prepareAttachments(ctx, client, job.Attachments)
+	cancel()
+	if err != nil {
+		for i, item := range job.Items {
+			result := BroadcastResult{
+				Index:     i,
+				Destino:   item.Destino,
+				State:     "failed",
+				Error:     err.Error(),
+				Timestamp: time.Now(),
+			}
+			select {
+			case job.ResultChan <- result:
+			default:
+			}
+		}
+		close(job.ResultChan)
+		return
+	}
 
 	for i, item := range job.Items {
 		item := item
@@ -112,7 +174,7 @@ func (w *BroadcastWorker) processJob(job BroadcastJob) {
 			Timestamp: time.Now(),
 		}
 
-		err := w.processItemWithRetry(item, job.AccountID)
+		err := w.processItemWithRetry(item, client, job.AccountID, prepared)
 		if err != nil {
 			result.State = "failed"
 			result.Error = err.Error()
@@ -127,10 +189,9 @@ func (w *BroadcastWorker) processJob(job BroadcastJob) {
 	}
 
 	close(job.ResultChan)
-	w.cleanupEmpresaQueue(ruc)
 }
 
-func (w *BroadcastWorker) processItemWithRetry(item domain.BroadcastItem, accountID string) error {
+func (w *BroadcastWorker) processItemWithRetry(item domain.BroadcastItem, client *wa.Client, accountID string, prepared []preparedAttachment) error {
 	var lastErr error
 
 	for attempt := 0; attempt <= w.config.MaxRetries; attempt++ {
@@ -138,7 +199,7 @@ func (w *BroadcastWorker) processItemWithRetry(item domain.BroadcastItem, accoun
 			time.Sleep(w.config.RetryDelay)
 		}
 
-		err := w.processItem(item, accountID)
+		err := w.processItem(item, client, accountID, prepared)
 		if err == nil {
 			return nil
 		}
@@ -153,13 +214,10 @@ func (w *BroadcastWorker) processItemWithRetry(item domain.BroadcastItem, accoun
 	return lastErr
 }
 
-func (w *BroadcastWorker) processItem(item domain.BroadcastItem, accountID string) error {
-	if w.manager == nil {
-		return ErrClientNotConnected
-	}
+func (w *BroadcastWorker) processItem(item domain.BroadcastItem, client *wa.Client, accountID string, prepared []preparedAttachment) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	return SendTextMessage(ctx, w.manager, accountID, item.Destino, item.Mensaje)
+	return sendPreparedMessage(ctx, NewModuleLogger("WA-BROADCAST"), client, accountID, item.Destino, item.Mensaje, prepared)
 }
 
 func isTransientError(err error) bool {
@@ -250,5 +308,3 @@ type BroadcastError struct {
 func (e *BroadcastError) Error() string {
 	return e.Message
 }
-
-

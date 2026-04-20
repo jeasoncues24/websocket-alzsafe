@@ -1,6 +1,8 @@
 package http
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -298,6 +300,41 @@ func TestPostMessageInvalidPhoneNonNumeric(t *testing.T) {
 	}
 }
 
+func TestPostMessageAllowsAttachmentWithoutText(t *testing.T) {
+	req := &domain.MessageRequest{
+		TelefonoID: 1,
+		Destino:    "51999999999",
+		Adjuntos: []domain.AttachmentPayload{{
+			Nombre:          "foto.jpg",
+			MIMEType:        "image/jpeg",
+			ContenidoBase64: "dGVzdA==",
+		}},
+	}
+
+	validationErr := ValidateMessageRequest(req)
+	if validationErr != nil {
+		t.Fatalf("expected attachment-only message to pass, got: %v", validationErr)
+	}
+}
+
+func TestPostMessageRejectsAudioWithCaption(t *testing.T) {
+	req := &domain.MessageRequest{
+		TelefonoID: 1,
+		Destino:    "51999999999",
+		Mensaje:    "Escucha esto",
+		Adjuntos: []domain.AttachmentPayload{{
+			Nombre:          "audio.mp3",
+			MIMEType:        "audio/mpeg",
+			ContenidoBase64: "dGVzdA==",
+		}},
+	}
+
+	validationErr := ValidateMessageRequest(req)
+	if validationErr == nil {
+		t.Fatalf("expected audio attachment with caption to fail")
+	}
+}
+
 func TestPostMessageSessionNotActive(t *testing.T) {
 	sessionStore := storage.NewSessionStore()
 
@@ -445,26 +482,17 @@ func TestValidateAttachmentInvalidBase64(t *testing.T) {
 }
 
 func TestValidateAttachmentSizeExceededSingle(t *testing.T) {
-	// For this test, we'll simply check that a large decoded size is rejected
-	// We use a smaller base64 that decodes to just under 5MB, then test boundary
+	// Generate a payload larger than the per-file limit.
+	largeBase64 := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("a"), 6*1024*1024))
 	att := domain.AttachmentPayload{
 		Nombre:          "largefile.pdf",
 		MIMEType:        "application/pdf",
-		ContenidoBase64: "dGVzdA==",      // Small base64
-		TamanoBytes:     6 * 1024 * 1024, // Claim 6MB to exceed limit
+		ContenidoBase64: largeBase64,
 	}
 
-	// Note: The actual validation uses decoded size, not TamanoBytes claim
-	// This test would need a properly sized base64 in a real scenario
-	// For now, this demonstrates the error path
 	validErr := ValidateAttachment(att)
-
-	// Since the actual decoded data is tiny (from "dGVzdA=="),
-	// this should NOT fail size check, so we expect no error
-	// To properly test this, we'd need to properly construct large base64
-	if validErr != nil {
-		// This is expected for this simplified test
-		t.Logf("Got error as expected in size test: %v", validErr)
+	if validErr == nil {
+		t.Fatalf("expected size validation error for large attachment")
 	}
 }
 
@@ -485,19 +513,12 @@ func TestValidateAttachmentEmptyName(t *testing.T) {
 	}
 }
 
-func TestValidateAttachmentsMultipleValid(t *testing.T) {
+func TestValidateAttachmentsSingleValid(t *testing.T) {
 	attachments := []domain.AttachmentPayload{
 		{
 			Nombre:          "doc1.pdf",
 			MIMEType:        "application/pdf",
 			ContenidoBase64: "dGVzdA==",
-			TamanoBytes:     4,
-		},
-		{
-			Nombre:          "doc2.docx",
-			MIMEType:        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-			ContenidoBase64: "dGVzdA==",
-			TamanoBytes:     4,
 		},
 	}
 
@@ -507,53 +528,41 @@ func TestValidateAttachmentsMultipleValid(t *testing.T) {
 	}
 }
 
-func TestValidateAttachmentsMixedValidInvalid(t *testing.T) {
+func TestValidateAttachmentsCountExceeded(t *testing.T) {
 	attachments := []domain.AttachmentPayload{
 		{
 			Nombre:          "doc1.pdf",
 			MIMEType:        "application/pdf",
 			ContenidoBase64: "dGVzdA==",
-			TamanoBytes:     4,
-		},
-		{
-			Nombre:          "malware.exe",
-			MIMEType:        "application/x-msdownload",
-			ContenidoBase64: "dGVzdA==",
-			TamanoBytes:     4,
-		},
-	}
-
-	validErr := ValidateAttachments(attachments)
-	if validErr == nil {
-		t.Fatalf("expected validation error for mixed valid/invalid attachments")
-	}
-	if validErr.Code != domain.ErrorCodeAttachmentTypeNotAllowed {
-		t.Fatalf("expected error to be from invalid attachment")
-	}
-}
-
-func TestValidateAttachmentsSizeExceededTotal(t *testing.T) {
-	// Create attachments that individually are valid but exceed total limit
-	largeBase64 := "AAAA" // Small for base64, but we'll claim large size
-
-	attachments := []domain.AttachmentPayload{
-		{
-			Nombre:          "doc1.pdf",
-			MIMEType:        "application/pdf",
-			ContenidoBase64: largeBase64,
-			TamanoBytes:     11 * 1024 * 1024, // 11MB
 		},
 		{
 			Nombre:          "doc2.pdf",
 			MIMEType:        "application/pdf",
-			ContenidoBase64: largeBase64,
-			TamanoBytes:     11 * 1024 * 1024, // 11MB (total 22MB > 20MB limit)
+			ContenidoBase64: "dGVzdA==",
 		},
 	}
 
 	validErr := ValidateAttachments(attachments)
 	if validErr == nil {
-		t.Fatalf("expected validation error for total size exceeded")
+		t.Fatalf("expected validation error for multiple attachments")
+	}
+	if validErr.Code != domain.ErrorCodeAttachmentCountExceeded {
+		t.Fatalf("expected ATTACHMENT_COUNT_EXCEEDED, got: %s", validErr.Code)
+	}
+}
+
+func TestValidateAttachmentsSizeExceededTotal(t *testing.T) {
+	// Single attachment over the total limit should still fail.
+	largeBase64 := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("a"), 6*1024*1024))
+	attachments := []domain.AttachmentPayload{{
+		Nombre:          "doc1.pdf",
+		MIMEType:        "application/pdf",
+		ContenidoBase64: largeBase64,
+	}}
+
+	validErr := ValidateAttachments(attachments)
+	if validErr == nil {
+		t.Fatalf("expected validation error for oversized attachment")
 	}
 	if validErr.Code != domain.ErrorCodeAttachmentSizeExceeded {
 		t.Fatalf("expected ATTACHMENT_SIZE_EXCEEDED, got: %s", validErr.Code)
@@ -705,6 +714,39 @@ func TestValidateBroadcastRequestValid(t *testing.T) {
 	}
 	if err := ValidateBroadcastRequest(req); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
+	}
+}
+
+func TestValidateBroadcastRequestAllowsAttachmentsWithoutItemText(t *testing.T) {
+	req := &domain.BroadcastRequest{
+		TelefonoID: 1,
+		Adjuntos: []domain.AttachmentPayload{{
+			Nombre:          "catalogo.pdf",
+			MIMEType:        "application/pdf",
+			ContenidoBase64: "dGVzdA==",
+		}},
+		ListaDifusion: []domain.BroadcastItem{
+			{Destino: "51999999999"},
+			{Destino: "51988888888"},
+		},
+	}
+	if err := ValidateBroadcastRequest(req); err != nil {
+		t.Fatalf("expected attachment broadcast to pass, got: %v", err)
+	}
+}
+
+func TestValidateBroadcastRequestRejectsAudioWithCaption(t *testing.T) {
+	req := &domain.BroadcastRequest{
+		TelefonoID: 1,
+		Adjuntos: []domain.AttachmentPayload{{
+			Nombre:          "cancion.mp3",
+			MIMEType:        "audio/mpeg",
+			ContenidoBase64: "dGVzdA==",
+		}},
+		ListaDifusion: []domain.BroadcastItem{{Destino: "51999999999", Mensaje: "Escucha esto"}},
+	}
+	if err := ValidateBroadcastRequest(req); err == nil {
+		t.Fatalf("expected audio attachment with caption to fail")
 	}
 }
 

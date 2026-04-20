@@ -1,6 +1,6 @@
 # Story 11.1: Núcleo WhatsAppMeow con SQLite y lifecycle real
 
-Status: review
+Status: done
 
 ## Story
 
@@ -64,7 +64,8 @@ gpt-5.4-mini
 - El WS de `init-session` ahora consume eventos reales de QR/estado.
 - Se creó `POST /api/admin/telefonos/{id}/connect` para iniciar la conexión desde la vista de teléfonos del panel admin.
 - Se agregaron tests unitarios para la sanitización del archivo SQLite y el fallback de `StartSession`.
+- Se validó el árbol con `go test ./...` y `npm run build`.
 
 ## Change Log
 
-- 2026-04-18: Implementado runtime WhatsAppMeow con SQLite local, eventos QR/estado y cleanup de sesión.
+- 2026-04-20: Cerrada la story tras validación completa de backend y frontend.

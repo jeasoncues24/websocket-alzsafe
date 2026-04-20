@@ -10,9 +10,13 @@ type BroadcastItem struct {
 
 // BroadcastRequest represents the HTTP POST /broadcast request payload.
 type BroadcastRequest struct {
-	TelefonoID    int64           `json:"telefono_id"`
-	ListaDifusion []BroadcastItem `json:"lista_difusion"`
+	TelefonoID    int64               `json:"telefono_id"`
+	Adjuntos      []AttachmentPayload `json:"adjuntos,omitempty"`
+	ListaDifusion []BroadcastItem     `json:"lista_difusion"`
 }
+
+// MaxBroadcastItems limits broadcast fan-out to a safe batch size.
+const MaxBroadcastItems = 500
 
 // BroadcastResponse represents the HTTP response for a broadcast request.
 type BroadcastResponse struct {
@@ -49,6 +53,7 @@ type BroadcastJob struct {
 	ReferenceID string            `json:"reference_id"`
 	EmpresaID   int64             `json:"empresa_id"`
 	TelefonoID  int64             `json:"telefono_id"`
+	Adjuntos    []AttachmentInfo  `json:"adjuntos,omitempty"`
 	Total       int               `json:"total"`
 	Status      BroadcastStatus   `json:"status"`
 	Results     []BroadcastResult `json:"results,omitempty"`
@@ -62,6 +67,7 @@ type BroadcastDetailResponse struct {
 	ReferenceID string            `json:"reference_id"`
 	EmpresaID   int64             `json:"empresa_id"`
 	TelefonoID  int64             `json:"telefono_id"`
+	Adjuntos    []AttachmentInfo  `json:"adjuntos,omitempty"`
 	Total       int               `json:"total"`
 	Status      string            `json:"status"`
 	Results     []BroadcastResult `json:"results,omitempty"`

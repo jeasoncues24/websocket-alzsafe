@@ -340,6 +340,7 @@ export interface AdminMessage {
   status: string;
   error_reason?: string;
   retry_count?: number;
+  adjuntos?: AttachmentInfo[];
   created_at: string;
 }
 
@@ -521,7 +522,14 @@ export interface BroadcastInfo {
   status: string;
   success: number;
   failed: number;
+  adjuntos?: AttachmentInfo[];
   created_at: string;
+}
+
+export interface AttachmentInfo {
+  nombre: string;
+  sha256_hash: string;
+  tamano_bytes: number;
 }
 
 export interface BroadcastsResponse {

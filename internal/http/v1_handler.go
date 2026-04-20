@@ -111,6 +111,13 @@ func (h *V1Handler) V1PostMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	message := domain.NewMessage(claims.EmpresaID, req.TelefonoID, strings.TrimSpace(req.Destino), strings.TrimSpace(req.Mensaje))
+	infos, infoErr := buildAttachmentInfos(req.Adjuntos)
+	if infoErr != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(domain.MessageResponse{OK: false, Error: "INVALID_ATTACHMENT", Details: "Adjunto inválido"})
+		return
+	}
+	message.Adjuntos = infos
 
 	if h.msgRepo != nil {
 		if err := h.msgRepo.Create(message); err != nil {
@@ -315,14 +322,23 @@ func (h *V1Handler) V1PostBroadcast(w http.ResponseWriter, r *http.Request) {
 		ReferenceID: referenceID,
 		EmpresaID:   claims.EmpresaID,
 		TelefonoID:  req.TelefonoID,
+		Adjuntos:    nil,
 		Total:       len(req.ListaDifusion),
 	}
+	infos, infoErr := buildAttachmentInfos(req.Adjuntos)
+	if infoErr != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(domain.BroadcastResponse{OK: false, Error: "INVALID_ATTACHMENT", Details: "Adjunto inválido"})
+		return
+	}
+	job.Adjuntos = infos
 	h.broadcastStore.Create(job)
 
 	resultChan := make(chan whatsapp.BroadcastResult, len(req.ListaDifusion))
 	wJob := whatsapp.BroadcastJob{
 		ReferenceID: referenceID,
 		RUCEmpresa:  sessionKey,
+		Attachments: req.Adjuntos,
 		Items:       req.ListaDifusion,
 		ResultChan:  resultChan,
 	}
@@ -383,6 +399,7 @@ func (h *V1Handler) V1GetBroadcast(w http.ResponseWriter, r *http.Request) {
 		ReferenceID: job.ReferenceID,
 		EmpresaID:   job.EmpresaID,
 		TelefonoID:  job.TelefonoID,
+		Adjuntos:    job.Adjuntos,
 		Total:       job.Total,
 		Status:      string(job.Status),
 		Results:     job.Results,

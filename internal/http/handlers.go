@@ -313,6 +313,13 @@ func (h *Handler) HandlePostMessage(w stdhttp.ResponseWriter, r *stdhttp.Request
 
 	// Create message
 	message := domain.NewMessage(empresaID, req.TelefonoID, strings.TrimSpace(req.Destino), strings.TrimSpace(req.Mensaje))
+	infos, infoErr := buildAttachmentInfos(req.Adjuntos)
+	if infoErr != nil {
+		w.WriteHeader(stdhttp.StatusBadRequest)
+		json.NewEncoder(w).Encode(domain.MessageResponse{OK: false, Error: "INVALID_ATTACHMENT", Details: "Adjunto inválido"})
+		return
+	}
+	message.Adjuntos = infos
 
 	// [QUÉ] Persistir el mensaje en DB antes de responder al cliente.
 	// [POR QUÉ] Guardamos primero (estado 'pending') para garantizar trazabilidad incluso si
@@ -611,9 +618,10 @@ func (h *Handler) HandlePostBroadcast(w stdhttp.ResponseWriter, r *stdhttp.Reque
 	w.Header().Set("Content-Type", "application/json")
 
 	var rawReq struct {
-		RUCEmpresa    string          `json:"ruc_empresa"`
-		TelefonoID    int64           `json:"telefono_id"`
-		ListaDifusion json.RawMessage `json:"lista_difusion"`
+		RUCEmpresa    string                     `json:"ruc_empresa"`
+		TelefonoID    int64                      `json:"telefono_id"`
+		Adjuntos      []domain.AttachmentPayload `json:"adjuntos,omitempty"`
+		ListaDifusion json.RawMessage            `json:"lista_difusion"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&rawReq); err != nil {
@@ -696,6 +704,7 @@ func (h *Handler) HandlePostBroadcast(w stdhttp.ResponseWriter, r *stdhttp.Reque
 
 	req := domain.BroadcastRequest{
 		TelefonoID:    rawReq.TelefonoID,
+		Adjuntos:      rawReq.Adjuntos,
 		ListaDifusion: listaDifusion,
 	}
 
@@ -727,14 +736,23 @@ func (h *Handler) HandlePostBroadcast(w stdhttp.ResponseWriter, r *stdhttp.Reque
 			ReferenceID: referenceID,
 			EmpresaID:   empresaID,
 			TelefonoID:  rawReq.TelefonoID,
+			Adjuntos:    nil,
 			Total:       len(req.ListaDifusion),
 		}
+		infos, infoErr := buildAttachmentInfos(req.Adjuntos)
+		if infoErr != nil {
+			w.WriteHeader(stdhttp.StatusBadRequest)
+			json.NewEncoder(w).Encode(domain.BroadcastResponse{OK: false, Error: "INVALID_ATTACHMENT", Details: "Adjunto inválido"})
+			return
+		}
+		job.Adjuntos = infos
 		h.broadcastStore.Create(job)
 
 		resultChan := make(chan whatsapp.BroadcastResult, len(req.ListaDifusion))
 		wJob := whatsapp.BroadcastJob{
 			ReferenceID: referenceID,
 			RUCEmpresa:  ruc,
+			Attachments: req.Adjuntos,
 			Items:       req.ListaDifusion,
 			ResultChan:  resultChan,
 		}
@@ -825,6 +843,7 @@ func (h *Handler) HandleGetBroadcast(w stdhttp.ResponseWriter, r *stdhttp.Reques
 		ReferenceID: job.ReferenceID,
 		EmpresaID:   job.EmpresaID,
 		TelefonoID:  job.TelefonoID,
+		Adjuntos:    job.Adjuntos,
 		Total:       job.Total,
 		Status:      string(job.Status),
 		Results:     job.Results,

@@ -423,15 +423,15 @@ func HandleGetCompanies(w http.ResponseWriter, r *http.Request) {
 }
 
 type AdminMessage struct {
-	ID          int        `json:"id"`
+	ID          int       `json:"id"`
 	ReferenceID string    `json:"reference_id,omitempty"`
-	AccountID  string    `json:"account_id"`
-	To         string    `json:"to"`
-	Content    string    `json:"content"`
-	Status     string    `json:"status"`
+	AccountID   string    `json:"account_id"`
+	To          string    `json:"to"`
+	Content     string    `json:"content"`
+	Status      string    `json:"status"`
 	ErrorReason *string   `json:"error_reason,omitempty"`
-	RetryCount *int      `json:"retry_count,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
+	RetryCount  *int      `json:"retry_count,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func HandleGetAdminMessages(w http.ResponseWriter, r *http.Request) {
@@ -461,13 +461,13 @@ func HandleGetAdminMessages(w http.ResponseWriter, r *http.Request) {
 				}
 				for _, m := range items {
 					msg := AdminMessage{
-						ID:         int(m.ID),
+						ID:          int(m.ID),
 						ReferenceID: m.ReferenceID,
-						AccountID:  ruc,
-						To:         m.Destino,
-						Content:    m.Contenido,
-						Status:     string(m.Estado),
-						CreatedAt:  m.TiempoEnvio,
+						AccountID:   ruc,
+						To:          m.Destino,
+						Content:     m.Contenido,
+						Status:      string(m.Estado),
+						CreatedAt:   m.TiempoEnvio,
 					}
 					if m.ErrorReason != "" {
 						msg.ErrorReason = &m.ErrorReason
@@ -552,6 +552,10 @@ func HandleAdminRetryMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "message already sent", http.StatusBadRequest)
 		return
 	}
+	if len(msg.Adjuntos) > 0 {
+		http.Error(w, "media retry unsupported", http.StatusBadRequest)
+		return
+	}
 
 	telefono, err := telefonoStore.GetByID(msg.TelefonoID)
 	if err != nil || telefono == nil {
@@ -570,14 +574,14 @@ func HandleAdminRetryMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	manager := whatsapp.NewManager()
-	err = whatsapp.SendTextMessage(r.Context(), manager, telefono.NumeroCompleto, msg.Destino, msg.Contenido)
+	err = whatsapp.SendRichMessage(r.Context(), manager, telefono.NumeroCompleto, msg.Destino, msg.Contenido, nil)
 	if err != nil {
 		_ = msgRepo.UpdateEstado(refID, domain.MessageStateFailed, err.Error())
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"ok":          false,
+			"ok":           false,
 			"reference_id": refID,
 			"estado":       string(domain.MessageStateFailed),
-			"error":       err.Error(),
+			"error":        err.Error(),
 		})
 		return
 	}
@@ -585,9 +589,9 @@ func HandleAdminRetryMessage(w http.ResponseWriter, r *http.Request) {
 	_ = msgRepo.UpdateEstado(refID, domain.MessageStateSent, "")
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":          true,
+		"ok":           true,
 		"reference_id": refID,
-		"estado":      string(domain.MessageStateSent),
+		"estado":       string(domain.MessageStateSent),
 	})
 }
 

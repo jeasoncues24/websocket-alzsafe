@@ -123,9 +123,17 @@ _Este archivo contiene reglas y patrones criticos que los agentes AI deben segui
 **IMPORTANTE:** Antes de iniciar cualquier trabajo, siempre consultar el sprint status.
 
 - **Archivo de Tracking:** `_bmad-output/implementation-artifacts/sprint-status.yaml`
-- **Ultima Actualizacion:** 2026-04-17T18:06:20Z
+- **Ultima Actualizacion:** 2026-04-20T18:13:15Z
 
-### Epics Completados:
+### Snapshot Actual:
+| Epic | Estado | Notes |
+|------|--------|-------|
+| Epic 8: Gestión de Empresas | ✅ done | `S-8.1` a `S-8.8` done; `S-8.9` y `S-8.10` quedan como futuro |
+| Epic 11b: QR Self-Hosted seguro | ✅ done | `11-1` done; `11-3` y `11-4` quedan como futuro |
+| Epic 11: WhatsAppMeow Core Backend | ✅ done | runtime real con SQLite y lifecycle verificado |
+| Epic 13: Mensajería confiable y reintentos | ✅ done | bootstrap, reconciliación y observabilidad base cerrados; `13-7` queda como futuro |
+
+### Epics Completados Históricos:
 | Epic | Estado | Stories |
 |------|--------|---------|
 | Epic 1: Sesiones WhatsApp | ✅ done | 4/4 |
@@ -135,11 +143,8 @@ _Este archivo contiene reglas y patrones criticos que los agentes AI deben segui
 | Epic 5: Panel Admin (Next.js) | ✅ done | 8/8 + 1 |
 | Epic 6: Refactor shadcn/ui | ✅ done | 9/9 |
 | Epic 7: Autenticación JWT | ✅ done | 4/4 |
-| Epic 8: Gestión de Empresas | ✅ done | 8/8 |
-| **Epic 8.5: Usuarios/Roles/Módulos** | ✅ done | 5/5 |
-| **Epic 9: Mensajería Enriquecida** | ✅ done | 5/5 |
-
-- **Epic 8 (empresa)**: completado en su alcance actual; `S-8.1` a `S-8.8` done, con `S-8.9` y `S-8.10` como futuros.
+| Epic 8.5: Usuarios/Roles/Módulos | ✅ done | 5/5 |
+| Epic 9: Mensajería Enriquecida | ✅ done | 5/5 |
 
 ### Reglas de Tracking:
 1. **Antes de iniciar cualquier tarea:** Consultar `sprint-status.yaml` para conocer el estado actual
@@ -148,7 +153,7 @@ _Este archivo contiene reglas y patrones criticos que los agentes AI deben segui
 4. **Al crear nuevos epics/stories:** Regenerar el sprint-status.yaml completo
 5. **Al hacer planning:** Actualizar project-context.md con el estado actual
 
-**Nota:** El agent debe会自动 detectar y sugerir el proximo paso basado en el sprint status.
+**Nota:** El agent debe detectar y sugerir el proximo paso basado en el sprint status.
 
 ## Legacy Baseline (usqay)
 
@@ -177,4 +182,4 @@ Para humanos:
 - Actualizar cuando cambie el stack, el flujo de sesion o la estrategia de pruebas.
 - Revisar periodicamente y eliminar reglas que ya sean obvias o hayan quedado obsoletas.
 
-Last Updated: 2026-04-17
+Last Updated: 2026-04-20
