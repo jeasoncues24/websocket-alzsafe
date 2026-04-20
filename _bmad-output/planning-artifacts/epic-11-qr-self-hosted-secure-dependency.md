@@ -78,7 +78,7 @@ Evaluación con criterios: seguridad/supply-chain, madurez, compatibilidad React
 - [x] Búsqueda en repo de `api.qrserver.com` no retorna resultados en código de app.
 - [ ] El flujo de conexión WhatsApp mantiene comportamiento funcional.
 
-### 11-3: Hardening UX del bloque QR (P0)
+### F-3: Hardening UX del bloque QR (P0)
 
 **Description:** mejorar legibilidad y robustez del QR para evitar fallos de escaneo.
 
@@ -93,7 +93,7 @@ Evaluación con criterios: seguridad/supply-chain, madurez, compatibilidad React
 - [ ] Escaneo exitoso en iOS/Android en condiciones normales.
 - [ ] El usuario entiende qué hacer en menos de 5 segundos.
 
-### 11-4: Base de decodificación local (P1)
+### F-4: Base de decodificación local (P1)
 
 **Description:** preparar módulo de lectura/decodificación QR sin afectar bundle inicial.
 

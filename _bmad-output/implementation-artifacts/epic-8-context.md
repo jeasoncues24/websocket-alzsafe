@@ -19,8 +19,8 @@ El foco actual de UX/UI cambió a una vista phone-first para creación, rotació
 - S-8.6.1: Fix intermedio API keys por teléfono
 - S-8.7: Documentar proceso conexión API externo
 - S-8.8: Documentar envío de mensajes vía API
-- S-8.9: [FUTURO] Vista números telefónicos por empresa (party mode)
-- S-8.10: [FUTURO] Ruta /soporte con documentación API
+- F-1: [FUTURO] Vista números telefónicos por empresa (party mode)
+- F-2: [FUTURO] Ruta /soporte con documentación API
 
 ## Requirements & Constraints
 

@@ -128,10 +128,12 @@ _Este archivo contiene reglas y patrones criticos que los agentes AI deben segui
 ### Snapshot Actual:
 | Epic | Estado | Notes |
 |------|--------|-------|
-| Epic 8: Gestión de Empresas | ✅ done | `S-8.1` a `S-8.8` done; `S-8.9` y `S-8.10` quedan como futuro |
-| Epic 11b: QR Self-Hosted seguro | ✅ done | `11-1` done; `11-3` y `11-4` quedan como futuro |
+| Epic 8: Gestión de Empresas | ✅ done | `S-8.1` a `S-8.8` done; futuros `F-1` y `F-2` |
+| Epic 11b: QR Self-Hosted seguro | ✅ done | `11-1` done; futuros `F-3` y `F-4` |
 | Epic 11: WhatsAppMeow Core Backend | ✅ done | runtime real con SQLite y lifecycle verificado |
-| Epic 13: Mensajería confiable y reintentos | ✅ done | bootstrap, reconciliación y observabilidad base cerrados; `13-7` queda como futuro |
+| Epic 13: Mensajería confiable y reintentos | ✅ done | bootstrap, reconciliación, observabilidad y tests backend cerrados |
+
+Recordatorio futuro vivo: `_bmad-output/implementation-artifacts/future-index.md`
 
 ### Epics Completados Históricos:
 | Epic | Estado | Stories |

@@ -25,6 +25,7 @@ When this skill completes, the user should:
 - **Catalog**: `{project-root}/_bmad/_config/bmad-help.csv` — assembled manifest of all installed module skills
 - **Config**: `config.yaml` and `user-config.yaml` files in `{project-root}/_bmad/` and its subfolders — resolve `output-location` variables, provide `communication_language` and `project_knowledge`
 - **Artifacts**: Files matching `outputs` patterns at resolved `output-location` paths reveal which steps are possibly completed; their content may also provide grounding context for recommendations
+- **Future index**: `{project-root}/_bmad-output/implementation-artifacts/future-index.md` — always scan this alongside `sprint-status.yaml` and treat it as the live reminder list for future items
 - **Project knowledge**: If `project_knowledge` resolves to an existing path, read it for grounding context. Never fabricate project-specific details.
 - **Module docs**: Rows with `_meta` in the `skill` column carry a URL or path in `output-location` pointing to the module's documentation (e.g., llms.txt). Fetch and use these to answer general questions about that module.
 
@@ -53,6 +54,7 @@ module,skill,display-name,menu-code,description,action,args,phase,after,before,r
 - Search resolved output paths for `outputs` patterns
 - Fuzzy-match found files to catalog rows
 - User may also state completion explicitly, or it may be evident from the current conversation
+- If `future-index.md` exists, read it after `sprint-status.yaml` and include a short reminder of outstanding future items whenever they exist
 
 **Descriptions carry routing context** — some contain cycle info and alternate paths (e.g., "back to DS if fixes needed"). Read them as navigation hints, not just display text.
 
@@ -73,3 +75,4 @@ For each recommended item, present:
 - Recommend running each skill in a **fresh context window**
 - Match the user's tone — conversational when they're casual, structured when they want specifics
 - If the active module is ambiguous, retrieve all meta rows remote sources to find relevant info also to help answer their question
+- When future items exist, end with a brief `Recordatorio futuro` block that lists the numbered IDs and titles
