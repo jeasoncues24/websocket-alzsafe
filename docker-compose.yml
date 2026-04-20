@@ -1,4 +1,25 @@
 services:
+  mariadb:
+    image: mariadb:11.4
+    env_file:
+      - .env
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-wsapi}
+      MARIADB_USER: ${DB_USER:-wsapi}
+      MARIADB_PASSWORD: ${DB_PASS:-change-me}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-change-me-root}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - wsapi-mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root -p\"$${MARIADB_ROOT_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
   backend:
     build:
       context: .
@@ -6,15 +27,24 @@ services:
     env_file:
       - .env
     environment:
-      APP_PORT: ${APP_PORT:-8080}
+      APP_PORT: 8080
+      DB_HOST: mariadb
+      DB_PORT: 3306
       WHATSAPP_SQLITE_DIR: ${WHATSAPP_SQLITE_DIR:-/app/sessions/whatsappmeow}
     ports:
-      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
     volumes:
       - wsapi-sessions:/app/sessions
       - wsapi-debug-log:/app/debug_log
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     restart: unless-stopped
 
   frontend:
@@ -22,13 +52,21 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: "http://backend:${APP_PORT:-8080}"
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:${APP_PORT:-8080}}
+        NEXT_INTERNAL_API_URL: ${NEXT_INTERNAL_API_URL:-http://backend:8080}
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:${APP_PORT:-8080}}
+      NEXT_INTERNAL_API_URL: ${NEXT_INTERNAL_API_URL:-http://backend:8080}
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
+  wsapi-mariadb:
   wsapi-sessions:
   wsapi-debug-log:

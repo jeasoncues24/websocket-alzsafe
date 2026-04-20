@@ -1,9 +1,13 @@
 import type { NextConfig } from "next";
 
-const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+const backendUrl =
+  process.env.NEXT_INTERNAL_API_URL?.replace(/\/$/, "") ??
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
 
 if (!backendUrl) {
-  throw new Error("NEXT_PUBLIC_API_URL is required in frontend/.env.local");
+  throw new Error(
+    "NEXT_INTERNAL_API_URL or NEXT_PUBLIC_API_URL is required in frontend/.env.local",
+  );
 }
 
 const nextConfig: NextConfig = {

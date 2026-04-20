@@ -5,10 +5,7 @@ Guía mínima para desplegar WSAPI con Docker Compose en producción.
 ## Requisitos
 
 - Docker y Docker Compose instalados.
-- MariaDB/MySQL accesible desde el contenedor backend.
-- Puertos libres para `APP_PORT` y `FRONTEND_PORT`.
-
-Si la base de datos corre en el mismo host, usa `DB_HOST=host.docker.internal` en `.env`.
+- Puertos libres para `APP_PORT`, `FRONTEND_PORT` y `3306`.
 
 ## Variables
 
@@ -18,8 +15,12 @@ Si la base de datos corre en el mismo host, usa `DB_HOST=host.docker.internal` e
 - `DB_NAME`
 - `DB_USER`
 - `DB_PASS`
+- `MARIADB_ROOT_PASSWORD`
+- `APP_ENV`
 - `APP_PORT`
 - `FRONTEND_PORT`
+- `NEXT_PUBLIC_API_URL`
+- `NEXT_INTERNAL_API_URL`
 
 2. Si vas a usar frontend local fuera de Compose, copia `frontend/.env.example` a `frontend/.env.local`.
 
@@ -31,32 +32,22 @@ Ejecuta:
 bash docker/check-ports.sh
 ```
 
-Si alguno está ocupado, cambia manualmente `APP_PORT` o `FRONTEND_PORT` en `.env` y vuelve a correr el script.
+Si alguno está ocupado, cambia manualmente `APP_PORT`, `FRONTEND_PORT` o el puerto de MariaDB y vuelve a correr el script.
 
 ## Build y arranque
 
 ```bash
-docker compose build
-docker compose up -d
+docker compose up -d --build
 ```
 
 ## Validación
 
-- Backend: `http://localhost:${APP_PORT}`
-- Frontend: `http://localhost:${FRONTEND_PORT}`
+- Backend: `http://127.0.0.1:${APP_PORT}`
+- Frontend: `http://127.0.0.1:${FRONTEND_PORT}`
+- MariaDB: `127.0.0.1:3306`
 
 ## Operación
 
-- Logs: `docker compose logs -f backend frontend`
+- Logs: `docker compose logs -f backend frontend mariadb`
 - Estado: `docker compose ps`
 - Detener: `docker compose down`
-
-## Builds con Makefile
-
-```bash
-make build-prod
-make docker-build
-```
-
-- `build-prod` genera artefactos de producción locales.
-- `docker-build` construye las imágenes de Compose.

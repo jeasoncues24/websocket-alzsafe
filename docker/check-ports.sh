@@ -3,6 +3,7 @@ set -euo pipefail
 
 backend_port="${1:-${APP_PORT:-8080}}"
 frontend_port="${2:-${FRONTEND_PORT:-3000}}"
+mariadb_port="${3:-3306}"
 
 port_in_use() {
   local port="$1"
@@ -55,6 +56,7 @@ status=0
 
 check_port "Backend" "$backend_port" "APP_PORT" || status=1
 check_port "Frontend" "$frontend_port" "FRONTEND_PORT" || status=1
+check_port "MariaDB" "$mariadb_port" "MariaDB host port" || status=1
 
 if [ "$status" -ne 0 ]; then
   echo "Actualiza manualmente .env y vuelve a ejecutar el despliegue."
