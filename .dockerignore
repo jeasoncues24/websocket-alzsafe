@@ -1,17 +1,45 @@
+# Control de versiones
 .git
 .github
+.gitignore
+
+# Agentes / docs internos
+.agent
+.agents
+.gemini
 .opencode
+_bmad
 _bmad-output
+AGENTS.md
+
+# Frontend (tiene su propio build context)
 frontend/
+
+# Docker
 docker/
+
+# Dependencias Node en raíz (no pertenecen al backend Go)
+node_modules/
+
+# Sesiones y datos runtime
 sessions/
 debug_log/
 dist/
-*.md
-*.log
-*.test
-coverage.txt
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Archivos de entorno
 .env
 .env.*
+
+# Binarios de test
+*.test
+http.test
+whatsapp.test
+
+# Logs y temporales
+*.log
+*.md
 *.swp
 *.swo
+coverage.txt
