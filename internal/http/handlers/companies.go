@@ -25,7 +25,7 @@ func NewCompaniesHandler(empresaStore domain.EmpresaStoreInterface, sessionStore
 // List empresas con filtros
 func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
@@ -53,12 +53,12 @@ func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Si no es super_admin, solo puede ver su empresa
 	if claims.Rol != domain.RoleSuperAdmin {
 		if claims.EmpresaID == nil {
-			http.Error(w, `{"ok": false, "error": "Acceso denegado a esta empresa"}`, http.StatusForbidden)
+			writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
 			return
 		}
 		empresa, err := h.empresaStore.GetByID(*claims.EmpresaID)
 		if err != nil || empresa == nil {
-			http.Error(w, `{"ok": false, "error": "Empresa no encontrada"}`, http.StatusNotFound)
+			writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -74,7 +74,7 @@ func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	empresas, total, err := h.empresaStore.GetAll(page, limit, search, activo)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al obtener empresas"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al obtener empresas")
 		return
 	}
 
@@ -91,13 +91,13 @@ func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
 // Get empresa by ID (para /api/admin/empresas/{id} y /api/companies/{id})
 func (h *CompaniesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	id := h.extractIDFromPath(r.URL.Path)
 	if id <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
@@ -105,18 +105,18 @@ func (h *CompaniesHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	empresa, err := h.empresaStore.GetByID(id)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al obtener empresa"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al obtener empresa")
 		return
 	}
 	if empresa == nil {
-		http.Error(w, `{"ok": false, "error": "Empresa no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
 		return
 	}
 
 	// Verificar acceso
 	if claims.Rol != domain.RoleSuperAdmin {
 		if claims.EmpresaID == nil || *claims.EmpresaID != empresa.ID {
-			http.Error(w, `{"ok": false, "error": "Acceso denegado a esta empresa"}`, http.StatusForbidden)
+			writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
 			return
 		}
 	}
@@ -131,26 +131,26 @@ func (h *CompaniesHandler) Get(w http.ResponseWriter, r *http.Request) {
 // Create empresa
 func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	var req domain.EmpresaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"ok": false, "error": "JSON inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "JSON inválido")
 		return
 	}
 
 	// Validaciones básicas
 	if req.RUC == "" || req.Nombre == "" {
-		http.Error(w, `{"ok": false, "error": "RUC y nombre son requeridos"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "RUC y nombre son requeridos")
 		return
 	}
 
 	// Verificar RUC único
 	existing, _ := h.empresaStore.GetByRUC(req.RUC)
 	if existing != nil {
-		http.Error(w, `{"ok": false, "error": "Ya existe una empresa con este RUC"}`, http.StatusConflict)
+		writeAPIError(w, http.StatusConflict, "Ya existe una empresa con este RUC")
 		return
 	}
 
@@ -163,7 +163,7 @@ func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	id, err := h.empresaStore.Create(empresa)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al crear empresa"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al crear empresa")
 		return
 	}
 
@@ -180,13 +180,13 @@ func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Update empresa (para /api/admin/empresas/{id} y /api/companies/{id})
 func (h *CompaniesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	id := h.extractIDFromPath(r.URL.Path)
 	if id <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
@@ -194,21 +194,21 @@ func (h *CompaniesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	empresa, err := h.empresaStore.GetByID(id)
 	if err != nil || empresa == nil {
-		http.Error(w, `{"ok": false, "error": "Empresa no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
 		return
 	}
 
 	// Verificar acceso
 	if claims.Rol != domain.RoleSuperAdmin {
 		if claims.EmpresaID == nil || *claims.EmpresaID != empresa.ID {
-			http.Error(w, `{"ok": false, "error": "Acceso denegado a esta empresa"}`, http.StatusForbidden)
+			writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
 			return
 		}
 	}
 
 	var req domain.EmpresaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"ok": false, "error": "JSON inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "JSON inválido")
 		return
 	}
 
@@ -226,7 +226,7 @@ func (h *CompaniesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.empresaStore.Update(empresa); err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al actualizar empresa"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al actualizar empresa")
 		return
 	}
 
@@ -240,13 +240,13 @@ func (h *CompaniesHandler) Update(w http.ResponseWriter, r *http.Request) {
 // Delete empresa (soft delete) (para /api/admin/empresas/{id} y /api/companies/{id})
 func (h *CompaniesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	id := h.extractIDFromPath(r.URL.Path)
 	if id <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
@@ -254,14 +254,14 @@ func (h *CompaniesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	empresa, err := h.empresaStore.GetByID(id)
 	if err != nil || empresa == nil {
-		http.Error(w, `{"ok": false, "error": "Empresa no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
 		return
 	}
 
 	// Verificar acceso
 	if claims.Rol != domain.RoleSuperAdmin {
 		if claims.EmpresaID == nil || *claims.EmpresaID != empresa.ID {
-			http.Error(w, `{"ok": false, "error": "Acceso denegado a esta empresa"}`, http.StatusForbidden)
+			writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
 			return
 		}
 	}
@@ -269,18 +269,18 @@ func (h *CompaniesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Verificar si tiene sesiones activas (simplificado)
 	if h.sessionStore != nil {
 		if state, ok := h.sessionStore.Get(empresa.RUC); ok && state.IsActive && state.Status == "active" {
-			http.Error(w, `{"ok": false, "error": "La empresa tiene sesiones WhatsApp activas"}`, http.StatusConflict)
+			writeAPIError(w, http.StatusConflict, "La empresa tiene sesiones WhatsApp activas")
 			return
 		}
 	}
 
 	if !empresa.Activo {
-		http.Error(w, `{"ok": false, "error": "La empresa ya está inactiva"}`, http.StatusConflict)
+		writeAPIError(w, http.StatusConflict, "La empresa ya está inactiva")
 		return
 	}
 
 	if err := h.empresaStore.Delete(id); err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al eliminar empresa"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al eliminar empresa")
 		return
 	}
 
@@ -292,23 +292,23 @@ func (h *CompaniesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // GET /api/empresas
 func (h *CompaniesHandler) GetCurrent(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	claims, ok := domain.GetEmpresaJWTClaims(r.Context())
 	if !ok {
-		http.Error(w, `{"ok": false, "error": "Autenticación de empresa requerida"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "Autenticación de empresa requerida")
 		return
 	}
 
 	empresa, err := h.empresaStore.GetByID(claims.EmpresaID)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al obtener empresa"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al obtener empresa")
 		return
 	}
 	if empresa == nil {
-		http.Error(w, `{"ok": false, "error": "Empresa no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
 		return
 	}
 
@@ -324,34 +324,34 @@ func (h *CompaniesHandler) GetCurrent(w http.ResponseWriter, r *http.Request) {
 // PUT /api/empresas
 func (h *CompaniesHandler) UpdateCurrent(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	claims, ok := domain.GetEmpresaJWTClaims(r.Context())
 	if !ok {
-		http.Error(w, `{"ok": false, "error": "Autenticación de empresa requerida"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "Autenticación de empresa requerida")
 		return
 	}
 
 	empresa, err := h.empresaStore.GetByID(claims.EmpresaID)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al obtener empresa"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al obtener empresa")
 		return
 	}
 	if empresa == nil {
-		http.Error(w, `{"ok": false, "error": "Empresa no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
 		return
 	}
 
 	var req domain.EmpresaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"ok": false, "error": "JSON inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "JSON inválido")
 		return
 	}
 
 	if req.RUC != "" && req.RUC != empresa.RUC {
-		http.Error(w, `{"ok": false, "error": "El RUC es de solo lectura"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "El RUC es de solo lectura")
 		return
 	}
 
@@ -369,7 +369,7 @@ func (h *CompaniesHandler) UpdateCurrent(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.empresaStore.Update(empresa); err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al actualizar empresa"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al actualizar empresa")
 		return
 	}
 
@@ -385,35 +385,35 @@ func (h *CompaniesHandler) UpdateCurrent(w http.ResponseWriter, r *http.Request)
 // POST /api/admin/empresas/{id}/token
 func (h *CompaniesHandler) GenerateToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	claims, ok := domain.GetAdminJWTClaims(r.Context())
 	if !ok || claims.Rol != domain.RoleSuperAdmin {
-		http.Error(w, `{"ok": false, "error": "Solo super_admin puede generar JWT de empresa"}`, http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "Solo super_admin puede generar JWT de empresa")
 		return
 	}
 
 	id := h.extractIDFromPath(r.URL.Path)
 	if id <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
 	empresa, err := h.empresaStore.GetByID(id)
 	if err != nil || empresa == nil {
-		http.Error(w, `{"ok": false, "error": "Empresa no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
 		return
 	}
 	if !empresa.Activo {
-		http.Error(w, `{"ok": false, "error": "La empresa está inactiva"}`, http.StatusConflict)
+		writeAPIError(w, http.StatusConflict, "La empresa está inactiva")
 		return
 	}
 
 	token, err := auth.GenerateEmpresaJWT(empresa, h.jwtConfig.Secret, h.jwtConfig.Issuer)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al generar JWT de empresa"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al generar JWT de empresa")
 		return
 	}
 
@@ -430,25 +430,25 @@ func (h *CompaniesHandler) GenerateToken(w http.ResponseWriter, r *http.Request)
 // POST /api/admin/empresas/{id}/token/revoke
 func (h *CompaniesHandler) RevokeToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	claims, ok := domain.GetAdminJWTClaims(r.Context())
 	if !ok || claims.Rol != domain.RoleSuperAdmin {
-		http.Error(w, `{"ok": false, "error": "Solo super_admin puede revocar JWT de empresa"}`, http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "Solo super_admin puede revocar JWT de empresa")
 		return
 	}
 
 	id := h.extractIDFromPath(r.URL.Path)
 	if id <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
 	newVersion, err := h.empresaStore.IncrementTokenVersion(id)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al revocar JWT de empresa"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al revocar JWT de empresa")
 		return
 	}
 

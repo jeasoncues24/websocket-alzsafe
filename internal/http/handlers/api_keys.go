@@ -33,29 +33,29 @@ type createApiKeyRequest struct {
 
 func (h *ApiKeysHandler) ListByTelefono(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	telefonoID := extractTelefonoKeyID(r.URL.Path, "/api/admin/telefonos/", "/api-keys")
 	if telefonoID <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
 	phone, err := h.telefonoStore.GetByID(telefonoID)
 	if err != nil || phone == nil {
-		http.Error(w, `{"ok": false, "error": "Teléfono no encontrado"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Teléfono no encontrado")
 		return
 	}
 	if !h.canAccessTelefono(r, phone.EmpresaID) {
-		http.Error(w, `{"ok": false, "error": "Acceso denegado a este teléfono"}`, http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a este teléfono")
 		return
 	}
 
 	keys, err := h.apiKeyStore.GetByTelefonoID(telefonoID)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al obtener API keys"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al obtener API keys")
 		return
 	}
 
@@ -65,29 +65,29 @@ func (h *ApiKeysHandler) ListByTelefono(w http.ResponseWriter, r *http.Request) 
 
 func (h *ApiKeysHandler) CreateForTelefono(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	telefonoID := extractTelefonoKeyID(r.URL.Path, "/api/admin/telefonos/", "/api-keys")
 	if telefonoID <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
 	phone, err := h.telefonoStore.GetByID(telefonoID)
 	if err != nil || phone == nil {
-		http.Error(w, `{"ok": false, "error": "Teléfono no encontrado"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Teléfono no encontrado")
 		return
 	}
 	if !h.canAccessTelefono(r, phone.EmpresaID) {
-		http.Error(w, `{"ok": false, "error": "Acceso denegado a este teléfono"}`, http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a este teléfono")
 		return
 	}
 
 	var req createApiKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"ok": false, "error": "JSON inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "JSON inválido")
 		return
 	}
 	if req.Nombre == "" {
@@ -99,7 +99,7 @@ func (h *ApiKeysHandler) CreateForTelefono(w http.ResponseWriter, r *http.Reques
 	if strings.TrimSpace(req.ExpiresAt) != "" {
 		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(req.ExpiresAt))
 		if err != nil {
-			http.Error(w, `{"ok": false, "error": "expires_at inválido"}`, http.StatusBadRequest)
+			writeAPIError(w, http.StatusBadRequest, "expires_at inválido")
 			return
 		}
 		expiresAt = &parsed
@@ -107,7 +107,7 @@ func (h *ApiKeysHandler) CreateForTelefono(w http.ResponseWriter, r *http.Reques
 
 	prefix, rawKey, err := auth.GenerateAPIKeyMaterial()
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al generar la API key"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al generar la API key")
 		return
 	}
 
@@ -127,7 +127,7 @@ func (h *ApiKeysHandler) CreateForTelefono(w http.ResponseWriter, r *http.Reques
 
 	secret, err := h.apiKeyStore.Create(apiKey, rawKey)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al crear API key"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al crear API key")
 		return
 	}
 
@@ -153,23 +153,23 @@ func (h *ApiKeysHandler) CreateForTelefono(w http.ResponseWriter, r *http.Reques
 
 func (h *ApiKeysHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	apiKeyID := extractAPIKeyID(r.URL.Path)
 	if apiKeyID <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
 	apiKey, err := h.apiKeyStore.GetByID(apiKeyID)
 	if err != nil || apiKey == nil {
-		http.Error(w, `{"ok": false, "error": "API key no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "API key no encontrada")
 		return
 	}
 	if !h.canAccessTelefono(r, apiKey.EmpresaID) {
-		http.Error(w, `{"ok": false, "error": "Acceso denegado a esta API key"}`, http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta API key")
 		return
 	}
 
@@ -179,30 +179,30 @@ func (h *ApiKeysHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 func (h *ApiKeysHandler) Rotate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	apiKeyID := extractAPIKeyID(strings.TrimSuffix(r.URL.Path, "/rotate"))
 	if apiKeyID <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
 	oldKey, err := h.apiKeyStore.GetByID(apiKeyID)
 	if err != nil || oldKey == nil {
-		http.Error(w, `{"ok": false, "error": "API key no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "API key no encontrada")
 		return
 	}
 	if !h.canAccessTelefono(r, oldKey.EmpresaID) {
-		http.Error(w, `{"ok": false, "error": "Acceso denegado a esta API key"}`, http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta API key")
 		return
 	}
 
 	claims, _ := domain.GetAdminJWTClaims(r.Context())
 	prefix, rawKey, err := auth.GenerateAPIKeyMaterial()
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al generar la API key"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al generar la API key")
 		return
 	}
 
@@ -223,7 +223,7 @@ func (h *ApiKeysHandler) Rotate(w http.ResponseWriter, r *http.Request) {
 
 	secret, err := h.apiKeyStore.Rotate(oldKey, newKey, rawKey)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al rotar API key"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al rotar API key")
 		return
 	}
 
@@ -248,28 +248,28 @@ func (h *ApiKeysHandler) Rotate(w http.ResponseWriter, r *http.Request) {
 
 func (h *ApiKeysHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	apiKeyID := extractAPIKeyID(strings.TrimSuffix(r.URL.Path, "/revoke"))
 	if apiKeyID <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
 	apiKey, err := h.apiKeyStore.GetByID(apiKeyID)
 	if err != nil || apiKey == nil {
-		http.Error(w, `{"ok": false, "error": "API key no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "API key no encontrada")
 		return
 	}
 	if !h.canAccessTelefono(r, apiKey.EmpresaID) {
-		http.Error(w, `{"ok": false, "error": "Acceso denegado a esta API key"}`, http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta API key")
 		return
 	}
 
 	if err := h.apiKeyStore.Revoke(apiKeyID); err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al revocar API key"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al revocar API key")
 		return
 	}
 
@@ -295,29 +295,29 @@ func (h *ApiKeysHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 
 func (h *ApiKeysHandler) Usage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	apiKeyID := extractAPIKeyID(strings.TrimSuffix(r.URL.Path, "/usage"))
 	if apiKeyID <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
 	apiKey, err := h.apiKeyStore.GetByID(apiKeyID)
 	if err != nil || apiKey == nil {
-		http.Error(w, `{"ok": false, "error": "API key no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "API key no encontrada")
 		return
 	}
 	if !h.canAccessTelefono(r, apiKey.EmpresaID) {
-		http.Error(w, `{"ok": false, "error": "Acceso denegado a esta API key"}`, http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta API key")
 		return
 	}
 
 	usage, err := h.apiKeyStore.GetUsageDailyByKey(apiKeyID)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al obtener uso"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al obtener uso")
 		return
 	}
 
@@ -327,29 +327,29 @@ func (h *ApiKeysHandler) Usage(w http.ResponseWriter, r *http.Request) {
 
 func (h *ApiKeysHandler) Audit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	apiKeyID := extractAPIKeyID(strings.TrimSuffix(r.URL.Path, "/audit"))
 	if apiKeyID <= 0 {
-		http.Error(w, `{"ok": false, "error": "ID inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
 		return
 	}
 
 	apiKey, err := h.apiKeyStore.GetByID(apiKeyID)
 	if err != nil || apiKey == nil {
-		http.Error(w, `{"ok": false, "error": "API key no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "API key no encontrada")
 		return
 	}
 	if !h.canAccessTelefono(r, apiKey.EmpresaID) {
-		http.Error(w, `{"ok": false, "error": "Acceso denegado a esta API key"}`, http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta API key")
 		return
 	}
 
 	audit, err := h.apiKeyStore.GetAuditEventsByKey(apiKeyID)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al obtener auditoría"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al obtener auditoría")
 		return
 	}
 
@@ -359,31 +359,31 @@ func (h *ApiKeysHandler) Audit(w http.ResponseWriter, r *http.Request) {
 
 func (h *ApiKeysHandler) Me(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	claims, ok := domain.GetApiKeyClaims(r.Context())
 	if !ok {
-		http.Error(w, `{"ok": false, "error": "API key requerida"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "API key requerida")
 		return
 	}
 
 	apiKey, err := h.apiKeyStore.GetByID(claims.ApiKeyID)
 	if err != nil || apiKey == nil {
-		http.Error(w, `{"ok": false, "error": "API key no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "API key no encontrada")
 		return
 	}
 
 	phone, err := h.telefonoStore.GetByID(claims.TelefonoID)
 	if err != nil || phone == nil {
-		http.Error(w, `{"ok": false, "error": "Teléfono no encontrado"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Teléfono no encontrado")
 		return
 	}
 
 	company, err := h.empresaStore.GetByID(claims.EmpresaID)
 	if err != nil || company == nil {
-		http.Error(w, `{"ok": false, "error": "Empresa no encontrada"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
 		return
 	}
 
@@ -401,19 +401,19 @@ func (h *ApiKeysHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 func (h *ApiKeysHandler) Session(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	claims, ok := domain.GetApiKeyClaims(r.Context())
 	if !ok {
-		http.Error(w, `{"ok": false, "error": "API key requerida"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "API key requerida")
 		return
 	}
 
 	phone, err := h.telefonoStore.GetByID(claims.TelefonoID)
 	if err != nil || phone == nil {
-		http.Error(w, `{"ok": false, "error": "Teléfono no encontrado"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Teléfono no encontrado")
 		return
 	}
 

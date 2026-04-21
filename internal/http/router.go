@@ -166,7 +166,7 @@ func HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	json.NewEncoder(w).Encode(m)
+	writeJSON(w, http.StatusOK, m)
 }
 
 type Company struct {
@@ -198,7 +198,8 @@ func HandleGetCompanies(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	json.NewEncoder(w).Encode(map[string][]Company{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":        true,
 		"companies": result,
 	})
 }
@@ -216,8 +217,6 @@ type AdminMessage struct {
 }
 
 func HandleGetAdminMessages(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	query := r.URL.Query()
 	limit := 50
 	if l := query.Get("limit"); l != "" {
@@ -281,36 +280,35 @@ func HandleGetAdminMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":       true,
 		"messages": messages,
 		"total":    len(messages),
 	})
 }
 
 func HandleAdminRetryMessage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	claims, ok := domain.GetAdminJWTClaims(r.Context())
 	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	refID := extractReferenceID(r.URL.Path)
 	if refID == "" {
-		http.Error(w, "missing reference_id", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "missing reference_id")
 		return
 	}
 
 	cfg := config.Load()
 	if cfg.DBHost == "" {
-		http.Error(w, "database not configured", http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "database not configured")
 		return
 	}
 
 	db, err := storage.NewDB(cfg)
 	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "database error")
 		return
 	}
 	defer db.Close()
@@ -320,37 +318,37 @@ func HandleAdminRetryMessage(w http.ResponseWriter, r *http.Request) {
 
 	msg, err := msgRepo.GetByReferenceID(refID)
 	if err != nil || msg == nil {
-		http.Error(w, "message not found", http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "message not found")
 		return
 	}
 
 	if claims.EmpresaID != nil && msg.EmpresaID != *claims.EmpresaID && !claims.IsRoot {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "forbidden")
 		return
 	}
 
 	if msg.Estado == domain.MessageStateSent || msg.Estado == domain.MessageStateDelivered {
-		http.Error(w, "message already sent", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "message already sent")
 		return
 	}
 	if len(msg.Adjuntos) > 0 {
-		http.Error(w, "media retry unsupported", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "media retry unsupported")
 		return
 	}
 
 	telefono, err := telefonoStore.GetByID(msg.TelefonoID)
 	if err != nil || telefono == nil {
-		http.Error(w, "telefono not found", http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "telefono not found")
 		return
 	}
 
 	if telefono.Status != domain.TelefonoStatusActive {
-		http.Error(w, "session not active", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "session not active")
 		return
 	}
 
 	if err := msgRepo.IncrementRetryCount(refID); err != nil {
-		http.Error(w, "error preparing retry", http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "error preparing retry")
 		return
 	}
 
@@ -358,7 +356,7 @@ func HandleAdminRetryMessage(w http.ResponseWriter, r *http.Request) {
 	err = whatsapp.SendRichMessage(r.Context(), manager, telefono.NumeroCompleto, msg.Destino, msg.Contenido, nil)
 	if err != nil {
 		_ = msgRepo.UpdateEstado(refID, domain.MessageStateFailed, err.Error())
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"ok":           false,
 			"reference_id": refID,
 			"estado":       string(domain.MessageStateFailed),
@@ -369,7 +367,7 @@ func HandleAdminRetryMessage(w http.ResponseWriter, r *http.Request) {
 
 	_ = msgRepo.UpdateEstado(refID, domain.MessageStateSent, "")
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":           true,
 		"reference_id": refID,
 		"estado":       string(domain.MessageStateSent),
@@ -394,8 +392,6 @@ type SessionInfo struct {
 }
 
 func HandleGetAdminSessions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	result := []SessionInfo{}
 	cfg := config.Load()
 	if cfg.DBHost != "" {
@@ -426,20 +422,19 @@ func HandleGetAdminSessions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	json.NewEncoder(w).Encode(map[string][]SessionInfo{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":       true,
 		"sessions": result,
 	})
 }
 
 func HandlePostAdminSessions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	var req struct {
 		AccountID string `json:"account_id"`
 		Action    string `json:"action"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -455,7 +450,8 @@ func HandlePostAdminSessions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":     true,
 		"status": "ok",
 	})
 }
@@ -471,8 +467,6 @@ type BroadcastInfo struct {
 }
 
 func HandleGetAdminBroadcasts(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	broadcastStore := storage.NewBroadcastStore()
 
 	query := r.URL.Query()
@@ -526,7 +520,8 @@ func HandleGetAdminBroadcasts(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	json.NewEncoder(w).Encode(map[string][]BroadcastInfo{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":         true,
 		"broadcasts": result,
 	})
 }
@@ -658,13 +653,13 @@ func HandleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method != "POST" {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 
@@ -672,14 +667,14 @@ func HandleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	// In production, this should query the database with hashed passwords
 	if req.Username == "admin" && req.Password == "admin123" {
 		token := "demo-token-" + time.Now().Format("20060102150405")
-		json.NewEncoder(w).Encode(domain.LoginResponse{
+		writeJSON(w, http.StatusOK, domain.LoginResponse{
 			OK:    true,
 			Token: token,
 		})
 		return
 	}
 
-	http.Error(w, "invalid credentials", http.StatusUnauthorized)
+	writeAPIError(w, http.StatusUnauthorized, "invalid credentials")
 }
 
 func HandleHealth(w http.ResponseWriter, r *http.Request) {
@@ -687,19 +682,20 @@ func HandleHealth(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "GET" {
 		w.Header().Set("Allow", "GET")
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":      true,
 		"status":  "ok",
 		"message": "API is running",
 	})
 }
 
 func handleRoot(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":       true,
 		"status":   "ok",
 		"service":  "wsapi",
 		"message":  "WhatsApp API running",
@@ -715,23 +711,23 @@ func handleAPI(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/admin/") {
 		if r.Method == "GET" || r.Method == "POST" || r.Method == "PUT" || r.Method == "DELETE" {
 			if !routeExists(path, r.Method) {
-				http.Error(w, "not found", http.StatusNotFound)
+				writeAPIError(w, http.StatusNotFound, "not found")
 				return
 			}
 		}
 		if !routeExists(path, r.Method) {
 			allowedMethods := getAllowedMethods(path)
 			if len(allowedMethods) == 0 {
-				http.Error(w, "not found", http.StatusNotFound)
+				writeAPIError(w, http.StatusNotFound, "not found")
 				return
 			}
 			w.Header().Set("Allow", strings.Join(allowedMethods, ", "))
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
 	}
 
-	http.Error(w, "not found", http.StatusNotFound)
+	writeAPIError(w, http.StatusNotFound, "not found")
 }
 
 func handleOtherMethods(w http.ResponseWriter, r *http.Request) {
@@ -741,12 +737,12 @@ func handleOtherMethods(w http.ResponseWriter, r *http.Request) {
 	allowedMethods := getAllowedMethods(path)
 
 	if len(allowedMethods) == 0 {
-		http.Error(w, "not found", http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "not found")
 		return
 	}
 
 	w.Header().Set("Allow", strings.Join(allowedMethods, ", "))
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
 }
 
 var registeredRoutes = map[string][]string{
@@ -810,7 +806,8 @@ func getAllowedMethods(path string) []string {
 func handleCatchAll(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.URL.Path == "/" {
-		json.NewEncoder(w).Encode(map[string]string{
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"ok":       true,
 			"status":   "ok",
 			"service":  "wsapi",
 			"message":  "WhatsApp API running",
@@ -818,5 +815,5 @@ func handleCatchAll(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	http.Error(w, "not found", http.StatusNotFound)
+	writeAPIError(w, http.StatusNotFound, "not found")
 }

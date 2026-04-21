@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -14,6 +15,12 @@ import (
 type AuthMiddleware struct {
 	jwtConfig      *config.JWTConfig
 	blacklistStore *storage.TokenBlacklistStore
+}
+
+func writeAuthError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = fmt.Fprintf(w, `{"ok":false,"error":%q,"message":%q}`, message, message)
 }
 
 func NewAuthMiddleware(jwtConfig *config.JWTConfig, blacklistStore *storage.TokenBlacklistStore) *AuthMiddleware {
@@ -110,20 +117,20 @@ func (m *AuthMiddleware) RequireAuth() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				http.Error(w, `{"ok": false, "error": "Token requerido"}`, http.StatusUnauthorized)
+				writeAuthError(w, http.StatusUnauthorized, "Token requerido")
 				return
 			}
 
 			// Extract token from "Bearer <token>"
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || parts[0] != "Bearer" {
-				http.Error(w, `{"ok": false, "error": "Formato de token inválido"}`, http.StatusUnauthorized)
+				writeAuthError(w, http.StatusUnauthorized, "Formato de token inválido")
 				return
 			}
 
 			claims, err := m.ValidateToken(parts[1])
 			if err != nil {
-				http.Error(w, `{"ok": false, "error": "Token inválido"}`, http.StatusUnauthorized)
+				writeAuthError(w, http.StatusUnauthorized, "Token inválido")
 				return
 			}
 
@@ -131,7 +138,7 @@ func (m *AuthMiddleware) RequireAuth() func(http.Handler) http.Handler {
 			if m.blacklistStore != nil && claims.JTI != "" {
 				blacklisted, _ := m.blacklistStore.IsBlacklisted(claims.JTI)
 				if blacklisted {
-					http.Error(w, `{"ok": false, "error": "Token invalidado"}`, http.StatusUnauthorized)
+					writeAuthError(w, http.StatusUnauthorized, "Token invalidado")
 					return
 				}
 			}

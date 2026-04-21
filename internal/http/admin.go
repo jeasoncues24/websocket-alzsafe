@@ -30,6 +30,14 @@ type AdminHandler struct {
 	jwtCfg        *config.JWTConfig
 }
 
+func writeAdminJSON(w http.ResponseWriter, status int, payload interface{}) {
+	writeJSON(w, status, payload)
+}
+
+func writeAdminError(w http.ResponseWriter, status int, message string) {
+	writeAPIError(w, status, message)
+}
+
 func NewAdminHandler(db *sql.DB, sessionStore *storage.SessionStore, manager *whatsapp.Manager, jwtCfg *config.JWTConfig) *AdminHandler {
 	if db == nil {
 		return nil
@@ -126,7 +134,7 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, total, err := h.userStore.GetAll(page, limit)
 	if err != nil {
-		http.Error(w, "error al obtener usuarios", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener usuarios")
 		return
 	}
 
@@ -136,7 +144,8 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		result[i] = u
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":    true,
 		"users": result,
 		"total": total,
 		"page":  page,
@@ -145,11 +154,9 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminHandler) ListUsuarioAdmins(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	access, ok := getPanelAdminAccess(r)
 	if !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
@@ -176,11 +183,11 @@ func (h *AdminHandler) ListUsuarioAdmins(w http.ResponseWriter, r *http.Request)
 	} else if access.IsRoot {
 		users, total, err = h.userStore.GetAll(page, limit)
 	} else {
-		http.Error(w, "acceso denegado", http.StatusForbidden)
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
 		return
 	}
 	if err != nil {
-		http.Error(w, "error al obtener usuario_admin", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener usuario_admin")
 		return
 	}
 
@@ -190,11 +197,12 @@ func (h *AdminHandler) ListUsuarioAdmins(w http.ResponseWriter, r *http.Request)
 		result[i] = u
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"usuario_admin": result,
-		"total":         total,
-		"page":          page,
-		"limit":         limit,
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":    true,
+		"users": result,
+		"total": total,
+		"page":  page,
+		"limit": limit,
 	})
 }
 
@@ -203,55 +211,53 @@ func (h *AdminHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	id, err := extractPanelUserID(r.URL.Path)
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid user ID")
 		return
 	}
 
 	user, err := h.userStore.GetByID(id)
 	if err != nil {
-		http.Error(w, "error al obtener usuario", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener usuario")
 		return
 	}
 	if user == nil {
-		http.Error(w, "usuario no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "usuario no encontrado")
 		return
 	}
 
 	user.PasswordHash = ""
-	json.NewEncoder(w).Encode(user)
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "user": user})
 }
 
 func (h *AdminHandler) GetUsuarioAdmin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	access, ok := getPanelAdminAccess(r)
 	if !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	id, err := extractPanelUserID(r.URL.Path)
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid user ID")
 		return
 	}
 
 	user, err := h.userStore.GetByID(id)
 	if err != nil {
-		http.Error(w, "error al obtener usuario_admin", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener usuario_admin")
 		return
 	}
 	if user == nil {
-		http.Error(w, "usuario_admin no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "usuario_admin no encontrado")
 		return
 	}
 	if user.EmpresaID != nil && !access.canAccessEmpresa(*user.EmpresaID) {
-		http.Error(w, "acceso denegado", http.StatusForbidden)
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
 		return
 	}
 
 	user.PasswordHash = ""
-	json.NewEncoder(w).Encode(map[string]interface{}{"usuario_admin": user})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "user": user})
 }
 
 type CreateUserRequest struct {
@@ -269,18 +275,18 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 
 	if req.Username == "" || req.Password == "" {
-		http.Error(w, "username y password requeridos", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "username y password requeridos")
 		return
 	}
 
 	hashBytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, "error al crear hash de contraseña", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al crear hash de contraseña")
 		return
 	}
 	hash := string(hashBytes)
@@ -297,37 +303,35 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	id, err := h.userStore.Create(user)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("error al crear usuario: %v", err), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, fmt.Sprintf("error al crear usuario: %v", err))
 		return
 	}
 
 	user.ID = id
 	user.PasswordHash = ""
-	json.NewEncoder(w).Encode(user)
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "user": user})
 }
 
 func (h *AdminHandler) CreateUsuarioAdmin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	access, ok := getPanelAdminAccess(r)
 	if !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	var req CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 	if req.Username == "" || req.Password == "" {
-		http.Error(w, "username y password requeridos", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "username y password requeridos")
 		return
 	}
 
 	hashBytes, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, "error al crear hash de contraseña", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al crear hash de contraseña")
 		return
 	}
 	user := &domain.AdminUser{
@@ -346,18 +350,18 @@ func (h *AdminHandler) CreateUsuarioAdmin(w http.ResponseWriter, r *http.Request
 		}
 	}
 	if user.EmpresaID != nil && !access.canAccessEmpresa(*user.EmpresaID) {
-		http.Error(w, "acceso denegado", http.StatusForbidden)
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
 		return
 	}
 
 	id, err := h.userStore.Create(user)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("error al crear usuario_admin: %v", err), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, fmt.Sprintf("error al crear usuario_admin: %v", err))
 		return
 	}
 	user.ID = id
 	user.PasswordHash = ""
-	json.NewEncoder(w).Encode(map[string]interface{}{"usuario_admin": user})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "user": user})
 }
 
 type UpdateUserRequest struct {
@@ -374,19 +378,19 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	id, err := extractPanelUserID(r.URL.Path)
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid user ID")
 		return
 	}
 
 	var req UpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 
 	user, err := h.userStore.GetByID(id)
 	if err != nil || user == nil {
-		http.Error(w, "usuario no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "usuario no encontrado")
 		return
 	}
 
@@ -403,42 +407,40 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	err = h.userStore.Update(user)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("error al actualizar usuario: %v", err), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, fmt.Sprintf("error al actualizar usuario: %v", err))
 		return
 	}
 
 	user.PasswordHash = ""
-	json.NewEncoder(w).Encode(user)
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "user": user})
 }
 
 func (h *AdminHandler) UpdateUsuarioAdmin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	access, ok := getPanelAdminAccess(r)
 	if !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	id, err := extractPanelUserID(r.URL.Path)
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid user ID")
 		return
 	}
 
 	var req UpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 
 	user, err := h.userStore.GetByID(id)
 	if err != nil || user == nil {
-		http.Error(w, "usuario_admin no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "usuario_admin no encontrado")
 		return
 	}
 	if user.EmpresaID != nil && !access.canAccessEmpresa(*user.EmpresaID) {
-		http.Error(w, "acceso denegado", http.StatusForbidden)
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
 		return
 	}
 
@@ -447,7 +449,7 @@ func (h *AdminHandler) UpdateUsuarioAdmin(w http.ResponseWriter, r *http.Request
 	}
 	if req.EmpresaID != nil {
 		if !access.canAccessEmpresa(*req.EmpresaID) && !access.IsRoot {
-			http.Error(w, "acceso denegado", http.StatusForbidden)
+			writeAdminError(w, http.StatusForbidden, "acceso denegado")
 			return
 		}
 		user.EmpresaID = req.EmpresaID
@@ -464,12 +466,12 @@ func (h *AdminHandler) UpdateUsuarioAdmin(w http.ResponseWriter, r *http.Request
 	user.Activo = req.IsActive
 
 	if err := h.userStore.Update(user); err != nil {
-		http.Error(w, fmt.Sprintf("error al actualizar usuario_admin: %v", err), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, fmt.Sprintf("error al actualizar usuario_admin: %v", err))
 		return
 	}
 
 	user.PasswordHash = ""
-	json.NewEncoder(w).Encode(map[string]interface{}{"usuario_admin": user})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "user": user})
 }
 
 func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
@@ -477,51 +479,49 @@ func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 	id, err := extractPanelUserID(r.URL.Path)
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid user ID")
 		return
 	}
 
 	action, err := h.userStore.DeleteWithPolicy(id)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("error al eliminar usuario: %v", err), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, fmt.Sprintf("error al eliminar usuario: %v", err))
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"status": action})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "status": action})
 }
 
 func (h *AdminHandler) DeleteUsuarioAdmin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	access, ok := getPanelAdminAccess(r)
 	if !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	id, err := extractPanelUserID(r.URL.Path)
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid user ID")
 		return
 	}
 
 	user, err := h.userStore.GetByID(id)
 	if err != nil || user == nil {
-		http.Error(w, "usuario_admin no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "usuario_admin no encontrado")
 		return
 	}
 	if user.EmpresaID != nil && !access.canAccessEmpresa(*user.EmpresaID) {
-		http.Error(w, "acceso denegado", http.StatusForbidden)
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
 		return
 	}
 
 	action, err := h.userStore.DeleteWithPolicy(id)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("error al eliminar usuario_admin: %v", err), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, fmt.Sprintf("error al eliminar usuario_admin: %v", err))
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"status": action})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "status": action})
 }
 
 type PromoteUserRequest struct {
@@ -540,11 +540,11 @@ func (h *AdminHandler) PromoteUser(w http.ResponseWriter, r *http.Request) {
 	} else if strings.Contains(path, "/users/") || strings.Contains(path, "/usuario_admin/") {
 		id, err = extractPanelUserID(path)
 	} else {
-		http.Error(w, "invalid path", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid path")
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -555,7 +555,7 @@ func (h *AdminHandler) PromoteUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.userStore.GetByID(id)
 	if err != nil || user == nil {
-		http.Error(w, "usuario no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "usuario no encontrado")
 		return
 	}
 
@@ -566,12 +566,12 @@ func (h *AdminHandler) PromoteUser(w http.ResponseWriter, r *http.Request) {
 
 	err = h.userStore.Update(user)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("error al promover usuario: %v", err), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, fmt.Sprintf("error al promover usuario: %v", err))
 		return
 	}
 
 	user.PasswordHash = ""
-	json.NewEncoder(w).Encode(user)
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "user": user})
 }
 
 func (h *AdminHandler) PromoteUsuarioAdmin(w http.ResponseWriter, r *http.Request) {
@@ -587,34 +587,32 @@ type AssignModulesRequest struct {
 }
 
 func (h *AdminHandler) GetUserModules(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	access, ok := getPanelAdminAccess(r)
 	if !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	id, err := extractPanelUserID(r.URL.Path)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	user, err := h.userStore.GetByID(id)
 	if err != nil || user == nil {
-		http.Error(w, "usuario_admin no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "usuario_admin no encontrado")
 		return
 	}
 	if user.EmpresaID != nil && !access.canAccessEmpresa(*user.EmpresaID) {
-		http.Error(w, "acceso denegado", http.StatusForbidden)
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
 		return
 	}
 
 	userModuleStore := storage.NewUserModuleStore(h.db)
 	modules, err := userModuleStore.GetByUserID(id)
 	if err != nil {
-		http.Error(w, "error al obtener módulos", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener módulos")
 		return
 	}
 
@@ -623,7 +621,7 @@ func (h *AdminHandler) GetUserModules(w http.ResponseWriter, r *http.Request) {
 		moduleIDs[i] = m.ID
 	}
 
-	json.NewEncoder(w).Encode(map[string][]int64{"module_ids": moduleIDs})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "module_ids": moduleIDs})
 }
 
 func (h *AdminHandler) GetUsuarioAdminModules(w http.ResponseWriter, r *http.Request) {
@@ -631,53 +629,51 @@ func (h *AdminHandler) GetUsuarioAdminModules(w http.ResponseWriter, r *http.Req
 }
 
 func (h *AdminHandler) AssignUserModules(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	access, ok := getPanelAdminAccess(r)
 	if !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	path := r.URL.Path
 	id, err := extractPanelUserID(path)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	user, err := h.userStore.GetByID(id)
 	if err != nil || user == nil {
-		http.Error(w, "usuario_admin no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "usuario_admin no encontrado")
 		return
 	}
 	if user.EmpresaID != nil && !access.canAccessEmpresa(*user.EmpresaID) {
-		http.Error(w, "acceso denegado", http.StatusForbidden)
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
 		return
 	}
 
 	var req AssignModulesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 
 	if err := h.validateModuleIDs(req.ModuleIDs); err != nil {
 		if strings.Contains(err.Error(), "inválido") {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			writeAdminError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	userModuleStore := storage.NewUserModuleStore(h.db)
 	if err := userModuleStore.AssignModules(id, req.ModuleIDs); err != nil {
-		http.Error(w, "error al asignar módulos", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al asignar módulos")
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "status": "ok"})
 }
 
 func (h *AdminHandler) AssignUsuarioAdminModules(w http.ResponseWriter, r *http.Request) {
@@ -689,20 +685,19 @@ func (h *AdminHandler) AssignUserModulesByID(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *AdminHandler) ListRoles(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	if _, ok := getPanelAdminAccess(r); !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	roles, err := h.roleStore.GetAll()
 	if err != nil {
-		http.Error(w, "error al obtener roles "+err.Error(), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener roles "+err.Error())
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":    true,
 		"roles": roles,
 	})
 }
@@ -715,72 +710,68 @@ type RoleRequest struct {
 }
 
 func (h *AdminHandler) GetRole(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	if _, ok := getPanelAdminAccess(r); !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	id, err := extractPanelUserID(r.URL.Path)
 	if err != nil {
-		http.Error(w, "invalid role ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid role ID")
 		return
 	}
 
 	role, err := h.roleStore.GetByID(id)
 	if err != nil {
-		http.Error(w, "error al obtener rol", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener rol")
 		return
 	}
 	if role == nil {
-		http.Error(w, "rol no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "rol no encontrado")
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{"role": role})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "role": role})
 }
 
 func (h *AdminHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	if _, ok := getPanelAdminAccess(r); !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	var req RoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	req.Description = strings.TrimSpace(req.Description)
 	if req.Name == "" {
-		http.Error(w, "name requerido", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "name requerido")
 		return
 	}
 
 	if existing, err := h.roleStore.GetByName(req.Name); err != nil {
-		http.Error(w, "error al validar nombre de rol", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al validar nombre de rol")
 		return
 	} else if existing != nil {
-		http.Error(w, "el rol ya existe", http.StatusConflict)
+		writeAdminError(w, http.StatusConflict, "el rol ya existe")
 		return
 	}
 
 	if err := h.validateRolePermissions(req.Permissions); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if req.IsRoot {
 		if rootRole, err := h.roleStore.GetRootRole(); err != nil {
-			http.Error(w, "error al validar rol root", http.StatusInternalServerError)
+			writeAdminError(w, http.StatusInternalServerError, "error al validar rol root")
 			return
 		} else if rootRole != nil {
-			http.Error(w, "ya existe un rol root", http.StatusConflict)
-			return
+			// http.Error(w, "ya existe un rol root", http.StatusConflict)
+			// return
 		}
 	}
 
@@ -792,73 +783,71 @@ func (h *AdminHandler) CreateRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.roleStore.Create(role); err != nil {
-		http.Error(w, fmt.Sprintf("error al crear rol: %v", err), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, fmt.Sprintf("error al crear rol: %v", err))
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{"role": role})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "role": role})
 }
 
 func (h *AdminHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	if _, ok := getPanelAdminAccess(r); !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	id, err := extractPanelUserID(r.URL.Path)
 	if err != nil {
-		http.Error(w, "invalid role ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid role ID")
 		return
 	}
 
 	current, err := h.roleStore.GetByID(id)
 	if err != nil {
-		http.Error(w, "error al obtener rol", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener rol")
 		return
 	}
 	if current == nil {
-		http.Error(w, "rol no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "rol no encontrado")
 		return
 	}
 
 	var req RoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	req.Description = strings.TrimSpace(req.Description)
 	if req.Name == "" {
-		http.Error(w, "name requerido", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "name requerido")
 		return
 	}
 
 	if existing, err := h.roleStore.GetByName(req.Name); err != nil {
-		http.Error(w, "error al validar nombre de rol", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al validar nombre de rol")
 		return
 	} else if existing != nil && existing.ID != id {
-		http.Error(w, "el rol ya existe", http.StatusConflict)
+		writeAdminError(w, http.StatusConflict, "el rol ya existe")
 		return
 	}
 
 	if err := h.validateRolePermissions(req.Permissions); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if current.IsRoot && !req.IsRoot {
-		http.Error(w, "el rol root no puede perder is_root", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "el rol root no puede perder is_root")
 		return
 	}
 	if req.IsRoot && !current.IsRoot {
 		if rootRole, err := h.roleStore.GetRootRole(); err != nil {
-			http.Error(w, "error al validar rol root", http.StatusInternalServerError)
+			writeAdminError(w, http.StatusInternalServerError, "error al validar rol root")
 			return
 		} else if rootRole != nil && rootRole.ID != current.ID {
-			http.Error(w, "ya existe un rol root", http.StatusConflict)
-			return
+			// http.Error(w, "ya existe un rol root", http.StatusConflict)
+			// return
 		}
 	}
 
@@ -868,51 +857,49 @@ func (h *AdminHandler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	current.Permissions = req.Permissions
 
 	if err := h.roleStore.Update(current); err != nil {
-		http.Error(w, fmt.Sprintf("error al actualizar rol: %v", err), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, fmt.Sprintf("error al actualizar rol: %v", err))
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{"role": current})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "role": current})
 }
 
 func (h *AdminHandler) DeleteRole(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	if _, ok := getPanelAdminAccess(r); !ok {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	id, err := extractPanelUserID(r.URL.Path)
 	if err != nil {
-		http.Error(w, "invalid role ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid role ID")
 		return
 	}
 
 	role, err := h.roleStore.GetByID(id)
 	if err != nil {
-		http.Error(w, "error al obtener rol", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener rol")
 		return
 	}
 	if role == nil {
-		http.Error(w, "rol no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "rol no encontrado")
 		return
 	}
 	if role.IsRoot {
-		http.Error(w, "el rol root no puede eliminarse", http.StatusConflict)
+		writeAdminError(w, http.StatusConflict, "el rol root no puede eliminarse")
 		return
 	}
 
 	if err := h.roleStore.DeleteIfUnused(id); err != nil {
 		if err == storage.ErrRoleInUse {
-			http.Error(w, "el rol está en uso y no puede eliminarse", http.StatusConflict)
+			writeAdminError(w, http.StatusConflict, "el rol está en uso y no puede eliminarse")
 			return
 		}
-		http.Error(w, fmt.Sprintf("error al eliminar rol: %v", err), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, fmt.Sprintf("error al eliminar rol: %v", err))
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "status": "deleted"})
 }
 
 func (h *AdminHandler) validateRolePermissions(perms []string) error {
@@ -978,15 +965,14 @@ func (h *AdminHandler) validateModuleIDs(moduleIDs []int64) error {
 }
 
 func (h *AdminHandler) ListModules(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	modules, err := h.moduleStore.GetAll()
 	if err != nil {
-		http.Error(w, "error al obtener módulos: "+err.Error(), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener módulos: "+err.Error())
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":      true,
 		"modules": modules,
 	})
 }
@@ -995,38 +981,38 @@ func (h *AdminHandler) ListCompanyPhones(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 
 	if h.telefonoStore == nil {
-		http.Error(w, "telefono store no disponible", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "telefono store no disponible")
 		return
 	}
 
 	companyID, err := extractCompanyIDFromPath(r.URL.Path, "/api/admin/empresas/", "/telefonos")
 	if err != nil || companyID <= 0 {
-		http.Error(w, "invalid company ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid company ID")
 		return
 	}
 
 	companyStore := storage.NewEmpresaStore(h.db)
 	company, err := companyStore.GetByID(companyID)
 	if err != nil {
-		http.Error(w, "error al validar empresa", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al validar empresa")
 		return
 	}
 	if company == nil {
-		http.Error(w, "empresa no encontrada", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "empresa no encontrada")
 		return
 	}
 
 	claims, _ := domain.GetAdminJWTClaims(r.Context())
 	if claims != nil && !claims.IsRoot {
 		if claims.EmpresaID == nil || *claims.EmpresaID != companyID {
-			http.Error(w, "acceso denegado", http.StatusForbidden)
+			writeAdminError(w, http.StatusForbidden, "acceso denegado")
 			return
 		}
 	}
 
 	phones, err := h.telefonoStore.GetByEmpresa(companyID)
 	if err != nil {
-		http.Error(w, "error al obtener teléfonos", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener teléfonos")
 		return
 	}
 
@@ -1053,7 +1039,7 @@ func (h *AdminHandler) ListCompanyPhones(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	json.NewEncoder(w).Encode(domain.TelefonosListResponse{
+	writeAdminJSON(w, http.StatusOK, domain.TelefonosListResponse{
 		OK:        true,
 		Telefonos: enriched,
 		Total:     len(phones),
@@ -1065,28 +1051,28 @@ func (h *AdminHandler) CreateCompanyPhone(w http.ResponseWriter, r *http.Request
 
 	companyID, err := extractCompanyIDFromPath(r.URL.Path, "/api/admin/empresas/", "/telefonos")
 	if err != nil || companyID <= 0 {
-		http.Error(w, "invalid company ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid company ID")
 		return
 	}
 
 	claims, _ := domain.GetAdminJWTClaims(r.Context())
 	if claims != nil && !claims.IsRoot {
 		if claims.EmpresaID == nil || *claims.EmpresaID != companyID {
-			http.Error(w, "acceso denegado", http.StatusForbidden)
+			writeAdminError(w, http.StatusForbidden, "acceso denegado")
 			return
 		}
 	}
 
 	var req adminTelefonoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "JSON inválido")
 		return
 	}
 
 	req.CodigoPais = strings.TrimSpace(req.CodigoPais)
 	req.Numero = strings.TrimSpace(req.Numero)
 	if req.CodigoPais == "" || req.Numero == "" {
-		http.Error(w, "codigo_pais y numero requeridos", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "codigo_pais y numero requeridos")
 		return
 	}
 
@@ -1096,14 +1082,14 @@ func (h *AdminHandler) CreateCompanyPhone(w http.ResponseWriter, r *http.Request
 		switch status {
 		case domain.TelefonoStatusActive, domain.TelefonoStatusQRPending, domain.TelefonoStatusDisconnected:
 		default:
-			http.Error(w, "estado de teléfono inválido", http.StatusBadRequest)
+			writeAdminError(w, http.StatusBadRequest, "estado de teléfono inválido")
 			return
 		}
 	}
 
 	numeroCompleto := req.CodigoPais + req.Numero
 	if existing, _ := h.telefonoStore.GetByNumeroCompleto(numeroCompleto); existing != nil {
-		http.Error(w, "ya existe un teléfono con ese número", http.StatusConflict)
+		writeAdminError(w, http.StatusConflict, "ya existe un teléfono con ese número")
 		return
 	}
 
@@ -1116,11 +1102,11 @@ func (h *AdminHandler) CreateCompanyPhone(w http.ResponseWriter, r *http.Request
 	}
 
 	if _, err := h.telefonoStore.Create(phone); err != nil {
-		http.Error(w, "error al crear teléfono", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al crear teléfono")
 		return
 	}
 
-	json.NewEncoder(w).Encode(domain.TelefonoResponse{OK: true, Telefono: phone})
+	writeAdminJSON(w, http.StatusOK, domain.TelefonoResponse{OK: true, Telefono: phone})
 }
 
 func (h *AdminHandler) UpdateCompanyPhone(w http.ResponseWriter, r *http.Request) {
@@ -1128,27 +1114,27 @@ func (h *AdminHandler) UpdateCompanyPhone(w http.ResponseWriter, r *http.Request
 
 	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
 	if err != nil || telefonoID <= 0 {
-		http.Error(w, "invalid telefono ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid telefono ID")
 		return
 	}
 
 	phone, err := h.telefonoStore.GetByID(telefonoID)
 	if err != nil || phone == nil {
-		http.Error(w, "teléfono no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "teléfono no encontrado")
 		return
 	}
 
 	claims, _ := domain.GetAdminJWTClaims(r.Context())
 	if claims != nil && !claims.IsRoot {
 		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
-			http.Error(w, "acceso denegado", http.StatusForbidden)
+			writeAdminError(w, http.StatusForbidden, "acceso denegado")
 			return
 		}
 	}
 
 	var req adminTelefonoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "JSON inválido")
 		return
 	}
 
@@ -1163,23 +1149,23 @@ func (h *AdminHandler) UpdateCompanyPhone(w http.ResponseWriter, r *http.Request
 		switch phone.Status {
 		case domain.TelefonoStatusActive, domain.TelefonoStatusQRPending, domain.TelefonoStatusDisconnected:
 		default:
-			http.Error(w, "estado de teléfono inválido", http.StatusBadRequest)
+			writeAdminError(w, http.StatusBadRequest, "estado de teléfono inválido")
 			return
 		}
 	}
 	phone.NumeroCompleto = phone.CodigoPais + phone.Numero
 
 	if existing, _ := h.telefonoStore.GetByNumeroCompleto(phone.NumeroCompleto); existing != nil && existing.ID != phone.ID {
-		http.Error(w, "ya existe un teléfono con ese número", http.StatusConflict)
+		writeAdminError(w, http.StatusConflict, "ya existe un teléfono con ese número")
 		return
 	}
 
 	if err := h.telefonoStore.Update(phone); err != nil {
-		http.Error(w, "error al actualizar teléfono", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al actualizar teléfono")
 		return
 	}
 
-	json.NewEncoder(w).Encode(domain.TelefonoResponse{OK: true, Telefono: phone})
+	writeAdminJSON(w, http.StatusOK, domain.TelefonoResponse{OK: true, Telefono: phone})
 }
 
 func (h *AdminHandler) DeleteCompanyPhone(w http.ResponseWriter, r *http.Request) {
@@ -1187,27 +1173,27 @@ func (h *AdminHandler) DeleteCompanyPhone(w http.ResponseWriter, r *http.Request
 
 	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
 	if err != nil || telefonoID <= 0 {
-		http.Error(w, "invalid telefono ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid telefono ID")
 		return
 	}
 
 	phone, err := h.telefonoStore.GetByID(telefonoID)
 	if err != nil || phone == nil {
-		http.Error(w, "teléfono no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "teléfono no encontrado")
 		return
 	}
 
 	claims, _ := domain.GetAdminJWTClaims(r.Context())
 	if claims != nil && !claims.IsRoot {
 		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
-			http.Error(w, "acceso denegado", http.StatusForbidden)
+			writeAdminError(w, http.StatusForbidden, "acceso denegado")
 			return
 		}
 	}
 
 	if h.apiKeyStore != nil {
 		if err := h.apiKeyStore.RevokeByTelefonoID(phone.ID); err != nil {
-			http.Error(w, "error al invalidar API keys", http.StatusInternalServerError)
+			writeAdminError(w, http.StatusInternalServerError, "error al invalidar API keys")
 			return
 		}
 	}
@@ -1219,11 +1205,11 @@ func (h *AdminHandler) DeleteCompanyPhone(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.telefonoStore.Delete(telefonoID); err != nil {
-		http.Error(w, "error al eliminar teléfono", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al eliminar teléfono")
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	writeAdminJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (h *AdminHandler) GetCompanyPhone(w http.ResponseWriter, r *http.Request) {
@@ -1231,38 +1217,38 @@ func (h *AdminHandler) GetCompanyPhone(w http.ResponseWriter, r *http.Request) {
 
 	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
 	if err != nil || telefonoID <= 0 {
-		http.Error(w, "invalid telefono ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid telefono ID")
 		return
 	}
 
 	phone, err := h.telefonoStore.GetByID(telefonoID)
 	if err != nil || phone == nil {
-		http.Error(w, "teléfono no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "teléfono no encontrado")
 		return
 	}
 
 	claims, _ := domain.GetAdminJWTClaims(r.Context())
 	if claims != nil && !claims.IsRoot {
 		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
-			http.Error(w, "acceso denegado", http.StatusForbidden)
+			writeAdminError(w, http.StatusForbidden, "acceso denegado")
 			return
 		}
 	}
 
-	json.NewEncoder(w).Encode(domain.TelefonoResponse{OK: true, Telefono: phone})
+	writeAdminJSON(w, http.StatusOK, domain.TelefonoResponse{OK: true, Telefono: phone})
 }
 
 func (h *AdminHandler) GetSessionsDiagnostics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method != http.MethodGet {
-		http.Error(w, "metodo no permitido", http.StatusMethodNotAllowed)
+		writeAdminError(w, http.StatusMethodNotAllowed, "metodo no permitido")
 		return
 	}
 
 	claims, _ := domain.GetAdminJWTClaims(r.Context())
 	if claims == nil {
-		http.Error(w, "token requerido", http.StatusUnauthorized)
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
@@ -1278,7 +1264,7 @@ func (h *AdminHandler) GetSessionsDiagnostics(w http.ResponseWriter, r *http.Req
 		if empresaIDRaw != "" {
 			empresaID, parseErr := strconv.ParseInt(empresaIDRaw, 10, 64)
 			if parseErr != nil || empresaID <= 0 {
-				http.Error(w, "empresa_id invalido", http.StatusBadRequest)
+				writeAdminError(w, http.StatusBadRequest, "empresa_id invalido")
 				return
 			}
 			telefonos, err = h.telefonoStore.GetByEmpresa(empresaID)
@@ -1287,13 +1273,13 @@ func (h *AdminHandler) GetSessionsDiagnostics(w http.ResponseWriter, r *http.Req
 		}
 	} else {
 		if claims.EmpresaID == nil || *claims.EmpresaID <= 0 {
-			http.Error(w, "acceso denegado", http.StatusForbidden)
+			writeAdminError(w, http.StatusForbidden, "acceso denegado")
 			return
 		}
 		telefonos, err = h.telefonoStore.GetByEmpresa(*claims.EmpresaID)
 	}
 	if err != nil {
-		http.Error(w, "error al obtener sesiones", http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener sesiones")
 		return
 	}
 
@@ -1328,7 +1314,7 @@ func (h *AdminHandler) GetSessionsDiagnostics(w http.ResponseWriter, r *http.Req
 		diagnostics = append(diagnostics, diag)
 	}
 
-	json.NewEncoder(w).Encode(map[string]any{
+	writeAdminJSON(w, http.StatusOK, map[string]any{
 		"ok": true,
 		"summary": map[string]any{
 			"total_telefonos":       len(telefonos),
@@ -1387,27 +1373,27 @@ func (h *AdminHandler) StartCompanyPhoneConnection(w http.ResponseWriter, r *htt
 
 	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
 	if err != nil || telefonoID <= 0 {
-		http.Error(w, "invalid telefono ID", http.StatusBadRequest)
+		writeAdminError(w, http.StatusBadRequest, "invalid telefono ID")
 		return
 	}
 
 	phone, err := h.telefonoStore.GetByID(telefonoID)
 	if err != nil || phone == nil {
-		http.Error(w, "teléfono no encontrado", http.StatusNotFound)
+		writeAdminError(w, http.StatusNotFound, "teléfono no encontrado")
 		return
 	}
 
 	claims, _ := domain.GetAdminJWTClaims(r.Context())
 	if claims != nil && !claims.IsRoot {
 		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
-			http.Error(w, "acceso denegado", http.StatusForbidden)
+			writeAdminError(w, http.StatusForbidden, "acceso denegado")
 			return
 		}
 	}
 
 	if h.sessionStore != nil {
 		if state, ok := h.sessionStore.Get(phone.NumeroCompleto); ok && state.Status == "active" {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			writeAdminJSON(w, http.StatusOK, map[string]interface{}{
 				"ok":             true,
 				"telefono_id":    phone.ID,
 				"numeroCompleto": phone.NumeroCompleto,
@@ -1420,13 +1406,13 @@ func (h *AdminHandler) StartCompanyPhoneConnection(w http.ResponseWriter, r *htt
 	}
 
 	if h.manager == nil {
-		http.Error(w, "whatsapp manager no disponible", http.StatusServiceUnavailable)
+		writeAdminError(w, http.StatusServiceUnavailable, "whatsapp manager no disponible")
 		return
 	}
 
 	events, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
 	if err != nil {
-		http.Error(w, "error al iniciar conexión: "+err.Error(), http.StatusInternalServerError)
+		writeAdminError(w, http.StatusInternalServerError, "error al iniciar conexión: "+err.Error())
 		return
 	}
 
@@ -1435,7 +1421,7 @@ func (h *AdminHandler) StartCompanyPhoneConnection(w http.ResponseWriter, r *htt
 		}
 	}()
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeAdminJSON(w, http.StatusOK, map[string]interface{}{
 		"ok":             true,
 		"telefono_id":    phone.ID,
 		"numeroCompleto": phone.NumeroCompleto,

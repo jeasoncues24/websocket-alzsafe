@@ -172,19 +172,43 @@ func TestListUsuarioAdminsUsesEmpresaScope(t *testing.T) {
 	}
 
 	var resp struct {
-		Usuarios []domain.AdminUser `json:"usuario_admin"`
-		Total    int                `json:"total"`
-		Page     int                `json:"page"`
-		Limit    int                `json:"limit"`
+		Users []domain.AdminUser `json:"users"`
+		Total int                `json:"total"`
+		Page  int                `json:"page"`
+		Limit int                `json:"limit"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response: %v", err)
 	}
-	if len(resp.Usuarios) != 1 || resp.Usuarios[0].Username != "alice" {
-		t.Fatalf("unexpected response: %+v", resp)
+	if len(resp.Users) != 1 || resp.Users[0].Username != "alice" {
+		t.Fatalf("expected users alias in response: %+v", resp)
 	}
 	if resp.Total != 1 {
 		t.Fatalf("expected total 1, got %d", resp.Total)
+	}
+}
+
+func TestListUsuarioAdminsUnauthorizedReturnsJSONError(t *testing.T) {
+	db := newAdminUserScopeTestDB(t)
+	store := storage.NewAdminUserStore(db)
+	h := &AdminHandler{userStore: store}
+	req := httptest.NewRequest(stdhttp.MethodGet, "/api/admin/usuario_admin?page=1&limit=20", nil)
+	rr := httptest.NewRecorder()
+
+	h.ListUsuarioAdmins(rr, req)
+
+	if rr.Code != stdhttp.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("expected json content-type, got %q", got)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json response: %v", err)
+	}
+	if resp["ok"] != false || resp["error"] == "" {
+		t.Fatalf("unexpected error payload: %+v", resp)
 	}
 }
 
@@ -272,9 +296,9 @@ func TestCreateAndUpdateUsuarioAdmin(t *testing.T) {
 	if err := json.Unmarshal(createRR.Body.Bytes(), &createResp); err != nil {
 		t.Fatalf("invalid create response: %v", err)
 	}
-	usuarioAdmin, ok := createResp["usuario_admin"].(map[string]any)
+	usuarioAdmin, ok := createResp["user"].(map[string]any)
 	if !ok {
-		t.Fatalf("missing usuario_admin payload: %+v", createResp)
+		t.Fatalf("missing user payload: %+v", createResp)
 	}
 	userID := int64(usuarioAdmin["id"].(float64))
 	stored, err := store.GetByID(userID)
@@ -347,6 +371,13 @@ func TestCreateRoleValidatesPermissionsAndRejectsDuplicates(t *testing.T) {
 
 	if dupRR.Code != stdhttp.StatusConflict {
 		t.Fatalf("expected duplicate conflict, got %d body=%s", dupRR.Code, dupRR.Body.String())
+	}
+	var dupResp map[string]any
+	if err := json.Unmarshal(dupRR.Body.Bytes(), &dupResp); err != nil {
+		t.Fatalf("expected duplicate response json: %v", err)
+	}
+	if dupResp["ok"] != false || dupResp["error"] != "el rol ya existe" {
+		t.Fatalf("unexpected duplicate payload: %+v", dupResp)
 	}
 }
 

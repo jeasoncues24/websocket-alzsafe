@@ -16,6 +16,54 @@ En esta documentación se cubre el contrato de empresas del panel admin y la bas
 - `super_admin` tiene acceso completo.
 - Un usuario no `super_admin` solo ve/modifica su propia empresa si su JWT incluye `empresa_id`.
 
+## Estándar De Respuesta
+
+### Error
+
+```json
+{
+  "ok": false,
+  "error": "mensaje",
+  "message": "mensaje"
+}
+```
+
+### Éxito - recurso único
+
+```json
+{
+  "ok": true,
+  "user": { ... }
+}
+```
+
+### Éxito - listado
+
+```json
+{
+  "ok": true,
+  "users": [],
+  "total": 0,
+  "page": 1,
+  "limit": 20
+}
+```
+
+### Éxito - acción
+
+```json
+{
+  "ok": true,
+  "status": "deleted"
+}
+```
+
+Reglas actuales:
+
+- `admin/auth/router` usa nombres de recurso explícitos: `user`, `users`, `empresa`, `empresas`, `telefono`, `telefonos`, `role`, `roles`, `api_key`, `api_keys`.
+- El alias payload `usuario_admin` fue eliminado del contrato de éxito; la ruta sigue siendo `/api/admin/usuario_admin` por compatibilidad funcional.
+- El contrato `v1` mantiene su shape público separado con `data` y `meta`.
+
 ## Topología Final Del Router
 
 - `POST /api/auth/*` y `POST /admin/login`: autenticación pública de panel/admin.
@@ -118,6 +166,74 @@ En esta documentación se cubre el contrato de empresas del panel admin y la bas
 ```
 
 ## Endpoints
+
+### GET `/api/admin/usuario_admin`
+
+Lista usuarios administrativos.
+
+#### Respuesta 200
+
+```json
+{
+  "ok": true,
+  "users": [],
+  "total": 0,
+  "page": 1,
+  "limit": 20
+}
+```
+
+### GET `/api/admin/usuario_admin/{id}`
+
+Obtiene un usuario administrativo.
+
+#### Respuesta 200
+
+```json
+{
+  "ok": true,
+  "user": { ... }
+}
+```
+
+### POST `/api/admin/usuario_admin`
+
+Crea un usuario administrativo.
+
+#### Respuesta 200
+
+```json
+{
+  "ok": true,
+  "user": { ... }
+}
+```
+
+### PUT `/api/admin/usuario_admin/{id}`
+
+Actualiza un usuario administrativo.
+
+#### Respuesta 200
+
+```json
+{
+  "ok": true,
+  "user": { ... }
+}
+```
+
+### DELETE `/api/admin/usuario_admin/{id}`
+
+Elimina o deshabilita un usuario administrativo según dependencias.
+
+#### Respuesta 200
+
+```json
+{
+  "ok": true,
+  "status": "deleted"
+}
+```
 
 ### GET `/api/admin/empresas`
 

@@ -34,35 +34,35 @@ func NewAuthHandler(userStore *storage.AdminUserStore, empresaStore domain.Empre
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	var req domain.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"ok": false, "error": "JSON inválido"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "JSON inválido")
 		return
 	}
 
 	if req.Username == "" || req.Password == "" {
-		http.Error(w, `{"ok": false, "error": "Usuario y contraseña requeridos"}`, http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "Usuario y contraseña requeridos")
 		return
 	}
 
 	// Get user from DB
 	user, err := h.userStore.GetByUsername(req.Username)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error interno"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error interno")
 		return
 	}
 	if user == nil || !user.Activo {
-		http.Error(w, `{"ok": false, "error": "Credenciales inválidas"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "Credenciales inválidas")
 		return
 	}
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		http.Error(w, `{"ok": false, "error": "Credenciales inválidas"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "Credenciales inválidas")
 		return
 	}
 
@@ -79,15 +79,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Generate JWT
 	token, err := h.generateToken(user, empresaRUC, empresaNombre)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al generar token"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al generar token")
 		return
 	}
 
 	// Update last login
 	h.userStore.UpdateLastLogin(user.ID)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(domain.LoginResponse{
+	writeHandlerJSON(w, http.StatusOK, domain.LoginResponse{
 		OK:      true,
 		Token:   token,
 		Message: "Login exitoso",
@@ -96,7 +95,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
@@ -122,25 +121,24 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"ok": true, "logged_out": true})
+	writeHandlerJSON(w, http.StatusOK, map[string]bool{"ok": true, "logged_out": true})
 }
 
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		http.Error(w, `{"ok": false, "error": "Token requerido"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "Token requerido")
 		return
 	}
 
 	parts := strings.Split(authHeader, " ")
 	if len(parts) != 2 || parts[0] != "Bearer" {
-		http.Error(w, `{"ok": false, "error": "Formato de token inválido"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "Formato de token inválido")
 		return
 	}
 
@@ -150,13 +148,13 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil || !token.Valid {
-		http.Error(w, `{"ok": false, "error": "Token inválido"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "Token inválido")
 		return
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		http.Error(w, `{"ok": false, "error": "Token inválido"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "Token inválido")
 		return
 	}
 
@@ -164,7 +162,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if jti, ok := claims["jti"].(string); ok {
 		blacklisted, _ := h.blacklistStore.IsBlacklisted(jti)
 		if blacklisted {
-			http.Error(w, `{"ok": false, "error": "Token invalidado"}`, http.StatusUnauthorized)
+			writeAPIError(w, http.StatusUnauthorized, "Token invalidado")
 			return
 		}
 	}
@@ -181,7 +179,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	userID := int64(claims["user_id"].(float64))
 	user, err := h.userStore.GetByID(userID)
 	if err != nil || user == nil {
-		http.Error(w, `{"ok": false, "error": "Usuario no encontrado"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "Usuario no encontrado")
 		return
 	}
 
@@ -196,12 +194,11 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	newToken, err := h.generateToken(user, empresaRUC, empresaNombre)
 	if err != nil {
-		http.Error(w, `{"ok": false, "error": "Error al generar token"}`, http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Error al generar token")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(domain.LoginResponse{
+	writeHandlerJSON(w, http.StatusOK, domain.LoginResponse{
 		OK:      true,
 		Token:   newToken,
 		Message: "Token refrescado",
@@ -210,20 +207,20 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"ok": false, "error": "Método no permitido"}`, http.StatusMethodNotAllowed)
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
 		return
 	}
 
 	claims, ok := domain.GetAdminJWTClaims(r.Context())
 	if !ok {
-		http.Error(w, `{"ok": false, "error": "No autenticado"}`, http.StatusUnauthorized)
+		writeAPIError(w, http.StatusUnauthorized, "No autenticado")
 		return
 	}
 
 	// Get full user info
 	user, err := h.userStore.GetByID(claims.UserID)
 	if err != nil || user == nil {
-		http.Error(w, `{"ok": false, "error": "Usuario no encontrado"}`, http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "Usuario no encontrado")
 		return
 	}
 
@@ -249,8 +246,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeHandlerJSON(w, http.StatusOK, response)
 }
 
 func (h *AuthHandler) generateToken(user *domain.AdminUser, empresaRUC, empresaNombre *string) (string, error) {

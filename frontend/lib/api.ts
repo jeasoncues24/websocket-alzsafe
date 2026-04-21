@@ -35,14 +35,35 @@ export interface Alert {
   message: string;
 }
 
-export async function getMetrics(): Promise<DashboardMetrics> {
-  const res = await fetch(`${API_BASE}/api/admin/metricas`, {
-    headers: authHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch metrics");
+type ApiEnvelope = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  [key: string]: any;
+};
+
+async function parseApiBody(res: Response): Promise<ApiEnvelope> {
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return res.json();
   }
-  return res.json();
+  const text = await res.text();
+  return { ok: res.ok, error: text || undefined, message: text || undefined };
+}
+
+async function requestJSON<T = ApiEnvelope>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, options);
+  const payload: ApiEnvelope = await parseApiBody(res).catch(() => ({ error: "Request failed" }));
+  if (!res.ok || payload.ok === false) {
+    throw new Error(payload.message || payload.error || "Request failed");
+  }
+  return payload as T;
+}
+
+export async function getMetrics(): Promise<DashboardMetrics> {
+  return requestJSON(`${API_BASE}/api/admin/metricas`, {
+    headers: authHeaders(),
+  }) as Promise<DashboardMetrics>;
 }
 
 // ---- Empresa (admin API) ----
@@ -188,11 +209,9 @@ export async function getEmpresas(params?: {
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.busqueda) q.set("busqueda", params.busqueda);
   if (params?.estado) q.set("estado", params.estado);
-  const res = await fetch(`${API_BASE}/api/admin/empresas?${q}`, {
+  return requestJSON(`${API_BASE}/api/admin/empresas?${q}`, {
     headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error("Error al obtener empresas");
-  return res.json();
+  }) as Promise<EmpresasListResponse>;
 }
 
 export async function getEmpresa(id: number): Promise<EmpresaResponse> {
@@ -245,39 +264,29 @@ export async function deleteAdminTelefono(
 export async function createEmpresa(
   data: EmpresaCreateRequest,
 ): Promise<EmpresaResponse> {
-  const res = await fetch(`${API_BASE}/api/admin/empresas`, {
+  return requestJSON(`${API_BASE}/api/admin/empresas`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(data),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || "Error al crear empresa");
-  return json;
+  }) as Promise<EmpresaResponse>;
 }
 
 export async function updateEmpresa(
   id: number,
   data: Partial<EmpresaCreateRequest>,
 ): Promise<EmpresaResponse> {
-  const res = await fetch(`${API_BASE}/api/admin/empresas/${id}`, {
+  return requestJSON(`${API_BASE}/api/admin/empresas/${id}`, {
     method: "PUT",
     headers: authHeaders(),
     body: JSON.stringify(data),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || "Error al actualizar empresa");
-  return json;
+  }) as Promise<EmpresaResponse>;
 }
 
 export async function deleteEmpresa(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/admin/empresas/${id}`, {
+  await requestJSON(`${API_BASE}/api/admin/empresas/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}));
-    throw new Error(json.error || "Error al eliminar empresa");
-  }
 }
 
 export async function getAdminTelefonoApiKeys(
@@ -398,34 +407,23 @@ export interface MessageRetryResponse {
 export async function retryMessageAdmin(
   referenceId: string,
 ): Promise<MessageRetryResponse> {
-  const res = await fetchWithAuth(
+  return fetchWithAuth(
     `${API_BASE}/api/admin/mensajes/${referenceId}`,
     {
       method: "POST",
     },
-  );
-
-  console.log("Retry response status:", res);
-  if (!res.ok) {
-    throw new Error(res.error || "Error al reintentar mensaje");
-  }
-  return res;
+  ) as Promise<MessageRetryResponse>;
 }
 
 export async function updateMessage(
   referenceId: string,
   data: { contenido?: string; destino?: string },
 ): Promise<{ ok: boolean; reference_id: string }> {
-  const res = await fetchWithAuth(`${API_BASE}/api/mensajes/${referenceId}`, {
+  return fetchWithAuth(`${API_BASE}/api/mensajes/${referenceId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || "Error al actualizar mensaje");
-  }
-  return res.json();
+  }) as Promise<{ ok: boolean; reference_id: string }>;
 }
 
 export interface EmpresaTelefonoSessionData {
@@ -444,17 +442,14 @@ export interface EmpresaTelefonoResponse {
   error?: string;
 }
 
-async function fetchWithEmpresaAuth(url: string, options?: RequestInit) {
-  const headers: HeadersInit = {
-    ...authHeaders(),
-    ...options?.headers,
-  };
-  const res = await fetch(url, { ...options, headers });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(error.error || error.message || "Request failed");
-  }
-  return res.json();
+async function fetchWithEmpresaAuth<T = ApiEnvelope>(url: string, options?: RequestInit): Promise<T> {
+  return requestJSON<T>(url, {
+    ...options,
+    headers: {
+      ...authHeaders(),
+      ...options?.headers,
+    },
+  });
 }
 
 export async function getEmpresaTelefono(
@@ -575,6 +570,7 @@ export interface Module {
 }
 
 export interface UsersResponse {
+  ok?: boolean;
   users: UserAdminRol[];
   total: number;
 }
@@ -587,29 +583,41 @@ export interface ModulesResponse {
   modules: Module[];
 }
 
-async function fetchWithAuth(url: string, options?: RequestInit) {
+async function fetchWithAuth<T = ApiEnvelope>(url: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem("admin_token");
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options?.headers,
+  return requestJSON<T>(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
+  });
+}
+
+function normalizeUserPayload(payload: any): UserAdminRol {
+  return payload?.user ?? payload;
+}
+
+function normalizeUsersResponse(payload: any): UsersResponse {
+  return {
+    ok: payload?.ok,
+    users: payload?.users ?? [],
+    total: payload?.total ?? 0,
   };
-  const res = await fetch(url, { ...options, headers });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(error.error || "Request failed");
-  }
-  return res.json();
 }
 
 export async function getUsuarioAdmins(page = 1, limit = 20): Promise<UsersResponse> {
-  return fetchWithAuth(
+  const payload = await fetchWithAuth(
     `${API_BASE}/api/admin/usuario_admin?page=${page}&limit=${limit}`,
   );
+  return normalizeUsersResponse(payload);
 }
 
 export async function getUsuarioAdmin(id: number): Promise<UserAdminRol> {
-  return fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${id}`);
+  return normalizeUserPayload(
+    await fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${id}`),
+  );
 }
 
 export interface CreateUserRequest {
@@ -623,10 +631,12 @@ export interface CreateUserRequest {
 export async function createUsuarioAdmin(
   data: CreateUserRequest,
 ): Promise<UserAdminRol> {
-  return fetchWithAuth(`${API_BASE}/api/admin/usuario_admin`, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+  return normalizeUserPayload(
+    await fetchWithAuth(`${API_BASE}/api/admin/usuario_admin`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  );
 }
 
 export interface UpdateUserRequest {
@@ -640,10 +650,12 @@ export async function updateUsuarioAdmin(
   id: number,
   data: UpdateUserRequest,
 ): Promise<UserAdminRol> {
-  return fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  });
+  return normalizeUserPayload(
+    await fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  );
 }
 
 export async function deleteUsuarioAdmin(id: number): Promise<{ status: string }> {
@@ -653,9 +665,11 @@ export async function deleteUsuarioAdmin(id: number): Promise<{ status: string }
 }
 
 export async function promoteUsuarioAdmin(userId: number): Promise<UserAdminRol> {
-  return fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${userId}/promote`, {
-    method: "POST",
-  });
+  return normalizeUserPayload(
+    await fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${userId}/promote`, {
+      method: "POST",
+    }),
+  );
 }
 
 export async function getUsuarioAdminModules(userId: number): Promise<{ module_ids: number[] }> {
