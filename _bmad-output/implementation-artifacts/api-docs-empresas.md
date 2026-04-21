@@ -16,6 +16,89 @@ En esta documentación se cubre el contrato de empresas del panel admin y la bas
 - `super_admin` tiene acceso completo.
 - Un usuario no `super_admin` solo ve/modifica su propia empresa si su JWT incluye `empresa_id`.
 
+## Topología Final Del Router
+
+- `POST /api/auth/*` y `POST /admin/login`: autenticación pública de panel/admin.
+- `/api/admin/*`: panel administrativo protegido con JWT admin (`AdminAuth`).
+- `/api/*` de empresa: protegido con JWT de empresa (`EmpresaAuth`).
+- `/api/*` de integraciones externas (`/api/me`, `/api/sesion`, `/api/mensajes`, `/api/difusiones`): protegido con API key por teléfono (`ClientAuth`).
+- `GET /v1/ws`: WebSocket de empresa autenticado con JWT de empresa enviado por query `token` o header `Authorization`.
+- `GET /ws`: WebSocket legacy operativo para compatibilidad del flujo histórico.
+- `GET /health` y `GET /metrics`: públicos.
+
+## Mapa De Endpoints Finales
+
+### Admin público
+
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `POST /api/auth/refresh`
+- `GET /api/auth/me` (JWT admin)
+- `POST /admin/login`
+
+### Admin protegido (`/api/admin/*`)
+
+- `GET|POST /api/admin/empresas`
+- `GET|PUT|DELETE /api/admin/empresas/{id}`
+- `POST /api/admin/empresas/{id}/token`
+- `POST /api/admin/empresas/{id}/token/revoke`
+- `GET|POST /api/admin/empresas/{id}/telefonos`
+- `GET|PUT|DELETE /api/admin/telefonos/{id}`
+- `POST /api/admin/telefonos/{id}/connect`
+- `GET /api/admin/telefonos/{id}/connect/ws`
+- `GET|POST /api/admin/telefonos/{id}/api-keys`
+- `GET /api/admin/api-keys/{id}`
+- `POST /api/admin/api-keys/{id}/rotate`
+- `POST /api/admin/api-keys/{id}/revoke`
+- `GET /api/admin/api-keys/{id}/usage`
+- `GET /api/admin/api-keys/{id}/audit`
+- `GET|POST /api/admin/users`
+- `GET|PUT|DELETE /api/admin/users/{id}`
+- `POST /api/admin/users/{id}/promote`
+- `GET|PUT /api/admin/users/{id}/modulos`
+- `GET|POST /api/admin/usuario_admin`
+- `GET|PUT|DELETE /api/admin/usuario_admin/{id}`
+- `POST /api/admin/usuario_admin/{id}/promote`
+- `GET|PUT /api/admin/usuario_admin/{id}/modulos`
+- `GET|POST /api/admin/roles`
+- `GET|PUT|DELETE /api/admin/roles/{id}`
+- `GET /api/admin/modules`
+- `GET /api/admin/mensajes`
+- `POST /api/admin/mensajes/{id}`
+- `GET|POST /api/admin/sesiones`
+- `GET /api/admin/sesiones/diagnostico`
+- `GET /api/admin/difusiones`
+- `GET /api/admin/metricas`
+
+### Empresa protegida (`EmpresaAuth`)
+
+- `POST /api/auth/empresa/validate`
+- `GET|PUT /api/empresas`
+- `GET /api/metricas`
+- `GET /api/telefonos`
+- `POST /api/telefonos/{id}/qr`
+- `GET /api/telefonos/{id}/estado`
+- `GET|POST /api/sesiones`
+- `GET|DELETE /api/sesiones/{id}`
+- `POST /api/sesiones/{id}/connect`
+
+### Integraciones externas (`ClientAuth` por API key)
+
+- `GET /api/me`
+- `GET /api/v1/me`
+- `GET /api/sesion`
+- `GET|POST /api/mensajes`
+- `GET|PATCH|POST /api/mensajes/{id}`
+- `GET|POST /api/difusiones`
+- `GET /api/difusiones/{id}`
+
+### Tiempo real y observabilidad
+
+- `GET /v1/ws`
+- `GET /ws`
+- `GET /health`
+- `GET /metrics`
+
 ## Modelo Empresa
 
 ```json
@@ -226,12 +309,33 @@ Rutas actuales del panel empresa con JWT de empresa:
 - `GET /api/empresas`
 - `PUT /api/empresas`
 - `POST /api/auth/empresa/validate`
+- `GET /api/metricas`
+- `GET /api/telefonos`
+- `POST /api/telefonos/{id}/qr`
+- `GET /api/telefonos/{id}/estado`
+- `GET /api/sesiones`
+- `POST /api/sesiones`
+- `GET /api/sesiones/{id}`
+- `DELETE /api/sesiones/{id}`
+- `POST /api/sesiones/{id}/connect`
+
+Rutas de integraciones externas con API key por teléfono:
+
+- `GET /api/me`
+- `GET /api/v1/me`
+- `GET /api/sesion`
 - `GET /api/mensajes`
 - `POST /api/mensajes`
+- `GET /api/mensajes/{reference_id}`
+- `PATCH /api/mensajes/{reference_id}`
+- `POST /api/mensajes/{reference_id}`
 - `GET /api/difusiones`
 - `POST /api/difusiones`
 - `GET /api/difusiones/{reference_id}`
-- `GET /api/metricas`
+
+WebSocket de empresa:
+
+- `GET /v1/ws`
 
 Rutas actuales del panel admin para teléfonos:
 
@@ -241,6 +345,7 @@ Rutas actuales del panel admin para teléfonos:
 - `PUT /api/admin/telefonos/{id}`
 - `DELETE /api/admin/telefonos/{id}`
 - `POST /api/admin/telefonos/{id}/connect`
+- `GET /api/admin/telefonos/{id}/connect/ws`
 
 ## Errores comunes
 
@@ -260,4 +365,4 @@ El frontend admin consume este contrato desde `frontend/lib/api.ts`.
 Para el flujo de conexión de integraciones externas con API keys por teléfono, ver `spec-8-7-conexion-api-externa.md`.
 Para el detalle del envío de mensajes vía API, ver `spec-8-8-envio-mensajes-api.md`.
 
-Documento actualizado: 2026-04-17
+Documento actualizado: 2026-04-21

@@ -1,5 +1,5 @@
 generated: "2026-04-17T18:06:20Z"
-last_updated: "2026-04-21T14:40:22Z"
+last_updated: "2026-04-21T19:30:00Z"
 project: "WSAPI - WhatsApp Multi-Empresa"
 project_key: "wsapi"
 tracking_system: "BMAD"
@@ -423,6 +423,38 @@ development_status:
     priority: "P2"
     phase: "frontend"
     result: "Logging de reintentos en console del browser"
+
+  # Epic 14: Refactor Laravel-style de Ruteo HTTP
+  epic-14-refactor-ruteo-http:
+    status: "done"
+    description: "Router desacoplado con kernel, container y registro de rutas por dominio; contratos finales validados"
+    priority: "high"
+    completed: "2026-04-21"
+    stories:
+      - "14.1: Separar kernel, container y registro de rutas admin/api"
+      - "14.2: Migrar rutas legacy faltantes y eliminar acoplamiento de middlewares en router.go"
+      - "14.3: Restaurar bootstrap/runtime del servidor y validar build/tests"
+      - "14.4: Actualizar documentación de endpoints y boundaries de autenticación"
+  14-1-kernel-container-routes:
+    status: "done"
+    epic: "epic-14-refactor-ruteo-http"
+    priority: "P0"
+    summary: "router.go reducido a ensamblaje; kernel y container centralizan middlewares, runtime y dependencias"
+  14-2-migracion-rutas-legacy:
+    status: "done"
+    epic: "epic-14-refactor-ruteo-http"
+    priority: "P0"
+    summary: "Rutas admin, empresa, api-key, health, metrics, /ws y /v1/ws registradas por dominio sin lógica de negocio en router.go"
+  14-3-validacion-build-tests:
+    status: "done"
+    epic: "epic-14-refactor-ruteo-http"
+    priority: "P0"
+    summary: "go test ./..., go build ./... y make build ejecutados en verde tras eliminar el ciclo de imports"
+  14-4-documentacion-contratos-finales:
+    status: "done"
+    epic: "epic-14-refactor-ruteo-http"
+    priority: "P1"
+    summary: "Documentación base de contratos actualizada con topology final del router y protections por middleware"
 
   # Epic 8.5: Panel Admin Backend Usuario Admin, Roles y Modulos
   epic-8-5-panel-admin-backend:

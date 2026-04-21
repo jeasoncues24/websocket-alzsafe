@@ -399,7 +399,7 @@ export async function retryMessageAdmin(
   referenceId: string,
 ): Promise<MessageRetryResponse> {
   const res = await fetchWithAuth(
-    `${API_BASE}/api/admin/mensajes/${referenceId}/reintentar`,
+    `${API_BASE}/api/admin/mensajes/${referenceId}`,
     {
       method: "POST",
     },

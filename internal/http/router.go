@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,11 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-
 	"wsapi/internal/config"
 	"wsapi/internal/domain"
-	httpHandlers "wsapi/internal/http/handlers"
-	"wsapi/internal/http/middleware"
 	"wsapi/internal/metrics"
 	"wsapi/internal/storage"
 	"wsapi/internal/whatsapp"
@@ -40,250 +36,20 @@ func (r *startupAwareRouter) RunStartupTasks(ctx context.Context) {
 	})
 }
 
+// NewRouter inicializa el runtime HTTP y delega el registro a archivos por dominio.
 func NewRouter() http.Handler {
-	manager := whatsapp.NewManager()
-	sessionStore := storage.NewSessionStore()
-
-	broadcastWorker := whatsapp.NewBroadcastWorker(whatsapp.DefaultWorkerConfig, manager)
-	broadcastWorker.Start(whatsapp.DefaultWorkerConfig.MaxWorkersGlobal)
-
-	broadcastStore := storage.NewBroadcastStore()
-
-	cfg := config.Load()
-	jwtCfg := config.LoadJWT()
-
-	whatsapp.ConfigureLogging(whatsapp.LoggingOptions{
-		DebugLogDir:        cfg.WhatsAppDebugLogDir,
-		DebugLogPerAccount: cfg.WhatsAppDebugLogPerAccount,
-		DebugLogLevel:      cfg.WhatsAppDebugLogLevel,
-		ConsoleLogLevel:    cfg.WhatsAppConsoleLogLevel,
-	})
-
-	var msgRepo storage.MessagesRepository
-	var empresaStore domain.EmpresaStoreInterface
-	var telefonoStore *storage.TelefonoStore
-	var db *sql.DB
-	if cfg.DBHost != "" {
-		var err error
-		db, err = storage.NewDB(cfg)
-		if err != nil {
-			fmt.Printf("[WARN] DB no disponible: %v\n", err)
-		} else {
-			msgRepo = storage.NewMessagesRepository(db)
-			empresaStore = storage.NewEmpresaStore(db)
-			telefonoStore = storage.NewTelefonoStore(db)
-			fmt.Printf("[INFO] DB conectada a %s:%s/%s\n", cfg.DBHost, cfg.DBPort, cfg.DBName)
-		}
-	}
-
-	whatsapp.NewService(manager, sessionStore, telefonoStore, cfg.WhatsAppSQLiteDir)
-
-	h := NewHandlerWithBroadcast(manager, sessionStore, msgRepo, empresaStore, broadcastWorker, broadcastStore)
-
-	// Dashboard handler
-	var dashboardHandler *DashboardHandler
-	if msgRepo != nil {
-		dashboardHandler = NewDashboardHandler(msgRepo, sessionStore, empresaStore)
-	}
-
-	// Auth handler and middleware
-	var authHandler *httpHandlers.AuthHandler
-	var companiesHandler *httpHandlers.CompaniesHandler
-	var apiKeysHandler *httpHandlers.ApiKeysHandler
-	var empresaAuthMiddleware *middleware.EmpresaAuthMiddleware
-	var apiKeyAuthMiddleware *middleware.ApiKeyAuthMiddleware
-	var v1MessagesHandler *httpHandlers.V1MessagesHandler
-	var v1BroadcastsHandler *httpHandlers.V1BroadcastsHandler
-	var v1MetricsHandler *httpHandlers.V1MetricsHandler
-	var authMiddleware *middleware.AuthMiddleware
-	if db != nil {
-		userStore := storage.NewAdminUserStore(db)
-		blacklistStore := storage.NewTokenBlacklistStore(db)
-		apiKeyStore := storage.NewApiKeyStore(db)
-		authHandler = httpHandlers.NewAuthHandler(userStore, empresaStore, blacklistStore, jwtCfg)
-		companiesHandler = httpHandlers.NewCompaniesHandler(empresaStore, sessionStore, jwtCfg)
-		apiKeysHandler = httpHandlers.NewApiKeysHandler(apiKeyStore, telefonoStore, empresaStore, manager)
-		empresaAuthMiddleware = middleware.NewEmpresaAuthMiddleware(jwtCfg, empresaStore, telefonoStore)
-		apiKeyAuthMiddleware = middleware.NewApiKeyAuthMiddleware(apiKeyStore, empresaStore, telefonoStore)
-		v1MessagesHandler = httpHandlers.NewV1MessagesHandler(msgRepo, telefonoStore, manager)
-		v1BroadcastsHandler = httpHandlers.NewV1BroadcastsHandler(broadcastStore, telefonoStore, broadcastWorker)
-		v1MetricsHandler = httpHandlers.NewV1MetricsHandler(msgRepo, telefonoStore)
-		authMiddleware = middleware.NewAuthMiddleware(jwtCfg, blacklistStore)
-	}
-
 	mux := http.NewServeMux()
 
-	// Admin users/roles/modules handler
-	var adminHandler *AdminHandler
-	if db != nil {
-		adminHandler = NewAdminHandler(db, sessionStore, manager, jwtCfg)
-		if adminHandler != nil {
-			adminHandler.telefonoStore = telefonoStore
-		}
-	}
+	c := NewContainer()
+	k := NewKernel(c.AuthMiddleware, c.EmpresaAuthMiddleware, c.ApiKeyAuthMiddleware)
 
-	// Auth routes (no auth required)
-	if authHandler != nil {
-		mux.HandleFunc("POST /api/auth/login", authHandler.Login)
-		mux.HandleFunc("POST /api/auth/logout", authHandler.Logout)
-		mux.HandleFunc("POST /api/auth/refresh", authHandler.Refresh)
-		if authMiddleware != nil {
-			mux.Handle("GET /api/auth/me", authMiddleware.RequireAuth()(http.HandlerFunc(authHandler.Me)))
-		}
-	}
+	RegisterAdminRoutes(mux, c, k)
+	RegisterAPIRoutes(mux, c, k)
+	mux.Handle("GET /", http.HandlerFunc(handleRoot))
 
-	// Admin routes (users, roles, modules) - protected
-	if empresaAuthMiddleware != nil && adminHandler != nil {
-		protectedEmpresa := empresaAuthMiddleware.RequireEmpresaAuth()
-		mux.Handle("GET /api/admin/usuario_admin", protectedEmpresa(http.HandlerFunc(adminHandler.ListUsuarioAdmins)))
-		mux.Handle("GET /api/admin/usuario_admin/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.GetUsuarioAdmin)))
-		mux.Handle("POST /api/admin/usuario_admin", protectedEmpresa(http.HandlerFunc(adminHandler.CreateUsuarioAdmin)))
-		mux.Handle("PUT /api/admin/usuario_admin/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.UpdateUsuarioAdmin)))
-		mux.Handle("DELETE /api/admin/usuario_admin/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.DeleteUsuarioAdmin)))
-		mux.Handle("GET /api/admin/usuario_admin/{id}/modulos", protectedEmpresa(http.HandlerFunc(adminHandler.GetUsuarioAdminModules)))
-		mux.Handle("PUT /api/admin/usuario_admin/{id}/modulos", protectedEmpresa(http.HandlerFunc(adminHandler.AssignUsuarioAdminModules)))
-		mux.Handle("GET /api/admin/roles", protectedEmpresa(http.HandlerFunc(adminHandler.ListRoles)))
-		mux.Handle("GET /api/admin/roles/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.GetRole)))
-		mux.Handle("POST /api/admin/roles", protectedEmpresa(http.HandlerFunc(adminHandler.CreateRole)))
-		mux.Handle("PUT /api/admin/roles/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.UpdateRole)))
-		mux.Handle("DELETE /api/admin/roles/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.DeleteRole)))
-		mux.Handle("GET /api/admin/modules", protectedEmpresa(http.HandlerFunc(adminHandler.ListModules)))
-	}
-
-	if authMiddleware != nil && adminHandler != nil {
-		protected := authMiddleware.RequireAuth()
-		mux.Handle("GET /api/admin/users", protected(http.HandlerFunc(adminHandler.ListUsers)))
-		mux.Handle("GET /api/admin/users/", protected(http.HandlerFunc(adminHandler.GetUser)))
-		mux.Handle("POST /api/admin/users", protected(http.HandlerFunc(adminHandler.CreateUser)))
-		mux.Handle("PUT /api/admin/users/", protected(http.HandlerFunc(adminHandler.UpdateUser)))
-		mux.Handle("DELETE /api/admin/users/", protected(http.HandlerFunc(adminHandler.DeleteUser)))
-		mux.Handle("POST /api/admin/users/promote/", protected(http.HandlerFunc(adminHandler.PromoteUser)))
-		mux.Handle("PUT /api/admin/users/modules/", protected(http.HandlerFunc(adminHandler.AssignUserModules)))
-		mux.Handle("GET /api/admin/empresas/{id}/telefonos", protected(http.HandlerFunc(adminHandler.ListCompanyPhones)))
-		mux.Handle("POST /api/admin/empresas/{id}/telefonos", protected(http.HandlerFunc(adminHandler.CreateCompanyPhone)))
-		mux.Handle("GET /api/admin/telefonos/{id}", protected(http.HandlerFunc(adminHandler.GetCompanyPhone)))
-		mux.Handle("PUT /api/admin/telefonos/{id}", protected(http.HandlerFunc(adminHandler.UpdateCompanyPhone)))
-		mux.Handle("DELETE /api/admin/telefonos/{id}", protected(http.HandlerFunc(adminHandler.DeleteCompanyPhone)))
-		mux.Handle("POST /api/admin/telefonos/{id}/connect", protected(http.HandlerFunc(adminHandler.StartCompanyPhoneConnection)))
-		mux.Handle("GET /api/admin/telefonos/{id}/connect/ws", http.HandlerFunc(adminHandler.ConnectCompanyPhoneWS))
-	}
-
-	// Admin companies routes and company JWT endpoints kept for compatibility
-	if authMiddleware != nil && companiesHandler != nil {
-		adminProtected := authMiddleware.RequireAuth()
-		mux.Handle("GET /api/admin/empresas", adminProtected(http.HandlerFunc(companiesHandler.List)))
-		mux.Handle("GET /api/admin/empresas/", adminProtected(http.HandlerFunc(companiesHandler.Get)))
-		mux.Handle("POST /api/admin/empresas", adminProtected(http.HandlerFunc(companiesHandler.Create)))
-		mux.Handle("PUT /api/admin/empresas/", adminProtected(http.HandlerFunc(companiesHandler.Update)))
-		mux.Handle("DELETE /api/admin/empresas/", adminProtected(http.HandlerFunc(companiesHandler.Delete)))
-		mux.Handle("POST /api/admin/empresas/{id}/token", adminProtected(http.HandlerFunc(companiesHandler.GenerateToken)))
-		mux.Handle("POST /api/admin/empresas/{id}/token/revoke", adminProtected(http.HandlerFunc(companiesHandler.RevokeToken)))
-	}
-
-	// Admin API keys routes
-	if authMiddleware != nil && apiKeysHandler != nil {
-		adminProtected := authMiddleware.RequireAuth()
-		mux.Handle("GET /api/admin/telefonos/{id}/api-keys", adminProtected(http.HandlerFunc(apiKeysHandler.ListByTelefono)))
-		mux.Handle("POST /api/admin/telefonos/{id}/api-keys", adminProtected(http.HandlerFunc(apiKeysHandler.CreateForTelefono)))
-		mux.Handle("GET /api/admin/api-keys/{id}", adminProtected(http.HandlerFunc(apiKeysHandler.Get)))
-		mux.Handle("POST /api/admin/api-keys/{id}/rotate", adminProtected(http.HandlerFunc(apiKeysHandler.Rotate)))
-		mux.Handle("POST /api/admin/api-keys/{id}/revoke", adminProtected(http.HandlerFunc(apiKeysHandler.Revoke)))
-		mux.Handle("GET /api/admin/api-keys/{id}/usage", adminProtected(http.HandlerFunc(apiKeysHandler.Usage)))
-		mux.Handle("GET /api/admin/api-keys/{id}/audit", adminProtected(http.HandlerFunc(apiKeysHandler.Audit)))
-	}
-
-	// Admin operational routes
-	if authMiddleware != nil {
-		adminProtected := authMiddleware.RequireAuth()
-		mux.Handle("GET /api/admin/mensajes", adminProtected(http.HandlerFunc(HandleGetAdminMessages)))
-		mux.Handle("POST /api/admin/mensajes/", adminProtected(http.HandlerFunc(HandleAdminRetryMessage)))
-		mux.Handle("GET /api/admin/sesiones", adminProtected(http.HandlerFunc(HandleGetAdminSessions)))
-		mux.Handle("POST /api/admin/sesiones", adminProtected(http.HandlerFunc(HandlePostAdminSessions)))
-		if adminHandler != nil {
-			mux.Handle("GET /api/admin/sesiones/diagnostico", adminProtected(http.HandlerFunc(adminHandler.GetSessionsDiagnostics)))
-		}
-		mux.Handle("GET /api/admin/difusiones", adminProtected(http.HandlerFunc(HandleGetAdminBroadcasts)))
-		if dashboardHandler != nil {
-			mux.Handle("GET /api/admin/metricas", adminProtected(http.HandlerFunc(dashboardHandler.GetMetrics)))
-		}
-	}
-
-	// Empresa auth validation
-	if empresaAuthMiddleware != nil {
-		empresaProtected := empresaAuthMiddleware.RequireEmpresaAuth()
-		mux.Handle("POST /api/auth/empresa/validate", empresaProtected(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
-		})))
-	}
-
-	// API key auth validation and public API routes
-	if apiKeyAuthMiddleware != nil && apiKeysHandler != nil && v1MessagesHandler != nil && v1BroadcastsHandler != nil {
-		apiKeyProtected := apiKeyAuthMiddleware.RequireApiKeyAuth()
-		mux.Handle("GET /api/me", apiKeyProtected(http.HandlerFunc(apiKeysHandler.Me)))
-		mux.Handle("GET /api/v1/me", apiKeyProtected(http.HandlerFunc(apiKeysHandler.Me)))
-		mux.Handle("GET /api/sesion", apiKeyProtected(http.HandlerFunc(apiKeysHandler.Session)))
-		mux.Handle("GET /api/mensajes", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.GetMessages)))
-		mux.Handle("POST /api/mensajes", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.PostMessage)))
-		mux.Handle("GET /api/mensajes/", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.GetMessageByReference)))
-		mux.Handle("PATCH /api/mensajes/", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.UpdateMessage)))
-		mux.Handle("POST /api/mensajes/", apiKeyProtected(http.HandlerFunc(v1MessagesHandler.RetryMessage)))
-		mux.Handle("GET /api/difusiones", apiKeyProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcasts)))
-		mux.Handle("POST /api/difusiones", apiKeyProtected(http.HandlerFunc(v1BroadcastsHandler.PostBroadcast)))
-		mux.Handle("GET /api/difusiones/", apiKeyProtected(http.HandlerFunc(v1BroadcastsHandler.GetBroadcast)))
-	}
-
-	// Empresa routes (/api/*) - empresa JWT protected
-	if empresaAuthMiddleware != nil && v1MetricsHandler != nil && companiesHandler != nil {
-		empresaProtected := empresaAuthMiddleware.RequireEmpresaAuth()
-		mux.Handle("GET /api/empresas", empresaProtected(http.HandlerFunc(companiesHandler.GetCurrent)))
-		mux.Handle("PUT /api/empresas", empresaProtected(http.HandlerFunc(companiesHandler.UpdateCurrent)))
-		mux.Handle("GET /api/metricas", empresaProtected(http.HandlerFunc(v1MetricsHandler.GetMetrics)))
-	}
-
-	// Public endpoints (no auth required for now)
-	mux.HandleFunc("/ws", h.HandleWS)
-	mux.HandleFunc("GET /metrics", HandleGetMetrics)
-	mux.HandleFunc("POST /admin/login", HandleAdminLogin)
-
-	// Health check endpoint
-	mux.HandleFunc("GET /health", HandleHealth)
-
-	// Register catch-all routes for 404/405 handling
-
-	// Wrap with catchAll for 404 handling
-	wrappedMux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check if path is a registered route
-		path := r.URL.Path
-
-		// Check for GET / (root) - handle specially
-		if r.Method == "GET" && path == "/" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{
-				"status":   "ok",
-				"service":  "wsapi",
-				"message":  "WhatsApp API running",
-				"frontend": "Serve separately on port 3000 or configure nginx",
-			})
-			return
-		}
-
-		// For root path with non-GET method, return 405
-		if path == "/" {
-			w.Header().Set("Allow", "GET")
-			w.Header().Set("Content-Type", "application/json")
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// For other paths, use the mux
-		mux.ServeHTTP(w, r)
-	})
-
-	baseHandler := LoggingMiddleware(CorrelationIDMiddleware(CORSMiddleware(wrappedMux)))
 	return &startupAwareRouter{
-		handler: baseHandler,
-		startFn: buildStartupBootstrap(cfg, manager, sessionStore, telefonoStore),
+		handler: k.Apply(mux),
+		startFn: c.StartupTasks,
 	}
 }
 
@@ -928,6 +694,16 @@ func HandleHealth(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "ok",
 		"message": "API is running",
+	})
+}
+
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":   "ok",
+		"service":  "wsapi",
+		"message":  "WhatsApp API running",
+		"frontend": "Serve separately on port 3000 or configure nginx",
 	})
 }
 
