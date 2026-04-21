@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
+	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
 
 	"wsapi/internal/domain"
@@ -141,6 +144,396 @@ func TestBuildAdminSessionDiagnosticHealthy(t *testing.T) {
 	}
 }
 
+func TestExtractPanelUserIDSupportsUsuarioAdminPath(t *testing.T) {
+	id, err := extractPanelUserID("/api/admin/usuario_admin/42")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id != 42 {
+		t.Fatalf("expected 42, got %d", id)
+	}
+}
+
+func TestListUsuarioAdminsUsesEmpresaScope(t *testing.T) {
+	db := newAdminUserScopeTestDB(t)
+	store := storage.NewAdminUserStore(db)
+	insertAdminUser(t, db, "alice", "$2a$10$abcdefghijklmnopqrstuv", "alice@a.com", 1, "admin", 1, false)
+	insertAdminUser(t, db, "bob", "$2a$10$abcdefghijklmnopqrstuv", "bob@b.com", 2, "admin", 2, false)
+
+	h := &AdminHandler{userStore: store}
+	req := httptest.NewRequest(stdhttp.MethodGet, "/api/admin/usuario_admin?page=1&limit=20", nil)
+	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	rr := httptest.NewRecorder()
+
+	h.ListUsuarioAdmins(rr, req)
+
+	if rr.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	var resp struct {
+		Usuarios []domain.AdminUser `json:"usuario_admin"`
+		Total    int                `json:"total"`
+		Page     int                `json:"page"`
+		Limit    int                `json:"limit"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response: %v", err)
+	}
+	if len(resp.Usuarios) != 1 || resp.Usuarios[0].Username != "alice" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+	if resp.Total != 1 {
+		t.Fatalf("expected total 1, got %d", resp.Total)
+	}
+}
+
+func TestGetUsuarioAdminRejectsCrossCompany(t *testing.T) {
+	db := newAdminUserScopeTestDB(t)
+	store := storage.NewAdminUserStore(db)
+	insertAdminUser(t, db, "alice", "$2a$10$abcdefghijklmnopqrstuv", "alice@a.com", 1, "admin", 1, false)
+	userID := insertAdminUser(t, db, "bob", "$2a$10$abcdefghijklmnopqrstuv", "bob@b.com", 2, "admin", 2, false)
+
+	h := &AdminHandler{userStore: store}
+	req := httptest.NewRequest(stdhttp.MethodGet, "/api/admin/usuario_admin/"+itoa(userID), nil)
+	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	rr := httptest.NewRecorder()
+
+	h.GetUsuarioAdmin(rr, req)
+
+	if rr.Code != stdhttp.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rr.Code)
+	}
+}
+
+func TestDeleteUsuarioAdminHardDeletesWhenNoDependencies(t *testing.T) {
+	db := newAdminUserScopeTestDB(t)
+	store := storage.NewAdminUserStore(db)
+	userID := insertAdminUser(t, db, "alice", "$2a$10$abcdefghijklmnopqrstuv", "alice@a.com", 1, "admin", 1, false)
+
+	action, err := store.DeleteWithPolicy(userID)
+	if err != nil {
+		t.Fatalf("delete policy: %v", err)
+	}
+	if action != "deleted" {
+		t.Fatalf("expected deleted action, got %s", action)
+	}
+
+	user, err := store.GetByID(userID)
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	if user != nil {
+		t.Fatalf("expected user removed, got %+v", user)
+	}
+}
+
+func TestDeleteUsuarioAdminDisablesWhenDependenciesExist(t *testing.T) {
+	db := newAdminUserScopeTestDB(t)
+	store := storage.NewAdminUserStore(db)
+	userID := insertAdminUser(t, db, "alice", "$2a$10$abcdefghijklmnopqrstuv", "alice@a.com", 1, "admin", 1, false)
+	if _, err := db.Exec(`INSERT INTO user_modules (user_id, module_id) VALUES (?, 1)`, userID); err != nil {
+		t.Fatalf("seed dependency: %v", err)
+	}
+
+	action, err := store.DeleteWithPolicy(userID)
+	if err != nil {
+		t.Fatalf("delete policy: %v", err)
+	}
+	if action != "disabled" {
+		t.Fatalf("expected disabled action, got %s", action)
+	}
+
+	user, err := store.GetByID(userID)
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	if user == nil || user.Activo {
+		t.Fatalf("expected disabled user, got %+v", user)
+	}
+}
+
+func TestCreateAndUpdateUsuarioAdmin(t *testing.T) {
+	db := newAdminUserScopeTestDB(t)
+	store := storage.NewAdminUserStore(db)
+	h := &AdminHandler{userStore: store}
+
+	createReq := httptest.NewRequest(stdhttp.MethodPost, "/api/admin/usuario_admin", strings.NewReader(`{"username":"newadmin","password":"Secret123!","email":"new@a.com","empresa_id":1,"role_id":1,"rol":"admin"}`))
+	createReq = createReq.WithContext(domain.WithEmpresaJWTClaims(createReq.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	createRR := httptest.NewRecorder()
+
+	h.CreateUsuarioAdmin(createRR, createReq)
+
+	if createRR.Code != stdhttp.StatusOK {
+		t.Fatalf("expected create 200, got %d body=%s", createRR.Code, createRR.Body.String())
+	}
+
+	var createResp map[string]any
+	if err := json.Unmarshal(createRR.Body.Bytes(), &createResp); err != nil {
+		t.Fatalf("invalid create response: %v", err)
+	}
+	usuarioAdmin, ok := createResp["usuario_admin"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing usuario_admin payload: %+v", createResp)
+	}
+	userID := int64(usuarioAdmin["id"].(float64))
+	stored, err := store.GetByID(userID)
+	if err != nil {
+		t.Fatalf("get created user: %v", err)
+	}
+	if stored == nil {
+		t.Fatalf("created user not found")
+	}
+	if stored.PasswordHash == "" || bcrypt.CompareHashAndPassword([]byte(stored.PasswordHash), []byte("Secret123!")) != nil {
+		t.Fatalf("password hash not stored correctly")
+	}
+
+	updateReq := httptest.NewRequest(stdhttp.MethodPut, "/api/admin/usuario_admin/"+strconv.FormatInt(userID, 10), strings.NewReader(`{"email":"updated@a.com","role_id":2,"is_active":false}`))
+	updateReq = updateReq.WithContext(domain.WithEmpresaJWTClaims(updateReq.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	updateRR := httptest.NewRecorder()
+
+	h.UpdateUsuarioAdmin(updateRR, updateReq)
+
+	if updateRR.Code != stdhttp.StatusOK {
+		t.Fatalf("expected update 200, got %d body=%s", updateRR.Code, updateRR.Body.String())
+	}
+
+	updated, err := store.GetByID(userID)
+	if err != nil {
+		t.Fatalf("get updated user: %v", err)
+	}
+	if updated == nil || updated.Email != "updated@a.com" || updated.RoleID == nil || *updated.RoleID != 2 || updated.Activo {
+		t.Fatalf("unexpected updated user: %+v", updated)
+	}
+}
+
+func TestCreateRoleValidatesPermissionsAndRejectsDuplicates(t *testing.T) {
+	db := newAdminRoleTestDB(t)
+	store := storage.NewRoleStore(db)
+	h := &AdminHandler{roleStore: store, moduleStore: storage.NewModuleStore(db)}
+
+	createReq := httptest.NewRequest(stdhttp.MethodPost, "/api/admin/roles", strings.NewReader(`{"name":"auditor","description":"Auditor","permissions":["messages","broadcasts:read"]}`))
+	createReq = createReq.WithContext(domain.WithEmpresaJWTClaims(createReq.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	createRR := httptest.NewRecorder()
+
+	h.CreateRole(createRR, createReq)
+
+	if createRR.Code != stdhttp.StatusOK {
+		t.Fatalf("expected create 200, got %d body=%s", createRR.Code, createRR.Body.String())
+	}
+
+	var createResp map[string]any
+	if err := json.Unmarshal(createRR.Body.Bytes(), &createResp); err != nil {
+		t.Fatalf("invalid create response: %v", err)
+	}
+	rolePayload, ok := createResp["role"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing role payload: %+v", createResp)
+	}
+	roleID := int64(rolePayload["id"].(float64))
+	created, err := store.GetByID(roleID)
+	if err != nil {
+		t.Fatalf("get created role: %v", err)
+	}
+	if created == nil || created.Name != "auditor" || len(created.Permissions) != 2 {
+		t.Fatalf("unexpected created role: %+v", created)
+	}
+
+	dupReq := httptest.NewRequest(stdhttp.MethodPost, "/api/admin/roles", strings.NewReader(`{"name":"auditor","description":"Duplicado","permissions":["messages"]}`))
+	dupReq = dupReq.WithContext(domain.WithEmpresaJWTClaims(dupReq.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	dupRR := httptest.NewRecorder()
+
+	h.CreateRole(dupRR, dupReq)
+
+	if dupRR.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected duplicate conflict, got %d body=%s", dupRR.Code, dupRR.Body.String())
+	}
+}
+
+func TestUpdateRoleRejectsDroppingRootFlag(t *testing.T) {
+	db := newAdminRoleTestDB(t)
+	store := storage.NewRoleStore(db)
+	rootRole := &domain.Role{Name: "super_admin", Description: "Super Admin", IsRoot: true, Permissions: []string{"all"}}
+	if _, err := store.Create(rootRole); err != nil {
+		t.Fatalf("seed root role: %v", err)
+	}
+
+	h := &AdminHandler{roleStore: store, moduleStore: storage.NewModuleStore(db)}
+	req := httptest.NewRequest(stdhttp.MethodPut, "/api/admin/roles/1", strings.NewReader(`{"name":"super_admin","description":"Root","is_root":false,"permissions":["all"]}`))
+	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	rr := httptest.NewRecorder()
+
+	h.UpdateRole(rr, req)
+
+	if rr.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDeleteRoleRejectsInUseRoles(t *testing.T) {
+	db := newAdminRoleTestDB(t)
+	store := storage.NewRoleStore(db)
+	role := &domain.Role{Name: "support", Description: "Support", Permissions: []string{"messages"}}
+	roleID, err := store.Create(role)
+	if err != nil {
+		t.Fatalf("seed role: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO admin_users (username, password_hash, email, empresa_id, rol, role_id, is_root, activo) VALUES (?, ?, ?, ?, ?, ?, ?, 1)`, "alice", "$2a$10$abcdefghijklmnopqrstuv", "alice@a.com", 1, "admin", roleID, false); err != nil {
+		t.Fatalf("seed user dependency: %v", err)
+	}
+
+	h := &AdminHandler{roleStore: store, moduleStore: storage.NewModuleStore(db)}
+	req := httptest.NewRequest(stdhttp.MethodDelete, "/api/admin/roles/1", nil)
+	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	rr := httptest.NewRecorder()
+
+	h.DeleteRole(rr, req)
+
+	if rr.Code != stdhttp.StatusConflict {
+		t.Fatalf("expected conflict, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	remaining, err := store.GetByID(roleID)
+	if err != nil {
+		t.Fatalf("get role after delete attempt: %v", err)
+	}
+	if remaining == nil {
+		t.Fatalf("expected role to remain after failed delete")
+	}
+}
+
+func TestGetUsuarioAdminModulesReturnsAssignedModules(t *testing.T) {
+	db := newAdminRoleTestDB(t)
+	userStore := storage.NewAdminUserStore(db)
+	userID := insertAdminUser(t, db, "alice", "$2a$10$abcdefghijklmnopqrstuv", "alice@a.com", 1, "admin", 1, false)
+	if err := storage.NewUserModuleStore(db).AssignModules(userID, []int64{1, 3}); err != nil {
+		t.Fatalf("seed modules: %v", err)
+	}
+
+	h := &AdminHandler{db: db, userStore: userStore}
+	req := httptest.NewRequest(stdhttp.MethodGet, "/api/admin/usuario_admin/"+itoa(userID)+"/modulos", nil)
+	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	rr := httptest.NewRecorder()
+
+	h.GetUsuarioAdminModules(rr, req)
+
+	if rr.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		ModuleIDs []int64 `json:"module_ids"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response: %v", err)
+	}
+	if len(resp.ModuleIDs) != 2 {
+		t.Fatalf("expected 2 module ids, got %+v", resp.ModuleIDs)
+	}
+	if !containsInt64(resp.ModuleIDs, 1) || !containsInt64(resp.ModuleIDs, 3) {
+		t.Fatalf("unexpected module ids: %+v", resp.ModuleIDs)
+	}
+}
+
+func TestAssignUsuarioAdminModulesReplacesFullSet(t *testing.T) {
+	db := newAdminRoleTestDB(t)
+	userStore := storage.NewAdminUserStore(db)
+	userModuleStore := storage.NewUserModuleStore(db)
+	userID := insertAdminUser(t, db, "alice", "$2a$10$abcdefghijklmnopqrstuv", "alice@a.com", 1, "admin", 1, false)
+	if err := userModuleStore.AssignModules(userID, []int64{1}); err != nil {
+		t.Fatalf("seed modules: %v", err)
+	}
+
+	h := &AdminHandler{db: db, userStore: userStore, moduleStore: storage.NewModuleStore(db)}
+	req := httptest.NewRequest(stdhttp.MethodPut, "/api/admin/usuario_admin/"+itoa(userID)+"/modulos", strings.NewReader(`{"module_ids":[2,3]}`))
+	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	rr := httptest.NewRecorder()
+
+	h.AssignUsuarioAdminModules(rr, req)
+
+	if rr.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	modules, err := userModuleStore.GetByUserID(userID)
+	if err != nil {
+		t.Fatalf("get modules: %v", err)
+	}
+	if len(modules) != 2 || modules[0].ID == 1 || modules[1].ID == 1 {
+		t.Fatalf("expected modules to be replaced, got %+v", modules)
+	}
+}
+
+func TestAssignUsuarioAdminModulesRejectsInvalidModuleID(t *testing.T) {
+	db := newAdminRoleTestDB(t)
+	userStore := storage.NewAdminUserStore(db)
+	userModuleStore := storage.NewUserModuleStore(db)
+	userID := insertAdminUser(t, db, "alice", "$2a$10$abcdefghijklmnopqrstuv", "alice@a.com", 1, "admin", 1, false)
+	if err := userModuleStore.AssignModules(userID, []int64{1}); err != nil {
+		t.Fatalf("seed modules: %v", err)
+	}
+
+	h := &AdminHandler{db: db, userStore: userStore, moduleStore: storage.NewModuleStore(db)}
+	req := httptest.NewRequest(stdhttp.MethodPut, "/api/admin/usuario_admin/"+itoa(userID)+"/modulos", strings.NewReader(`{"module_ids":[1,99]}`))
+	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	rr := httptest.NewRecorder()
+
+	h.AssignUsuarioAdminModules(rr, req)
+
+	if rr.Code != stdhttp.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	modules, err := userModuleStore.GetByUserID(userID)
+	if err != nil {
+		t.Fatalf("get modules: %v", err)
+	}
+	if len(modules) != 1 || modules[0].ID != 1 {
+		t.Fatalf("expected original modules to remain, got %+v", modules)
+	}
+}
+
+func TestListModulesReturnsCatalog(t *testing.T) {
+	db := newAdminRoleTestDB(t)
+	h := &AdminHandler{moduleStore: storage.NewModuleStore(db)}
+	req := httptest.NewRequest(stdhttp.MethodGet, "/api/admin/modules", nil)
+	rr := httptest.NewRecorder()
+
+	h.ListModules(rr, req)
+
+	if rr.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp struct {
+		Modules []domain.Module `json:"modules"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response: %v", err)
+	}
+	if len(resp.Modules) != 3 {
+		t.Fatalf("expected 3 modules, got %+v", resp.Modules)
+	}
+	if resp.Modules[0].Slug == "" {
+		t.Fatalf("expected module slugs in response: %+v", resp.Modules[0])
+	}
+}
+
+func TestAdminModulesRouteIsReadOnly(t *testing.T) {
+	mux := stdhttp.NewServeMux()
+	mux.Handle("GET /api/admin/modules", stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		w.WriteHeader(stdhttp.StatusOK)
+	}))
+
+	req := httptest.NewRequest(stdhttp.MethodPost, "/api/admin/modules", nil)
+	rr := httptest.NewRecorder()
+
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != stdhttp.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rr.Code)
+	}
+}
+
 func newAdminPhoneTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite", "file:admin-phone-test?mode=memory&cache=shared")
@@ -188,3 +581,141 @@ func insertAdminPhone(t *testing.T, db *sql.DB, empresaID int64, codigoPais, num
 }
 
 func adminTestInt64Ptr(v int64) *int64 { return &v }
+
+func newAdminUserScopeTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:admin-user-scope-test?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+
+	_, err = db.Exec(`
+CREATE TABLE admin_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    email TEXT,
+    empresa_id INTEGER,
+    rol TEXT NOT NULL DEFAULT 'operador',
+    role_id INTEGER,
+    is_root INTEGER NOT NULL DEFAULT 0,
+    activo INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMP NULL
+);
+CREATE TABLE user_modules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    module_id INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE api_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_by_user_id INTEGER NULL
+);
+CREATE TABLE api_key_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_user_id INTEGER NULL
+);`)
+	if err != nil {
+		_ = db.Close()
+		t.Fatalf("create admin_users schema: %v", err)
+	}
+
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+func newAdminRoleTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:admin-role-test?mode=memory&cache=shared")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+
+	_, err = db.Exec(`
+CREATE TABLE modules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    slug TEXT UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE roles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    is_root INTEGER NOT NULL DEFAULT 0,
+    permissions TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE admin_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    email TEXT,
+    empresa_id INTEGER,
+    rol TEXT NOT NULL DEFAULT 'operador',
+    role_id INTEGER,
+    is_root INTEGER NOT NULL DEFAULT 0,
+    activo INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMP NULL
+);
+CREATE TABLE user_modules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    module_id INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`)
+	if err != nil {
+		_ = db.Close()
+		t.Fatalf("create role schema: %v", err)
+	}
+
+	for _, module := range []struct {
+		name, description, slug string
+	}{
+		{name: "messages", description: "Mensajes", slug: "messages"},
+		{name: "broadcasts", description: "Difusiones", slug: "broadcasts"},
+		{name: "roles", description: "Roles", slug: "roles"},
+	} {
+		if _, err := db.Exec(`INSERT INTO modules (name, description, slug) VALUES (?, ?, ?)`, module.name, module.description, module.slug); err != nil {
+			_ = db.Close()
+			t.Fatalf("seed module %s: %v", module.name, err)
+		}
+	}
+
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+func containsInt64(values []int64, target int64) bool {
+	for _, v := range values {
+		if v == target {
+			return true
+		}
+	}
+	return false
+}
+
+func insertAdminUser(t *testing.T, db *sql.DB, username, passwordHash, email string, empresaID int64, rol string, roleID int64, isRoot bool) int64 {
+	t.Helper()
+	res, err := db.Exec(`
+INSERT INTO admin_users (username, password_hash, email, empresa_id, rol, role_id, is_root, activo)
+VALUES (?, ?, ?, ?, ?, ?, ?, 1)`, username, passwordHash, email, empresaID, rol, roleID, isRoot)
+	if err != nil {
+		t.Fatalf("insert admin user: %v", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("last insert id: %v", err)
+	}
+	return id
+}
+
+func itoa(v int64) string { return strconv.FormatInt(v, 10) }

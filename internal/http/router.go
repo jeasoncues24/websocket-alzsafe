@@ -133,6 +133,23 @@ func NewRouter() http.Handler {
 	}
 
 	// Admin routes (users, roles, modules) - protected
+	if empresaAuthMiddleware != nil && adminHandler != nil {
+		protectedEmpresa := empresaAuthMiddleware.RequireEmpresaAuth()
+		mux.Handle("GET /api/admin/usuario_admin", protectedEmpresa(http.HandlerFunc(adminHandler.ListUsuarioAdmins)))
+		mux.Handle("GET /api/admin/usuario_admin/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.GetUsuarioAdmin)))
+		mux.Handle("POST /api/admin/usuario_admin", protectedEmpresa(http.HandlerFunc(adminHandler.CreateUsuarioAdmin)))
+		mux.Handle("PUT /api/admin/usuario_admin/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.UpdateUsuarioAdmin)))
+		mux.Handle("DELETE /api/admin/usuario_admin/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.DeleteUsuarioAdmin)))
+		mux.Handle("GET /api/admin/usuario_admin/{id}/modulos", protectedEmpresa(http.HandlerFunc(adminHandler.GetUsuarioAdminModules)))
+		mux.Handle("PUT /api/admin/usuario_admin/{id}/modulos", protectedEmpresa(http.HandlerFunc(adminHandler.AssignUsuarioAdminModules)))
+		mux.Handle("GET /api/admin/roles", protectedEmpresa(http.HandlerFunc(adminHandler.ListRoles)))
+		mux.Handle("GET /api/admin/roles/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.GetRole)))
+		mux.Handle("POST /api/admin/roles", protectedEmpresa(http.HandlerFunc(adminHandler.CreateRole)))
+		mux.Handle("PUT /api/admin/roles/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.UpdateRole)))
+		mux.Handle("DELETE /api/admin/roles/{id}", protectedEmpresa(http.HandlerFunc(adminHandler.DeleteRole)))
+		mux.Handle("GET /api/admin/modules", protectedEmpresa(http.HandlerFunc(adminHandler.ListModules)))
+	}
+
 	if authMiddleware != nil && adminHandler != nil {
 		protected := authMiddleware.RequireAuth()
 		mux.Handle("GET /api/admin/users", protected(http.HandlerFunc(adminHandler.ListUsers)))
@@ -140,8 +157,6 @@ func NewRouter() http.Handler {
 		mux.Handle("POST /api/admin/users", protected(http.HandlerFunc(adminHandler.CreateUser)))
 		mux.Handle("PUT /api/admin/users/", protected(http.HandlerFunc(adminHandler.UpdateUser)))
 		mux.Handle("DELETE /api/admin/users/", protected(http.HandlerFunc(adminHandler.DeleteUser)))
-		mux.Handle("GET /api/admin/roles", protected(http.HandlerFunc(adminHandler.ListRoles)))
-		mux.Handle("GET /api/admin/modules", protected(http.HandlerFunc(adminHandler.ListModules)))
 		mux.Handle("POST /api/admin/users/promote/", protected(http.HandlerFunc(adminHandler.PromoteUser)))
 		mux.Handle("PUT /api/admin/users/modules/", protected(http.HandlerFunc(adminHandler.AssignUserModules)))
 		mux.Handle("GET /api/admin/empresas/{id}/telefonos", protected(http.HandlerFunc(adminHandler.ListCompanyPhones)))

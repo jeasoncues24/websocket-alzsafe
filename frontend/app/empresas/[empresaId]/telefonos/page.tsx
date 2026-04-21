@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Building2, KeyRound, Loader2, Phone, Pencil, Plus, QrCode, RefreshCw, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -119,19 +118,6 @@ export default function CompanyPhonesPage() {
       await reload();
     } catch (err: unknown) {
       setMutationError(err instanceof Error ? err.message : "Error eliminando teléfono");
-    }
-  }
-
-  function formatStatus(status: string) {
-    switch (status) {
-      case "active":
-        return "Activo";
-      case "qr_pending":
-        return "QR pendiente";
-      case "disconnected":
-        return "Desconectado";
-      default:
-        return status;
     }
   }
 

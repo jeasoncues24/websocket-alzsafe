@@ -561,8 +561,10 @@ export interface UserAdminRol {
 export interface Role {
   id: number;
   name: string;
-  description: string;
+  description?: string;
   is_root: boolean;
+  permissions: string[];
+  usage_count?: number;
 }
 
 export interface Module {
@@ -600,14 +602,14 @@ async function fetchWithAuth(url: string, options?: RequestInit) {
   return res.json();
 }
 
-export async function getUsers(page = 1, limit = 20): Promise<UsersResponse> {
+export async function getUsuarioAdmins(page = 1, limit = 20): Promise<UsersResponse> {
   return fetchWithAuth(
-    `${API_BASE}/api/admin/users?page=${page}&limit=${limit}`,
+    `${API_BASE}/api/admin/usuario_admin?page=${page}&limit=${limit}`,
   );
 }
 
-export async function getUser(id: number): Promise<UserAdminRol> {
-  return fetchWithAuth(`${API_BASE}/api/admin/users/${id}`);
+export async function getUsuarioAdmin(id: number): Promise<UserAdminRol> {
+  return fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${id}`);
 }
 
 export interface CreateUserRequest {
@@ -618,10 +620,10 @@ export interface CreateUserRequest {
   empresa_id?: number;
 }
 
-export async function createUser(
+export async function createUsuarioAdmin(
   data: CreateUserRequest,
 ): Promise<UserAdminRol> {
-  return fetchWithAuth(`${API_BASE}/api/admin/users`, {
+  return fetchWithAuth(`${API_BASE}/api/admin/usuario_admin`, {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -634,33 +636,37 @@ export interface UpdateUserRequest {
   empresa_id?: number;
 }
 
-export async function updateUser(
+export async function updateUsuarioAdmin(
   id: number,
   data: UpdateUserRequest,
 ): Promise<UserAdminRol> {
-  return fetchWithAuth(`${API_BASE}/api/admin/users/${id}`, {
+  return fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
 }
 
-export async function deleteUser(id: number): Promise<void> {
-  await fetchWithAuth(`${API_BASE}/api/admin/users/${id}`, {
+export async function deleteUsuarioAdmin(id: number): Promise<{ status: string }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${id}`, {
     method: "DELETE",
   });
 }
 
-export async function promoteToRoot(userId: number): Promise<UserAdminRol> {
-  return fetchWithAuth(`${API_BASE}/api/admin/users/${userId}/promote`, {
+export async function promoteUsuarioAdmin(userId: number): Promise<UserAdminRol> {
+  return fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${userId}/promote`, {
     method: "POST",
   });
 }
 
-export async function assignUserModules(
+export async function getUsuarioAdminModules(userId: number): Promise<{ module_ids: number[] }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${userId}/modulos`);
+}
+
+export async function assignUsuarioAdminModules(
   userId: number,
   moduleIds: number[],
 ): Promise<void> {
-  await fetchWithAuth(`${API_BASE}/api/admin/users/${userId}/modules`, {
+  await fetchWithAuth(`${API_BASE}/api/admin/usuario_admin/${userId}/modulos`, {
     method: "PUT",
     body: JSON.stringify({ module_ids: moduleIds }),
   });
@@ -672,4 +678,34 @@ export async function getRoles(): Promise<RolesResponse> {
 
 export async function getModules(): Promise<ModulesResponse> {
   return fetchWithAuth(`${API_BASE}/api/admin/modules`);
+}
+
+export interface RoleRequest {
+  name: string;
+  description?: string;
+  is_root?: boolean;
+  permissions: string[];
+}
+
+export async function createRole(data: RoleRequest): Promise<{ role: Role }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/roles`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRole(
+  id: number,
+  data: RoleRequest,
+): Promise<{ role: Role }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/roles/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRole(id: number): Promise<{ status: string }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/roles/${id}`, {
+    method: "DELETE",
+  });
 }

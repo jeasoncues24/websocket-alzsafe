@@ -1,262 +1,175 @@
-# Epic 8.5: Sistema de Gestión de Usuarios con Roles y Módulos
+---
+stepsCompleted:
+  - validate-prerequisites
+  - design-epics
+  - create-stories
+  - final-validation
+inputDocuments:
+  - _bmad-output/project-context.md
+  - _bmad-output/implementation-artifacts/sprint-status.yaml
+  - _bmad-output/implementation-artifacts/future-index.md
+status: "ready-for-dev"
+---
+
+# wsapi - Epic Breakdown: Usuario Admin, Roles y Modulos
 
 ## Overview
 
-| Campo | Valor |
-|-------|-------|
-| **Nombre** | Sistema de Gestión de Usuarios con Roles y Módulos |
-| **Tipo** | Backend + Frontend + DB |
-| **Estado** | Planning |
-| **Story Count** | 5 |
-| **Effort Estimate** | 8-12 horas |
+Este epic redefine el panel administrativo para que todo el backend de administracion viva bajo `/api/admin/*` y se consuma solo con JWT de empresa. El foco es refactorizar `usuarios` a `usuario_admin`, actualizar el CRUD de roles, exponer `modules` solo en lectura y ajustar la logica de eliminacion segun dependencias reales de base de datos.
 
-## Objetivo
+## Requirements Inventory
 
-Implementar un sistema completo de gestión de usuarios con roles y permisos por módulos para el panel administrativo de wsapi.
+### Functional Requirements
 
-- Crear estructura de tablas para roles, módulos y permisos usuario-módulo
-- Implementar sistema de autorización centralizado con bypass para root
-- Proteger el flag de root con múltiples capas de seguridad
-- Permitir promoción a root solo cuando existe otro root activo
-- CRUD de usuarios con asignación de roles y módulos
-- Frontend para gestionar usuarios, roles y módulos
+FR1: Todos los endpoints del panel administrativo deben vivir bajo `/api/admin/*` y aceptar solo JWT de empresa.
+FR2: El recurso de administracion de usuarios debe renombrarse a `usuario_admin` en rutas, contratos y handlers.
+FR3: `usuario_admin` debe soportar CRUD completo alineado con la tabla `admin_users` actual.
+FR4: `roles` debe soportar CRUD completo alineado con la tabla `roles` actual, incluyendo `permissions`.
+FR5: `modules` debe ser de solo lectura, con endpoints `GET` para catalogo y consulta.
+FR6: `user_modules` debe soportar asignacion y reemplazo de modulos por usuario como override de permisos.
+FR7: La eliminacion de `usuario_admin` debe borrar solo si no hay dependencias; si existen dependencias no cascada, debe deshabilitarse con `activo = 0`.
+FR8: La eliminacion de `roles` debe fallar si el rol esta en uso por cualquier `usuario_admin`.
+FR9: Los contratos deben reflejar los campos reales de migracion: `username`, `password_hash`, `email`, `empresa_id`, `rol`, `role_id`, `is_root`, `activo`, `last_login_at`, `permissions`.
+FR10: El backend debe incluir pruebas para rutas, contratos, validaciones y reglas de eliminacion.
 
-## Modules del Sistema (definidos)
+### NonFunctional Requirements
 
-| Módulo | Slug | Descripción |
-|--------|------|-------------|
-| Dashboard | dashboard | Panel de métricas |
-| Empresas | companies | Gestión de empresas |
-| Mensajes | messages | Historial de mensajes |
-| Sesiones | sessions | Gestión de sesiones WhatsApp |
-| Difusiones | broadcasts | Envío masivo |
-| Configuración | settings | Settings del sistema |
+NFR1: Los contratos administrativos deben ser consistentes y predecibles para el panel.
+NFR2: La logica de borrado debe proteger integridad referencial y no romper tablas relacionadas.
+NFR3: Los cambios deben ser testeables con cobertura de handlers, servicios y storage.
+NFR4: El epic no debe mezclar frontend; la UI administrativa se tratara en un epic separado.
 
-## Arquitectura de Datos
+### Additional Requirements
 
-### Diagrama de Relaciones
+- La ruta `/api/admin/*` es exclusiva para administracion y no debe compartir contrato con endpoints del token por telefono.
+- El JWT de telefono no debe poder consumir estos endpoints.
+- `rol` existe como columna legacy/operativa; el contrato debe priorizar `role_id` para escritura y devolver ambos campos donde aplique.
+- `is_root` y `permissions` deben validarse en el backend y no aceptarse sin control.
+- `modules` no tiene CRUD; solo lectura del catalogo.
+- `DELETE` de usuarios debe evaluar dependencias reales antes de decidir entre hard delete o deshabilitacion.
+- `DELETE` de roles no debe degradar a disable; si esta en uso, se rechaza.
 
-```
-┌─────────────────┐       ┌─────────────────┐
-│    roles        │       │    modules      │
-├─────────────────┤       ├─────────────────┤
-│ id (PK)         │       │ id (PK)         │
-│ name (UNIQUE)   │       │ name (UNIQUE)   │
-│ description     │       │ description     │
-│ is_root         │       │ slug            │
-│ created_at      │       │ created_at      │
-│ updated_at      │       └─────────────────┘
-└─────────────────┐              ▲
-        │                        │
-        │              ┌─────────────────┐
-        │              │  user_modules   │
-        │              ├─────────────────┤
-        │              │ user_id (FK)    │
-        │              │ module_id (FK)  │
-        │              │ created_at      │
-        │              └─────────────────┘
-        │
-        ▼
-┌─────────────────┐
-│  admin_users    │
-├─────────────────┤
-│ id (PK)         │
-│ username        │
-│ password_hash  │
-│ email           │
-│ empresa_id      │
-│ role_id (FK)    │
-│ is_root         │
-│ is_active       │
-│ created_at      │
-│ updated_at      │
-└─────────────────┘
-```
+### UX Design Requirements
 
-## Reglas de Seguridad
+No UX design document is included for this backend-only epic.
 
-### 1. Protección de Root
+### FR Coverage Map
 
-- El flag `is_root` está en la tabla `roles`, no en `admin_users`
-- Trigger en DB previene modificación directa de `is_root`
-- Storage layer valida que no se pueda modificar rol root
-- Solo un usuario root puede promover a otro usuario a root
-- **Requiere al menos un root activo existente** para poder promover
+FR1: Epic 8.5 - Panel Admin de Usuarios, Roles y Modulos
+FR2: Epic 8.5 - Panel Admin de Usuarios, Roles y Modulos
+FR3: Epic 8.5 - Panel Admin de Usuarios, Roles y Modulos
+FR4: Epic 8.5 - Panel Admin de Usuarios, Roles y Modulos
+FR5: Epic 8.5 - Panel Admin de Usuarios, Roles y Modulos
+FR6: Epic 8.5 - Panel Admin de Usuarios, Roles y Modulos
+FR7: Epic 8.5 - Panel Admin de Usuarios, Roles y Modulos
+FR8: Epic 8.5 - Panel Admin de Usuarios, Roles y Modulos
+FR9: Epic 8.5 - Panel Admin de Usuarios, Roles y Modulos
+FR10: Epic 8.5 - Panel Admin de Usuarios, Roles y Modulos
 
-### 2. Acceso a Módulos
+## Epic List
 
-- Root tiene acceso a TODOS los módulos sin verificar permisos
-- Resolución de permisos: **override usuario → rol → denegado**
-- Si usuario tiene entradas en `user_modules`, esas prevalecen
-- Si no hay override, usar módulos del rol del usuario
+### Epic 8.5: Panel Admin de Usuarios, Roles y Modulos
+Permitir gestion completa del panel administrativo con contratos bajo `/api/admin/*`, CRUD de `usuario_admin`, CRUD de roles, catalogo de modulos en solo lectura y reglas de borrado segun uso real en base de datos.
+**FRs covered:** FR1, FR2, FR3, FR4, FR5, FR6, FR7, FR8, FR9, FR10
 
-### 3. Drop/Recreate para Pruebas
+## Contract Notes
 
-```sql
-SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS user_modules;
-DROP TABLE IF EXISTS admin_users;
-DROP TABLE IF EXISTS modules;
-DROP TABLE IF EXISTS roles;
-SET FOREIGN_KEY_CHECKS = 1;
-```
+### Base Route
 
-## Criterios de Aceptación
+- Todos los endpoints de este epic viven bajo `/api/admin/*`.
+- Solo se aceptan requests autenticadas con JWT de empresa.
+- No se expone ninguna variante bajo `/api/*` para este dominio.
 
-1. Tablas creadas con migraciones y seeds iniciales
-2. CRUD de usuarios funcional con roles asignados
-3. Sistema de autorización bloquea acceso a módulos no permitidos
-4. Root tiene acceso a todo sin hardcoding en handlers
-5. Solo root puede cambiar rol de usuario a root (con otro root presente)
-6. Trigger de protección en DB para evitar cambios directos a is_root
-7. Frontend permite gestionar usuarios y asignar roles
-8. Tests de integración pasan con drop/recreate
+### Proposed Endpoints
 
----
+- `GET /api/admin/usuario_admin`
+- `GET /api/admin/usuario_admin/:id`
+- `POST /api/admin/usuario_admin`
+- `PUT /api/admin/usuario_admin/:id`
+- `DELETE /api/admin/usuario_admin/:id`
+- `GET /api/admin/usuario_admin/:id/modulos`
+- `PUT /api/admin/usuario_admin/:id/modulos`
+- `GET /api/admin/roles`
+- `GET /api/admin/roles/:id`
+- `POST /api/admin/roles`
+- `PUT /api/admin/roles/:id`
+- `DELETE /api/admin/roles/:id`
+- `GET /api/admin/modules`
+- `GET /api/admin/modules/:id`
+
+### Payload Rules
+
+- `usuario_admin` create/update: `username`, `password` (create only), `email`, `empresa_id`, `role_id`, `activo`, `is_root` only when backend validation allows it.
+- `roles` create/update: `name`, `description`, `is_root`, `permissions`.
+- `permissions` debe validar JSON y referenciar slugs reales de `modules`.
+- `user_modules` debe reemplazar el set completo de modulos asignados al usuario para evitar estados parciales.
+
+## Story Draft Status
+
+La estructura del epic ya esta definida para backend solamente. El siguiente paso fuera de este epic sera crear un epic separado para frontend con apoyo de `bmad-agent-ux-designer`.
 
 ## Stories
 
-### 8.5.1: Migraciones y Estructura de Datos
+### Story 8.5.1: Rutas admin y contratos base
 
-**Objetivo:** Crear tablas de roles, módulos y user_modules con seeds iniciales
+**Objetivo:** mover todo el panel administrativo a `/api/admin/*` y validar que solo use JWT de empresa.
 
-**Tareas:**
-- [ ] Crear migración `001_create_roles.up.sql` con seeds (root, admin, operador, viewer)
-- [ ] Crear migración `001_create_roles.down.sql` (drop table)
-- [ ] Crear migración `002_create_modules.up.sql` con seeds (6 módulos del sistema)
-- [ ] Crear migración `002_create_modules.down.sql` (drop table)
-- [ ] Crear migración `003_create_user_modules.up.sql`
-- [ ] Crear migración `003_create_user_modules.down.sql` (drop table)
-- [ ] Crear migración `004_alter_admin_users_add_role_id.up.sql`
-- [ ] Crear migración `004_alter_admin_users_add_role_id.down.sql`
-- [ ] Crear trigger para protección de is_root en roles
-- [ ] Ejecutar migraciones en entorno de desarrollo
-- [ ] Verificar que las tablas y datos seed existen
+**Acceptance Criteria:**
 
-**Criterios de Aceptación:**
-- [ ] Tabla `roles` tiene 4 registros种子 (root, admin, operador, viewer)
-- [ ] Tabla `modules` tiene 6 registros种子 (dashboard, companies, messages, sessions, broadcasts, settings)
-- [ ] Trigger previene UPDATE de is_root en roles
-- [ ] FK entre admin_users y roles funciona
+- `Given` una request sin JWT de empresa `When` accede a `/api/admin/*` `Then` retorna 401.
+- `Given` un JWT por telefono `When` intenta consumir `/api/admin/*` `Then` se rechaza.
+- `Given` una ruta legacy de usuarios `When` se revisa el router `Then` ya no expone `usuarios` fuera de `usuario_admin`.
+- `Given` una request valida `When` consulta el endpoint base `usuario_admin` `Then` la respuesta usa el contrato nuevo.
 
-**Dependencies:** Ninguna
+### Story 8.5.2: CRUD de usuario_admin
 
-**Estimated Effort:** 2 horas
+**Objetivo:** implementar create, read, update y delete para usuarios administrativos usando la tabla `admin_users`.
 
----
+**Acceptance Criteria:**
 
-### 8.5.2: Domain Entities y Storage Layer
+- `Given` datos validos `When` se crea un `usuario_admin` `Then` se persiste `username`, `email`, `empresa_id`, `role_id` y password hash.
+- `Given` un usuario existente `When` se actualiza `Then` se modifican solo los campos permitidos y se conserva `last_login_at`.
+- `Given` un usuario sin dependencias bloqueantes `When` se elimina `Then` el registro desaparece.
+- `Given` un usuario con relaciones en tablas no cascada `When` se elimina `Then` se deshabilita con `activo = 0`.
+- `Given` un usuario con override de modulos `When` se reemplaza su set `Then` se actualiza `user_modules` de forma atomica.
 
-**Objetivo:** Implementar entidades y storage para roles, módulos y user_modules
+### Story 8.5.3: CRUD de roles
 
-**Tareas:**
-- [ ] Crear `domain/role.go` con struct Role y métodos
-- [ ] Crear `domain/module.go` con struct Module
-- [ ] Crear `storage/role.go` con RoleStore (CRUD + GetRootRole)
-- [ ] Crear `storage/module.go` con ModuleStore (CRUD + GetAll)
-- [ ] Crear `storage/user_module.go` con UserModuleStore
-- [ ] Crear `storage/user.go` actualizado con métodos de roles
-- [ ] Ejecutar tests unitarios existentes
-- [ ] Agregar tests para los nuevos stores
+**Objetivo:** habilitar administracion completa de roles con validacion de uso real y permisos por modulo.
 
-**Criterios de Aceptación:**
-- [ ] Todos los stores implementan interfaz válida
-- [ ] Tests existentes pasan sin regresiones
-- [ ] Nuevos tests para Role, Module, UserModule stores pasan
+**Acceptance Criteria:**
 
-**Dependencies:** Story 8.5.1
+- `Given` un rol valido `When` se crea `Then` guarda `name`, `description`, `is_root` y `permissions`.
+- `Given` un rol existente `When` se actualiza `Then` se reflejan los cambios sin romper usuarios asociados.
+- `Given` un rol usado por al menos un `usuario_admin` `When` se intenta eliminar `Then` retorna conflicto y no borra nada.
+- `Given` un rol no usado `When` se elimina `Then` se borra de forma permanente.
+- `Given` permissions con slugs inexistentes `When` se valida `Then` retorna error de validacion.
 
-**Estimated Effort:** 2 horas
+### Story 8.5.4: Catalogo de modules y override por usuario
 
----
+**Objetivo:** exponer `modules` como catalogo solo lectura y permitir asignacion de modulos por usuario.
 
-### 8.5.3: Authorization Service
+**Acceptance Criteria:**
 
-**Objetivo:** Implementar servicio centralizado de autorización con bypass para root
+- `Given` una request valida `When` consulta `/api/admin/modules` `Then` retorna el catalogo completo.
+- `Given` un slug invalido `When` se intenta asignar a un usuario `Then` se rechaza.
+- `Given` una asignacion existente `When` se reemplaza `Then` el estado final coincide con la lista enviada.
+- `Given` la tabla `modules` `When` se revisa el contrato `Then` no existe CRUD de escritura.
 
-**Tareas:**
-- [ ] Crear `domain/authorization.go` con AuthorizationService
-- [ ] Implementar `CanAccess(ctx, moduleSlug)` con lógica de bypass root
-- [ ] Implementar `GetUserModules(ctx)` con lógica de resolución
-- [ ] Crear middleware de autorización para rutas
-- [ ] Integrar middleware en router
-- [ ] Tests unitarios para AuthorizationService
+### Story 8.5.5: Tests de integridad y contratos
 
-**Criterios de Aceptación:**
-- [ ] `CanAccess` retorna true para root sin verificar módulos
-- [ ] `CanAccess` verifica permisos para usuarios no-root
-- [ ] `GetUserModules` devuelve todos los módulos para root
-- [ ] Middlego intercepta requests y valida acceso
+**Objetivo:** cubrir la refactorizacion con pruebas de backend para evitar regresiones.
 
-**Dependencies:** Story 8.5.2
+**Acceptance Criteria:**
 
-**Estimated Effort:** 2 horas
+- `Given` el router actualizado `When` se ejecutan tests `Then` las rutas admin responden bajo `/api/admin/*`.
+- `Given` un delete de usuario con dependencias `When` se prueba `Then` el sistema lo deshabilita en lugar de borrarlo.
+- `Given` un delete de rol en uso `When` se prueba `Then` falla con el error esperado.
+- `Given` el catalogo de modules `When` se prueba `Then` solo hay lecturas.
+- `Given` contratos actualizados `When` se ejecutan pruebas de handlers/storage `Then` pasan sin romper el schema actual.
 
----
+## Out of Scope
 
-### 8.5.4: User Service con Promoción Segura a Root
-
-**Objetivo:** Implementar lógica de negocio para gestión de usuarios y promoción segura
-
-**Tareas:**
-- [ ] Crear `domain/user_service.go` con UserService
-- [ ] Implementar método `CreateUser` con validación de rol
-- [ ] Implementar método `UpdateUser` con protección de root
-- [ ] Implementar método `DeleteUser` con validación
-- [ ] Implementar método `PromoteToRoot` con validación de existente root
-- [ ] Implementar método `AssignModules` para override de permisos
-- [ ] Integrar UserService en handlers HTTP
-- [ ] Tests unitarios para UserService
-
-**Criterios de Aceptación:**
-- [ ] Crear usuario asigna rol correctamente
-- [ ] No se puede cambiar is_root directamente en update
-- [ ] PromoteToRoot falla si no existe otro root
-- [ ] PromoteToRoot requiere que el solicitante sea root
-- [ ] Tests pasan
-
-**Dependencies:** Story 8.5.3
-
-**Estimated Effort:** 2 horas
-
----
-
-### 8.5.5: Frontend - Gestión de Usuarios
-
-**Objetivo:** Crear interfaz para gestionar usuarios, roles y módulos
-
-**Tareas:**
-- [ ] Crear página `/users` con tabla de usuarios
-- [ ] Crear modal/form para crear/editar usuario
-- [ ] Agregar selector de roles en formulario
-- [ ] Agregar selector de módulos (checkbox) para override
-- [ ] Crear página `/roles` (opcional, solo listar)
-- [ ] Crear página `/modules` (opcional, solo listar)
-- [ ] Integrar con API de usuarios
-- [ ] Tests E2E para flujos de usuario
-
-**Criterios de Aceptación:**
-- [ ] Lista de usuarios muestra username, email, rol, estado
-- [ ] Crear usuario con rol funciona
-- [ ] Editar usuario funciona
-- [ ] Asignar módulos adicionales funciona
-- [ ] Botón de eliminar funciona
-
-**Dependencies:** Story 8.5.4
-
-**Estimated Effort:** 2-3 horas
-
----
-
-## Dependencias Externas
-
-- MariaDB/MySQL para persistencia
-- Frontend Next.js existente
-- shadcn/ui componentes (ya instalados)
-
-## Notas de Implementación
-
-1. **No modificar lógica de módulos existentes** - La autorización se integra como middleware, no dentro de cada handler
-2. **JWT incluye is_root** - Para evitar consulta DB en hot path
-3. **Seed inicial tiene root** - Crear primer usuario root manualmente después de migraciones
-4. **Tests con drop/recreate** - Cada test de integración ejecuta script de limpieza
+- Frontend del panel administrativo.
+- Rutas de usuarios clientes o cualquier dominio fuera de `/api/admin/*`.
+- Endpoints del token por telefono.

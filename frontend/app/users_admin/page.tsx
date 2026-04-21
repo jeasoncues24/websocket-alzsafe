@@ -16,24 +16,35 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Search, Users as UsersIcon, Plus, Pencil, Trash2 } from "lucide-react";
 import {
-  getUsers,
-  createUser,
-  updateUser,
-  deleteUser,
-  assignUserModules,
+  getEmpresas,
+  getUsuarioAdmins,
+  createUsuarioAdmin,
+  updateUsuarioAdmin,
+  deleteUsuarioAdmin,
+  assignUsuarioAdminModules,
+  getUsuarioAdminModules,
   getRoles,
   getModules,
+  type Empresa,
   type UserAdminRol,
   type Role,
   type Module,
   type CreateUserRequest,
   type UpdateUserRequest,
-  API_BASE,
 } from "@/lib/api";
 
 function UserFormModal({
@@ -43,6 +54,7 @@ function UserFormModal({
   user,
   roles,
   modules,
+  companies,
   userModules = [],
 }: {
   open: boolean;
@@ -54,6 +66,7 @@ function UserFormModal({
   user: UserAdminRol | null;
   roles: Role[];
   modules: Module[];
+  companies: Empresa[];
   userModules?: number[];
 }) {
   const [loading, setLoading] = useState(false);
@@ -64,6 +77,8 @@ function UserFormModal({
   const [selectedModules, setSelectedModules] = useState<number[]>([]);
   const [empresaId, setEmpresaId] = useState<number | undefined>();
   const [error, setError] = useState("");
+
+  const companyOptions = companies;
 
   useEffect(() => {
     if (open) {
@@ -124,129 +139,147 @@ function UserFormModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background rounded-lg shadow-lg w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-xl font-semibold mb-4">
-            {user ? "Editar Usuario" : "Nuevo Usuario"}
-          </h2>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {user ? "Editar usuario_admin" : "Nuevo usuario_admin"}
+          </DialogTitle>
+          <DialogDescription>
+            {user
+              ? "Ajusta datos, rol, empresa y módulos del usuario."
+              : "Crea un nuevo usuario administrativo con permisos iniciales."}
+          </DialogDescription>
+        </DialogHeader>
 
-          {error && (
-            <div className="mb-4 p-3 bg-destructive/10 text-destructive rounded-md text-sm">
-              {error}
+        {error && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Usuario</label>
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              disabled={!!user}
+              placeholder="Nombre de usuario"
+            />
+          </div>
+
+          {!user && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">Contraseña</label>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="Contraseña"
+              />
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Usuario</label>
-              <Input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                disabled={!!user}
-                placeholder="Nombre de usuario"
-              />
-            </div>
+          <div className="space-y-2 md:col-span-2">
+            <label className="block text-sm font-medium">Email</label>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="email@ejemplo.com"
+            />
+          </div>
 
-            {!user && (
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Contraseña
-                </label>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="Contraseña"
-                />
-              </div>
-            )}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Rol</label>
+            <select
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+              value={roleId || ""}
+              onChange={(e) =>
+                setRoleId(e.target.value ? Number(e.target.value) : undefined)
+              }
+            >
+              <option value="">Seleccionar rol</option>
+              {roles.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="email@ejemplo.com"
-              />
-            </div>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Empresa</label>
+            <select
+              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+              value={empresaId || ""}
+              onChange={(e) =>
+                setEmpresaId(e.target.value ? Number(e.target.value) : undefined)
+              }
+            >
+              <option value="">Sin empresa</option>
+              {companyOptions.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Rol</label>
-              <select
-                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                value={roleId || ""}
-                onChange={(e) =>
-                  setRoleId(e.target.value ? Number(e.target.value) : undefined)
-                }
-              >
-                <option value="">Seleccionar rol</option>
-                {roles.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name}
-                  </option>
+          {modules.length > 0 && (
+            <div className="md:col-span-2 space-y-2">
+              <label className="block text-sm font-medium">Módulos</label>
+              <div className="grid gap-2 rounded-md border p-3 sm:grid-cols-2">
+                {modules.map((mod) => (
+                  <label
+                    key={mod.id}
+                    className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedModules.includes(mod.id)}
+                      onChange={() => toggleModule(mod.id)}
+                      className="rounded border-input"
+                    />
+                    <span className="text-sm">
+                      {mod.name}
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {mod.slug}
+                      </span>
+                    </span>
+                  </label>
                 ))}
-              </select>
-            </div>
-
-            {modules.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Módulos Adicionales
-                </label>
-                <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
-                  {modules.map((mod) => (
-                    <label
-                      key={mod.id}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedModules.includes(mod.id)}
-                        onChange={() => toggleModule(mod.id)}
-                        className="rounded border-input"
-                      />
-                      <span className="text-sm">{mod.name}</span>
-                    </label>
-                  ))}
-                </div>
               </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? "Guardando..." : "Guardar"}
-              </Button>
             </div>
-          </form>
-        </div>
-      </div>
-    </div>
+          )}
+
+          <DialogFooter className="md:col-span-2">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Guardando..." : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 async function loadUserModules(userId: number): Promise<number[]> {
   try {
-    const res = await fetch(`${API_BASE}/admin/users/${userId}/modules`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("admin_token")}`,
-      },
-    });
-    if (!res.ok) return [];
-    const json = await res.json();
+    const json = await getUsuarioAdminModules(userId);
     return json.module_ids || [];
   } catch {
     return [];
   }
 }
 
-export default function UsersPage() {
+export default function UsuarioAdminPage() {
   const [users, setUsers] = useState<UserAdminRol[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -256,17 +289,19 @@ export default function UsersPage() {
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
+  const [companies, setCompanies] = useState<Empresa[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<UserAdminRol | null>(null);
   const [editModules, setEditModules] = useState<number[]>([]);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [loadError, setLoadError] = useState("");
   const [deleteError, setDeleteError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await getUsers(page, limit);
+      const resp = await getUsuarioAdmins(page, limit);
       console.log(resp);
       const filtered = search
         ? resp.users.filter(
@@ -281,7 +316,7 @@ export default function UsersPage() {
     } catch (err: unknown) {
       setUsers([]);
       setLoadError(
-        err instanceof Error ? err.message : "Error al cargar usuarios",
+        err instanceof Error ? err.message : "Error al cargar usuario_admin",
       );
     } finally {
       setLoading(false);
@@ -301,6 +336,15 @@ export default function UsersPage() {
     }
   }, []);
 
+  const loadCompanies = useCallback(async () => {
+    try {
+      const resp = await getEmpresas({ limit: 1000 });
+      setCompanies(resp.empresas || []);
+    } catch (err) {
+      console.error("Error loading companies:", err);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(load, 300);
     return () => clearTimeout(timer);
@@ -310,17 +354,21 @@ export default function UsersPage() {
     loadRolesModules();
   }, [loadRolesModules]);
 
+  useEffect(() => {
+    loadCompanies();
+  }, [loadCompanies]);
+
   async function handleSave(
     data: CreateUserRequest | UpdateUserRequest,
     selectedModules: number[],
   ) {
     if (editTarget) {
-      await updateUser(editTarget.id, data);
-      await assignUserModules(editTarget.id, selectedModules);
+      await updateUsuarioAdmin(editTarget.id, data);
+      await assignUsuarioAdminModules(editTarget.id, selectedModules);
     } else {
-      const newUser = await createUser(data as CreateUserRequest);
+      const newUser = await createUsuarioAdmin(data as CreateUserRequest);
       if (selectedModules.length > 0) {
-        await assignUserModules(newUser.id, selectedModules);
+        await assignUsuarioAdminModules(newUser.id, selectedModules);
       }
     }
     setPage(1);
@@ -331,8 +379,14 @@ export default function UsersPage() {
     if (!confirm(`¿Eliminar el usuario "${user.username}"?`)) return;
     setDeletingId(user.id);
     setDeleteError("");
+    setActionMessage("");
     try {
-      await deleteUser(user.id);
+      const result = await deleteUsuarioAdmin(user.id);
+      setActionMessage(
+        result.status === "disabled"
+          ? `Usuario ${user.username} deshabilitado`
+          : `Usuario ${user.username} eliminado`,
+      );
       await load();
     } catch (err: unknown) {
       setDeleteError(
@@ -362,31 +416,54 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Usuarios</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Usuario Admin</h1>
           <p className="text-muted-foreground">
-            Gestiona los usuarios del panel de administración
+            Gestiona los usuario_admin del panel de administración
           </p>
         </div>
         <Button onClick={openNew}>
           <Plus className="h-4 w-4 mr-2" />
-          Nuevo Usuario
+          Nuevo usuario_admin
         </Button>
       </div>
 
-      {loadError && <p className="text-sm text-destructive">{loadError}</p>}
-      {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+      <Alert>
+        <AlertTitle>Delete behavior</AlertTitle>
+        <AlertDescription>
+          If a user has dependencies, the backend disables it instead of removing it.
+        </AlertDescription>
+      </Alert>
+
+      {loadError && (
+        <Alert variant="destructive">
+          <AlertTitle>Error al cargar</AlertTitle>
+          <AlertDescription>{loadError}</AlertDescription>
+        </Alert>
+      )}
+      {deleteError && (
+        <Alert variant="destructive">
+          <AlertTitle>Error de eliminación</AlertTitle>
+          <AlertDescription>{deleteError}</AlertDescription>
+        </Alert>
+      )}
+      {actionMessage && (
+        <Alert>
+          <AlertTitle>Acción completada</AlertTitle>
+          <AlertDescription>{actionMessage}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
             <div>
-              <CardTitle>Lista de Usuarios</CardTitle>
-              <CardDescription>{total} usuario(s) en total</CardDescription>
+              <CardTitle>Lista de usuario_admin</CardTitle>
+              <CardDescription>{total} usuario_admin(s) en total</CardDescription>
             </div>
             <div className="relative w-52">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por usuario o email"
+                placeholder="Buscar por usuario_admin o email"
                 className="pl-8"
                 value={search}
                 onChange={(e) => {
@@ -403,7 +480,9 @@ export default function UsersPage() {
               <TableRow>
                 <TableHead>Usuario</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Empresa</TableHead>
                 <TableHead>Rol</TableHead>
+                <TableHead>Root</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -412,7 +491,7 @@ export default function UsersPage() {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={7}
                     className="text-center text-muted-foreground py-8"
                   >
                     Cargando...
@@ -421,11 +500,11 @@ export default function UsersPage() {
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={7}
                     className="text-center text-muted-foreground py-8"
                   >
                     <UsersIcon className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                    No hay usuarios registrados
+                    No hay usuario_admin registrados
                   </TableCell>
                 </TableRow>
               ) : (
@@ -438,7 +517,20 @@ export default function UsersPage() {
                       {user.email || "—"}
                     </TableCell>
                     <TableCell>
+                      <Badge variant="outline">
+                        {user.empresa_id
+                          ? companies.find((c) => c.id === user.empresa_id)
+                              ?.nombre ?? `Empresa #${user.empresa_id}`
+                          : "Global"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="outline">{user.rol}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={user.is_root ? "default" : "secondary"}>
+                        {user.is_root ? "Sí" : "No"}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -511,6 +603,7 @@ export default function UsersPage() {
         user={editTarget}
         roles={roles}
         modules={modules}
+        companies={companies}
         userModules={editModules}
       />
     </div>

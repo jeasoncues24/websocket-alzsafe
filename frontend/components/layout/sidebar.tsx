@@ -31,7 +31,7 @@ const navItems = [
   { id: "messages", label: "Mensajes", icon: MessageSquare, href: "/messages" },
   { id: "sessions", label: "Sesiones", icon: Wifi, href: "/sessions" },
   { id: "broadcasts", label: "Broadcasts", icon: Send, href: "/broadcasts" },
-  { id: "users", label: "Usuarios", icon: Users, href: "/users_admin" },
+  { id: "users", label: "Usuario Admin", icon: Users, href: "/usuario_admin" },
   { id: "roles", label: "Roles", icon: Shield, href: "/roles" },
   { id: "modules", label: "Módulos", icon: LayoutGrid, href: "/modules" },
   { id: "settings", label: "Settings", icon: Settings, href: "/settings" },

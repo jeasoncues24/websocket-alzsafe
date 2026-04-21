@@ -1,5 +1,5 @@
 generated: "2026-04-17T18:06:20Z"
-last_updated: "2026-04-20T19:38:06Z"
+last_updated: "2026-04-21T14:40:22Z"
 project: "WSAPI - WhatsApp Multi-Empresa"
 project_key: "wsapi"
 tracking_system: "BMAD"
@@ -423,3 +423,96 @@ development_status:
     priority: "P2"
     phase: "frontend"
     result: "Logging de reintentos en console del browser"
+
+  # Epic 8.5: Panel Admin Backend Usuario Admin, Roles y Modulos
+  epic-8-5-panel-admin-backend:
+    status: "done"
+    description: "Refactor del backend admin bajo /api/admin/* con usuario_admin, roles, modules y reglas de borrado por dependencia"
+    priority: "high"
+    context: "_bmad-output/planning-artifacts/epic-8.5-usuarios-roles-modulos.md"
+    stories:
+      - "8.5.1: Rutas admin y contratos base"
+      - "8.5.2: CRUD de usuario_admin"
+      - "8.5.3: CRUD de roles"
+      - "8.5.4: Catalogo de modules y override por usuario"
+      - "8.5.5: Tests de integridad y contratos"
+  8-5-1-admin-routes-contracts:
+    status: "done"
+    epic: "epic-8-5-panel-admin-backend"
+    priority: "P0"
+    story_file: "_bmad-output/implementation-artifacts/story-8-5-1-admin-routes-contracts.md"
+    summary: "Admin routes isolated under /api/admin/* with empresa JWT boundary"
+  8-5-2-crud-usuario-admin:
+    status: "done"
+    epic: "epic-8-5-panel-admin-backend"
+    priority: "P0"
+    story_file: "_bmad-output/implementation-artifacts/story-8-5-2-crud-usuario-admin.md"
+    summary: "CRUD completo para usuario_admin con delete vs disable"
+  8-5-3-crud-roles:
+    status: "done"
+    epic: "epic-8-5-panel-admin-backend"
+    priority: "P0"
+    story_file: "_bmad-output/implementation-artifacts/story-8-5-3-crud-roles.md"
+    summary: "CRUD de roles con validacion de uso y permissions JSON"
+  8-5-4-modules-overrides:
+    status: "done"
+    epic: "epic-8-5-panel-admin-backend"
+    priority: "P1"
+    story_file: "_bmad-output/implementation-artifacts/story-8-5-4-modules-overrides.md"
+    summary: "Catalogo de modules y override atomico por usuario"
+  8-5-5-tests-contracts:
+    status: "done"
+    epic: "epic-8-5-panel-admin-backend"
+    priority: "P1"
+    story_file: "_bmad-output/implementation-artifacts/story-8-5-5-tests-contracts.md"
+    summary: "Cobertura de tests para contratos, validacion y reglas de borrado"
+
+  # Epic 8.6: Panel Admin Frontend Usuario Admin, Roles y Modulos
+  epic-8-6-panel-admin-frontend:
+    status: "done"
+    description: "Refactor de la UI admin para usuario_admin, roles y modules alineada al nuevo backend"
+    priority: "high"
+    context: "_bmad-output/planning-artifacts/epic-8.6-panel-admin-frontend-usuario-roles-modulos.md"
+    stories:
+      - "8.6.1: Migracion de API client y navegacion admin"
+      - "8.6.2: Usuario Admin workspace"
+      - "8.6.3: Roles workspace"
+      - "8.6.4: Modules catalog"
+      - "8.6.5: Estados criticos y feedback de riesgo"
+      - "8.6.6: Verificacion y accesibilidad"
+  8-6-1-api-client-navigation:
+    status: "done"
+    epic: "epic-8-6-panel-admin-frontend"
+    priority: "P0"
+    story_file: "_bmad-output/implementation-artifacts/story-8-6-1-api-client-navigation.md"
+    summary: "API client y sidebar alineados a /api/admin/* y /usuario_admin"
+  8-6-2-usuario-admin-workspace:
+    status: "done"
+    epic: "epic-8-6-panel-admin-frontend"
+    priority: "P0"
+    story_file: "_bmad-output/implementation-artifacts/story-8-6-2-usuario-admin-workspace.md"
+    summary: "Workspace CRUD para usuario_admin con module override"
+  8-6-3-roles-workspace:
+    status: "done"
+    epic: "epic-8-6-panel-admin-frontend"
+    priority: "P0"
+    story_file: "_bmad-output/implementation-artifacts/story-8-6-3-roles-workspace.md"
+    summary: "Workspace CRUD de roles con permissions editor"
+  8-6-4-modules-catalog:
+    status: "done"
+    epic: "epic-8-6-panel-admin-frontend"
+    priority: "P1"
+    story_file: "_bmad-output/implementation-artifacts/story-8-6-4-modules-catalog.md"
+    summary: "Catalogo de modules solo lectura para referencia de permisos"
+  8-6-5-feedback-risk:
+    status: "done"
+    epic: "epic-8-6-panel-admin-frontend"
+    priority: "P1"
+    story_file: "_bmad-output/implementation-artifacts/story-8-6-5-feedback-risk.md"
+    summary: "Feedback visual para delete/disable, bloqueos y errores"
+  8-6-6-verification-accessibility:
+    status: "done"
+    epic: "epic-8-6-panel-admin-frontend"
+    priority: "P1"
+    story_file: "_bmad-output/implementation-artifacts/story-8-6-6-verification-accessibility.md"
+    summary: "Lint, build y accesibilidad del refactor frontend"

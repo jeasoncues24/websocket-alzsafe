@@ -16,6 +16,8 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { LayoutGrid } from "lucide-react";
 import { getModules, type Module } from "@/lib/api";
 
@@ -43,11 +45,21 @@ export default function ModulesPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Módulos</h1>
         <p className="text-muted-foreground">
-          Lista de módulos disponibles en el sistema
+          Catálogo de módulos y slugs de referencia para permisos
         </p>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Badge variant="secondary">Solo lectura</Badge>
+        <span>Usa estos slugs al editar roles o overrides de usuario.</span>
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertTitle>Error al cargar</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader>
@@ -82,7 +94,11 @@ export default function ModulesPage() {
                     className="text-center text-muted-foreground py-8"
                   >
                     <LayoutGrid className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                    No hay módulos configurados
+                    No hay módulos configurados.
+                    <div className="mt-2 text-xs">
+                      Este catálogo es solo de lectura y sirve como referencia
+                      para permisos.
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (

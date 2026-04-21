@@ -458,7 +458,7 @@ client.Store.DeviceProps = &waPB.DeviceProps{
 ```
 
 ---
-
+e
 ## Errores Comunes
 
 | Código | Descripción | Solución |
