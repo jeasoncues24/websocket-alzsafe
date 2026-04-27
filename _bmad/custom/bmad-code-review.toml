@@ -1,0 +1,6 @@
+[workflow]
+
+persistent_facts = [
+  "file:{project-root}/docs/bmad-project-rules.md",
+  "file:{project-root}/_bmad-output/project-context.md",
+]
