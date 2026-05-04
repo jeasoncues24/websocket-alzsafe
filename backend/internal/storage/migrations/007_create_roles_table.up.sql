@@ -14,10 +14,3 @@ CREATE TABLE IF NOT EXISTS roles (
     INDEX idx_roles_created_by (created_by),
     INDEX idx_roles_updated_by (updated_by)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Insert default roles (created_by NULL = sistema)
-INSERT INTO roles (name, description, is_root, permissions, created_by) VALUES
-('super_admin', 'Super Administrador', TRUE, '["all"]', NULL),
-('admin', 'Administrador', FALSE, '["users","companies","messages","broadcasts","sessions"]', NULL),
-('operador', 'Operador', FALSE, '["messages","broadcasts"]', NULL),
-('viewer', 'Visor', FALSE, '["messages:read","broadcasts:read"]', NULL);

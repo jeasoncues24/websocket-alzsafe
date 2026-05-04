@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     last_used_at TIMESTAMP NULL,
     expires_at TIMESTAMP NULL,
     revoked_at TIMESTAMP NULL,
+    updated_by BIGINT NULL,
     rotated_from_id BIGINT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -20,5 +21,6 @@ CREATE TABLE IF NOT EXISTS api_keys (
     INDEX idx_api_keys_empresa (empresa_id),
     INDEX idx_api_keys_telefono (telefono_id),
     INDEX idx_api_keys_activo (activo),
-    INDEX idx_api_keys_last_used (last_used_at)
+    INDEX idx_api_keys_last_used (last_used_at),
+    INDEX idx_api_keys_updated_by (updated_by)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-26T18:43:24-05:00
-last_updated: 2026-05-04T14:00:00-05:00
+last_updated: 2026-05-04T16:30:00-05:00
 project: wsapi
 project_key: NOKEY
 tracking_system: file-system
@@ -49,4 +49,5 @@ development_status:
   1-4-makefile-backend: review
   1-5-runtime-appport-failfast: done
   1-6-migraciones-embebidas: done
+  1-7-normalizar-migraciones: review
   epic-1-retrospective: optional

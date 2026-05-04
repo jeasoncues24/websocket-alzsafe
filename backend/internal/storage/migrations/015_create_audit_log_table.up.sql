@@ -1,4 +1,4 @@
--- 019: Auditoría genérica unificada
+-- 015: Auditoría genérica unificada
 CREATE TABLE IF NOT EXISTS audit_log (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     entity_type VARCHAR(40) NOT NULL COMMENT 'empresa, telefono, rol, api_key, admin_user, user_module',

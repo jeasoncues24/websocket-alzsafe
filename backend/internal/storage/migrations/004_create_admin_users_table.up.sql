@@ -17,8 +17,3 @@ CREATE TABLE IF NOT EXISTS admin_users (
     INDEX idx_admin_users_created_by (created_by),
     INDEX idx_admin_users_updated_by (updated_by)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- El primer usuario se inserta sin created_by (sistema)
--- Asumiendo que rol super_admin tiene id=1
-INSERT INTO admin_users (username, password_hash, email, role_id, activo, created_by) VALUES
-('admin_usqay', '$2a$12$nchOPi3dzhpy6TCd5WwlHuArAjSvAY7N/0XFzapBIaZKpDT3tRgcG', 'admin@wsapi.com', 1, TRUE, NULL);

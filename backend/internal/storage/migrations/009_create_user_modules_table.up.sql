@@ -10,7 +10,3 @@ CREATE TABLE IF NOT EXISTS user_modules (
     CONSTRAINT fk_um_user FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
     CONSTRAINT fk_um_module FOREIGN KEY (module_id) REFERENCES modules(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Assign all modules to admin user
-INSERT INTO user_modules (user_id, module_id)
-SELECT 1, id FROM modules;
