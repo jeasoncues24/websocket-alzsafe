@@ -3,21 +3,18 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/mysql"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
-type MigrationRunner struct {
-	migrationsPath string
-}
+type MigrationRunner struct{}
 
 func NewMigrationRunner() *MigrationRunner {
-	return &MigrationRunner{
-		migrationsPath: "internal/storage/migrations",
-	}
+	return &MigrationRunner{}
 }
 
 func (r *MigrationRunner) RunMigrations(db *sql.DB) error {
@@ -81,16 +78,22 @@ func (r *MigrationRunner) GetCurrentVersion(db *sql.DB) (int, error) {
 }
 
 func (r *MigrationRunner) newMigrator(db *sql.DB) (*migrate.Migrate, error) {
-	driver, err := mysql.WithInstance(db, &mysql.Config{})
+	sub, err := fs.Sub(migrationsFS, "migrations")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create migrations sub-fs: %w", err)
+	}
+
+	srcDriver, err := iofs.New(sub, ".")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iofs source: %w", err)
+	}
+
+	dbDriver, err := mysql.WithInstance(db, &mysql.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create mysql driver: %w", err)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance(
-		fmt.Sprintf("file://%s", r.migrationsPath),
-		"mysql",
-		driver,
-	)
+	m, err := migrate.NewWithInstance("iofs", srcDriver, "mysql", dbDriver)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create migrator: %w", err)
 	}
