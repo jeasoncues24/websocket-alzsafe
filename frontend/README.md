@@ -3,15 +3,23 @@
 ## Entorno
 
 1. Copia `frontend/.env.example` a `frontend/.env.local`.
-2. Define `NEXT_PUBLIC_API_URL` con la URL publica del backend.
-3. Define `NEXT_INTERNAL_API_URL` con la URL interna para rewrites SSR.
+2. Define `NEXT_PUBLIC_API_URL` con la URL pública del backend accesible desde el navegador.
+3. Define `NEXT_INTERNAL_API_URL` solo si el servidor Next.js necesita hablar con el backend por una URL interna distinta.
+4. Si lo necesitas, define `PORT` para cambiar el puerto de `next dev` / `next start`.
 
 Ejemplo:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8080
 NEXT_INTERNAL_API_URL=http://localhost:8080
+PORT=3000
 ```
+
+Notas:
+
+- `frontend/.env.local` es local y no debe commitearse.
+- Si omites `NEXT_INTERNAL_API_URL`, `next.config.ts` reutiliza `NEXT_PUBLIC_API_URL`.
+- `NEXT_PUBLIC_API_URL` es obligatoria porque `frontend/lib/api.ts` falla al iniciar si no existe.
 
 ## Desarrollo
 
