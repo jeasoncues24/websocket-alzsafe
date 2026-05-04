@@ -1,0 +1,18 @@
+# Secretos / entorno
+.env
+.env.*
+.env.copy
+
+# Documentación
+docs/
+*.md
+
+# Artefactos de test y cobertura
+*.test
+coverage.txt
+
+# Metadata de herramientas y temporales
+.gitignore
+*.log
+*.swp
+*.swo

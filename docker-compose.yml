@@ -1,14 +1,39 @@
 # docker-compose.yml
-# Uso: docker compose run --rm backend-build
-# Deja el binario compilado en ./dist/wsapi
+#
+# PROPÓSITO: Orquestador de BUILD-ONLY para el backend wsapi.
+# Este archivo compila el binario Go y lo exporta a ./dist/wsapi.
+# NO levanta el backend como servicio, NO expone puertos y NO incluye base de datos.
+#
+# Runtime del backend: PM2 en el host. Ver docs/deploy-backend.md.
+#
+# Uso recomendado (con validación de .env):
+#   ./scripts/build-backend.sh
+#
+# Uso directo (sin validación de .env):
+#   docker compose build backend-build
+#   docker compose run --rm backend-build
 
 services:
   backend-build:
     build:
       context: ./backend
       dockerfile: ../docker/go/Dockerfile
+      # network: host permite que `go mod download` acceda a internet durante el build
+      # en entornos Linux donde la red del contenedor no tiene resolución DNS por defecto.
       network: host
+      args:
+        # Incluye metadatos de caché en la imagen para acelerar builds en CI/CD con cache_from.
+        BUILDKIT_INLINE_CACHE: "1"
     volumes:
       - ./dist:/dist
-    entrypoint: ["sh", "-c", "cp /usr/local/bin/wsapi /dist/wsapi && echo 'Binario listo en ./dist/wsapi'"]
+    # El entrypoint crea dist/ si no existe, luego exporta el binario de forma atómica (cp+mv).
+    # Runtime del backend es responsabilidad del host (PM2), no de este contenedor.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mkdir -p /dist && \
+        cp /out/wsapi /dist/wsapi.tmp && \
+        mv /dist/wsapi.tmp /dist/wsapi && \
+        echo 'Binario listo en ./dist/wsapi'
     restart: "no"

@@ -136,3 +136,20 @@ Una story no está lista si le faltan ACs testeables, alcance, fuera de alcance,
 ### Definition of Done
 
 Una story no está terminada si no cumple ACs, no compila, no tiene pruebas/verificación, no pasó review o no actualizó sprint status.
+
+## Preferencias de salida para Sprint Status
+
+Cuando el usuario pida estado de sprint, pendientes o "resumen", la respuesta debe incluir siempre tablas Markdown.
+
+Formato mínimo:
+
+1. Tabla de pendientes con columnas: `Orden`, `Story`, `Estado`, `Siguiente acción`.
+2. Resumen de conteos de stories/epics en formato compacto.
+3. Recomendación explícita del próximo workflow.
+
+Reglas de estilo:
+
+- Priorizar tablas sobre párrafos largos.
+- Acciones concretas y cortas.
+- Orden natural por story (1-1, 1-2, 2-1...).
+- Si hay riesgos, incluirlos al final en lista breve o tabla.
