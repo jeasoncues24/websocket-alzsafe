@@ -1,53 +1,70 @@
 # Producción WSAPI
 
-Guía mínima para desplegar WSAPI con Docker Compose en producción.
+## Flujo oficial vigente
 
-## Requisitos
+El despliegue actual definido por el último epic es este:
 
-- Docker y Docker Compose instalados.
-- Puertos libres para `APP_PORT`, `FRONTEND_PORT` y `3306`.
+- **Docker Compose** se usa solo para **compilar** el backend.
+- El binario se exporta a `dist/wsapi`.
+- **PM2 en el host** ejecuta el backend en producción.
+- **La base de datos no vive en este compose**.
 
-## Variables
+> En otras palabras: hoy **no** corresponde hacer `docker compose up -d --build` para levantar todo el stack.
 
-1. Copia `.env.example` a `.env` y completa:
+## Pasos rápidos
+
+```bash
+cp backend/.env.copy backend/.env
+# editar variables reales de producción
+make build
+make start
+pm2 save
+pm2 startup
+```
+
+> Si `wsapi` ya estaba registrado en PM2 pero quedó detenido, usa `make restart` en lugar de `make start`.
+
+## Variables críticas
+
+Asegúrate de definir al menos:
+
+- `APP_ENV=production`
+- `APP_PORT`
 - `DB_HOST`
 - `DB_PORT`
 - `DB_NAME`
 - `DB_USER`
 - `DB_PASS`
-- `MARIADB_ROOT_PASSWORD`
-- `APP_ENV`
-- `APP_PORT`
-- `FRONTEND_PORT`
-- `NEXT_PUBLIC_API_URL`
-- `NEXT_INTERNAL_API_URL`
+- `JWT_SECRET`
 
-2. Si vas a usar frontend local fuera de Compose, copia `frontend/.env.example` a `frontend/.env.local`.
-
-## Verificar puertos
-
-Ejecuta:
-
-```bash
-bash docker/check-ports.sh
-```
-
-Si alguno está ocupado, cambia manualmente `APP_PORT`, `FRONTEND_PORT` o el puerto de MariaDB y vuelve a correr el script.
-
-## Build y arranque
-
-```bash
-docker compose up -d --build
-```
+Recuerda que `backend/.env.copy` es solo una base y que `JWT_SECRET` no debe quedar vacío en producción.
 
 ## Validación
 
-- Backend: `http://127.0.0.1:${APP_PORT}`
-- Frontend: `http://127.0.0.1:${FRONTEND_PORT}`
-- MariaDB: `127.0.0.1:3306`
+```bash
+make logs
+pm2 status
+APP_PORT_VALUE="$(grep '^APP_PORT=' backend/.env | cut -d= -f2)"
+curl "http://127.0.0.1:${APP_PORT_VALUE}/health"
+```
 
-## Operación
+## Actualización
 
-- Logs: `docker compose logs -f backend frontend mariadb`
-- Estado: `docker compose ps`
-- Detener: `docker compose down`
+```bash
+git pull
+make build
+make restart
+```
+
+## Requisitos importantes
+
+- Docker y Docker Compose
+- Node.js y npm
+- `libsqlite3-0` instalada en el host
+- Puerto `APP_PORT` libre en el host
+- Permisos para instalar PM2 globalmente o PM2 ya preinstalado
+
+## Más detalle
+
+- `../README.md`
+- `../docs/deploy-backend.md`
