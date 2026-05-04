@@ -49,5 +49,7 @@ development_status:
   1-4-makefile-backend: review
   1-5-runtime-appport-failfast: done
   1-6-migraciones-embebidas: done
-  1-7-normalizar-migraciones: review
+  1-7-normalizar-migraciones: done
+  1-8-cors-backend: done
+  1-9-frontend-next-start-pm2: ready-for-dev
   epic-1-retrospective: optional
