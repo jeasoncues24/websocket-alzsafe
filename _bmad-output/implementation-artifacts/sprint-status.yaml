@@ -4,6 +4,17 @@
 # project_key: NOKEY
 # tracking_system: file-system
 # story_location: /home/fulanito/development/wsapi/_bmad-output/implementation-artifacts
+#
+# CONVENCIÓN DE ARCHIVOS (ver docs/bmad-project-rules.md para detalle completo):
+# ============================================================================
+# Stories:   {epic-n}-{story-n}-{nombre-slug}.md   → clave aquí = nombre sin .md
+# Epics:     epic-{n}-{nombre-slug}.md              → clave aquí = epic-{n}
+# Docs ref:  spec-{nombre-slug}.md                  → NO aparecen aquí
+#
+# ORDEN AUTORITATIVO:
+# Este archivo es la única fuente de verdad para el orden de implementación.
+# El filesystem puede ordenar stories intermedias (ej: 2-2-5) antes que 2-2
+# por orden ASCII. Ignorar el orden del filesystem; seguir el orden de este YAML.
 
 # STATUS DEFINITIONS:
 # ==================
@@ -35,21 +46,35 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-26T18:43:24-05:00
-last_updated: 2026-05-04T17:32:00-05:00
+last_updated: 2026-05-05T21:00:00-05:00
 project: wsapi
 project_key: NOKEY
 tracking_system: file-system
 story_location: /home/fulanito/development/wsapi/_bmad-output/implementation-artifacts
 
 development_status:
-  epic-1: in-progress
-  1-1-dockerfile-optimizado: review
-  1-2-docker-compose-build-only: review
-  1-3-dockerignore-backend: review
-  1-4-makefile-backend: review
+  epic-1: done
+  1-1-dockerfile-optimizado: done
+  1-2-docker-compose-build-only: done
+  1-3-dockerignore-backend: done
+  1-4-makefile-backend: done
   1-5-runtime-appport-failfast: done
   1-6-migraciones-embebidas: done
   1-7-normalizar-migraciones: done
   1-8-cors-backend: done
-  1-9-frontend-env-example: review
+  1-9-frontend-env-example: done
   epic-1-retrospective: optional
+  epic-2: in-progress
+  2-1-eliminar-select-empresa-usuario-admin: done
+  2-2-restaurar-empresas-desactivadas: done
+  2-2-5-limpiar-empresa-del-jwt-admin: done
+  2-3-assets-mensajes-investigar-corregir: ready-for-dev
+  2-4-sesiones-herramientas-logs: backlog
+  2-5-validar-reconexion-reinicio-binario: backlog
+  2-6-fix-ws-timer-simplificar-ui-conexion: backlog
+  2-7-qr-api-token-ws-fallback-rest: backlog
+  2-8-enlace-qr-compartible-token-provisional: backlog
+  2-9-enriquecer-metricas-dashboard: backlog
+  2-10-responsive-mode-panel: backlog
+  2-11-documentar-arquitectura-ws: backlog
+  epic-2-retrospective: optional
