@@ -289,6 +289,14 @@ export async function deleteEmpresa(id: number): Promise<void> {
   });
 }
 
+export async function restoreEmpresa(
+  id: number,
+): Promise<{ ok: boolean; empresa: Empresa }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/empresas/${id}/restore`, {
+    method: "POST",
+  });
+}
+
 export async function getAdminTelefonoApiKeys(
   telefonoId: number,
 ): Promise<ApiKeyListResponse> {
@@ -548,7 +556,6 @@ export interface UserAdminRol {
   role_id?: number;
   is_root: boolean;
   activo: boolean;
-  empresa_id?: number;
   created_at: string;
   updated_at: string;
 }
@@ -625,7 +632,6 @@ export interface CreateUserRequest {
   password: string;
   email: string;
   role_id?: number;
-  empresa_id?: number;
 }
 
 export async function createUsuarioAdmin(
@@ -643,7 +649,6 @@ export interface UpdateUserRequest {
   email?: string;
   role_id?: number;
   is_active?: boolean;
-  empresa_id?: number;
 }
 
 export async function updateUsuarioAdmin(

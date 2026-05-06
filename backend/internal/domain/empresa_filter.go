@@ -35,11 +35,10 @@ func GetEmpresaFilter(ctx context.Context, headerEmpresaID string) (*EmpresaFilt
 	}
 
 	filter := &EmpresaFilter{
-		IsRoot:    claims.IsRoot,
-		EmpresaID: claims.EmpresaID,
+		IsRoot: claims.IsRoot,
 	}
 
-	if claims.IsRoot && headerEmpresaID != "" {
+	if headerEmpresaID != "" {
 		if id, err := strconv.ParseInt(headerEmpresaID, 10, 64); err == nil && id > 0 {
 			filter.EmpresaID = &id
 		}
@@ -78,6 +77,7 @@ type EmpresaStoreInterface interface {
 	Create(empresa *Empresa) (int64, error)
 	Update(empresa *Empresa) error
 	Delete(id int64) error
+	Restore(id int64) error
 	IncrementTokenVersion(id int64) (int, error)
 }
 

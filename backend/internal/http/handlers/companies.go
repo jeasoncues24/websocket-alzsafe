@@ -29,7 +29,11 @@ func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	access, ok := domain.GetPanelAccess(r.Context())
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "Token requerido")
+		return
+	}
 
 	// Parse query params
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
@@ -50,13 +54,8 @@ func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
 		activo = &[]bool{false}[0]
 	}
 
-	// Si no es super_admin, solo puede ver su empresa
-	if claims.Rol != domain.RoleSuperAdmin {
-		if claims.EmpresaID == nil {
-			writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
-			return
-		}
-		empresa, err := h.empresaStore.GetByID(*claims.EmpresaID)
+	if companyID, hasCompany := access.CompanyID(); hasCompany && !access.IsAdminJWT {
+		empresa, err := h.empresaStore.GetByID(companyID)
 		if err != nil || empresa == nil {
 			writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
 			return
@@ -101,7 +100,11 @@ func (h *CompaniesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	access, ok := domain.GetPanelAccess(r.Context())
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "Token requerido")
+		return
+	}
 
 	empresa, err := h.empresaStore.GetByID(id)
 	if err != nil {
@@ -113,12 +116,9 @@ func (h *CompaniesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verificar acceso
-	if claims.Rol != domain.RoleSuperAdmin {
-		if claims.EmpresaID == nil || *claims.EmpresaID != empresa.ID {
-			writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
-			return
-		}
+	if !access.CanAccessEmpresa(empresa.ID) {
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -190,7 +190,11 @@ func (h *CompaniesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	access, ok := domain.GetPanelAccess(r.Context())
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "Token requerido")
+		return
+	}
 
 	empresa, err := h.empresaStore.GetByID(id)
 	if err != nil || empresa == nil {
@@ -198,12 +202,9 @@ func (h *CompaniesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verificar acceso
-	if claims.Rol != domain.RoleSuperAdmin {
-		if claims.EmpresaID == nil || *claims.EmpresaID != empresa.ID {
-			writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
-			return
-		}
+	if !access.CanAccessEmpresa(empresa.ID) {
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
+		return
 	}
 
 	var req domain.EmpresaRequest
@@ -250,7 +251,11 @@ func (h *CompaniesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
+	access, ok := domain.GetPanelAccess(r.Context())
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "Token requerido")
+		return
+	}
 
 	empresa, err := h.empresaStore.GetByID(id)
 	if err != nil || empresa == nil {
@@ -258,12 +263,9 @@ func (h *CompaniesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verificar acceso
-	if claims.Rol != domain.RoleSuperAdmin {
-		if claims.EmpresaID == nil || *claims.EmpresaID != empresa.ID {
-			writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
-			return
-		}
+	if !access.CanAccessEmpresa(empresa.ID) {
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
+		return
 	}
 
 	// Verificar si tiene sesiones activas (simplificado)
@@ -286,6 +288,52 @@ func (h *CompaniesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+// Restore empresa (soft delete undo)
+func (h *CompaniesHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
+		return
+	}
+
+	id := h.extractIDFromPath(r.URL.Path)
+	if id <= 0 {
+		writeAPIError(w, http.StatusBadRequest, "ID inválido")
+		return
+	}
+
+	empresa, err := h.empresaStore.GetByID(id)
+	if err != nil || empresa == nil {
+		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
+		return
+	}
+
+	access, ok := domain.GetPanelAccess(r.Context())
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "Token requerido")
+		return
+	}
+
+	if !access.CanAccessEmpresa(empresa.ID) {
+		writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta empresa")
+		return
+	}
+
+	if empresa.Activo {
+		writeAPIError(w, http.StatusConflict, "La empresa ya está activa")
+		return
+	}
+
+	if err := h.empresaStore.Restore(id); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "Error al restaurar empresa")
+		return
+	}
+
+	empresa.Activo = true
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "empresa": empresa})
 }
 
 // GetCurrent returns the authenticated company's own profile.
@@ -472,6 +520,7 @@ func (h *CompaniesHandler) extractIDFromPath(path string) int64 {
 		if idStr != path {
 			idStr = strings.TrimSuffix(idStr, "/token")
 			idStr = strings.TrimSuffix(idStr, "/token/revoke")
+			idStr = strings.TrimSuffix(idStr, "/restore")
 			id, err := strconv.ParseInt(idStr, 10, 64)
 			if err == nil && id > 0 {
 				return id

@@ -288,7 +288,7 @@ func HandleGetAdminMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleAdminRetryMessage(w http.ResponseWriter, r *http.Request) {
-	claims, ok := domain.GetAdminJWTClaims(r.Context())
+	access, ok := domain.GetPanelAccess(r.Context())
 	if !ok {
 		writeAPIError(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -322,7 +322,7 @@ func HandleAdminRetryMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if claims.EmpresaID != nil && msg.EmpresaID != *claims.EmpresaID && !claims.IsRoot {
+	if !access.CanAccessEmpresa(msg.EmpresaID) {
 		writeAPIError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -768,6 +768,7 @@ var registeredRoutes = map[string][]string{
 	"/api/admin/users/modules/":       {"PUT"},
 	"/api/admin/roles":                {"GET"},
 	"/api/admin/modules":              {"GET"},
+	"/api/admin/empresas/{id}/restore": {"POST"},
 	"/api/dashboard/metricas":         {"GET"},
 	"/message":                        {"POST"},
 	"/messages":                       {"GET"},

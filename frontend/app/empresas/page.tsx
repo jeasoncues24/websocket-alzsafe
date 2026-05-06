@@ -21,12 +21,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
-import { Search, Building2, Plus, Pencil, Eye, Trash2, KeyRound } from "lucide-react";
+import { Search, Building2, Plus, Pencil, Eye, Trash2, KeyRound, RotateCcw } from "lucide-react";
 import {
   getEmpresas,
   createEmpresa,
   updateEmpresa,
   deleteEmpresa,
+  restoreEmpresa,
   type Empresa,
   type EmpresaCreateRequest,
 } from "@/lib/api";
@@ -48,6 +49,8 @@ export default function CompaniesPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailTarget, setDetailTarget] = useState<Empresa | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [restoringId, setRestoringId] = useState<number | null>(null);
+  const [restoreError, setRestoreError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [deleteError, setDeleteError] = useState("");
 
@@ -104,6 +107,22 @@ export default function CompaniesPage() {
     }
   }
 
+  async function handleRestore(empresa: Empresa) {
+    if (!confirm(`¿Restaurar la empresa "${empresa.nombre}"?`)) return;
+    setRestoringId(empresa.id);
+    setRestoreError("");
+    try {
+      await restoreEmpresa(empresa.id);
+      await load();
+    } catch (err: unknown) {
+      setRestoreError(
+        err instanceof Error ? err.message : "Error al restaurar empresa",
+      );
+    } finally {
+      setRestoringId(null);
+    }
+  }
+
   function openNew() {
     setEditTarget(null);
     setFormOpen(true);
@@ -138,6 +157,7 @@ export default function CompaniesPage() {
 
       {loadError && <p className="text-sm text-destructive">{loadError}</p>}
       {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+      {restoreError && <p className="text-sm text-destructive">{restoreError}</p>}
 
       <Card>
         <CardHeader>
@@ -255,16 +275,29 @@ export default function CompaniesPage() {
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(empresa)}
-                          disabled={deletingId === empresa.id}
-                          title="Eliminar"
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {empresa.activo ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDelete(empresa)}
+                            disabled={deletingId === empresa.id}
+                            title="Eliminar"
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handleRestore(empresa)}
+                            disabled={restoringId === empresa.id}
+                            title="Restaurar"
+                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
