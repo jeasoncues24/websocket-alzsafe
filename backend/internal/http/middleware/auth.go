@@ -77,37 +77,12 @@ func (m *AuthMiddleware) ValidateToken(tokenString string) (*domain.AdminJWTClai
 
 	jti, _ := claims["jti"].(string)
 
-	var empresaID *int64
-	if v, ok := claims["empresa_id"]; ok && v != nil {
-		if f, ok := v.(float64); ok && f > 0 {
-			eid := int64(f)
-			empresaID = &eid
-		}
-	}
-
-	var empresaRUC *string
-	if v, ok := claims["empresa_ruc"]; ok && v != nil {
-		if s, ok := v.(string); ok {
-			empresaRUC = &s
-		}
-	}
-
-	var empresaNombre *string
-	if v, ok := claims["empresa_nombre"]; ok && v != nil {
-		if s, ok := v.(string); ok {
-			empresaNombre = &s
-		}
-	}
-
 	return &domain.AdminJWTClaims{
-		JTI:           jti,
-		UserID:        userID,
-		Username:      username,
-		Rol:           rol,
-		IsRoot:        isRoot,
-		EmpresaID:     empresaID,
-		EmpresaRUC:    empresaRUC,
-		EmpresaNombre: empresaNombre,
+		JTI:      jti,
+		UserID:   userID,
+		Username: username,
+		Rol:      rol,
+		IsRoot:   isRoot,
 	}, nil
 }
 

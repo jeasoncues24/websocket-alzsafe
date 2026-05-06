@@ -54,12 +54,11 @@ func (m *mockEmpresaStore) IncrementTokenVersion(id int64) (int, error) {
 	return 2, nil
 }
 
-func TestGetEmpresaFilter_UsuarioNormal(t *testing.T) {
+func TestGetEmpresaFilter_AdminJWTGlobal(t *testing.T) {
 	claims := &AdminJWTClaims{
-		UserID:    1,
-		Username:  "user1",
-		IsRoot:    false,
-		EmpresaID: int64Ptr(10),
+		UserID:   1,
+		Username: "user1",
+		IsRoot:   false,
 	}
 	ctx := WithAdminJWTClaims(context.Background(), claims)
 
@@ -71,17 +70,16 @@ func TestGetEmpresaFilter_UsuarioNormal(t *testing.T) {
 	if filter.IsRoot {
 		t.Error("Expected IsRoot to be false for normal user")
 	}
-	if filter.EmpresaID == nil || *filter.EmpresaID != 10 {
-		t.Error("Expected EmpresaID to be 10")
+	if filter.EmpresaID != nil {
+		t.Error("Expected EmpresaID to be nil for admin JWT without header")
 	}
 }
 
 func TestGetEmpresaFilter_RootSinEmpresa(t *testing.T) {
 	claims := &AdminJWTClaims{
-		UserID:    1,
-		Username:  "root",
-		IsRoot:    true,
-		EmpresaID: nil,
+		UserID:   1,
+		Username: "root",
+		IsRoot:   true,
 	}
 	ctx := WithAdminJWTClaims(context.Background(), claims)
 
@@ -100,10 +98,9 @@ func TestGetEmpresaFilter_RootSinEmpresa(t *testing.T) {
 
 func TestGetEmpresaFilter_RootConHeader(t *testing.T) {
 	claims := &AdminJWTClaims{
-		UserID:    1,
-		Username:  "root",
-		IsRoot:    true,
-		EmpresaID: nil,
+		UserID:   1,
+		Username: "root",
+		IsRoot:   true,
 	}
 	ctx := WithAdminJWTClaims(context.Background(), claims)
 

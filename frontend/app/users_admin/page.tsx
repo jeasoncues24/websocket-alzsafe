@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/dialog";
 import { Search, Users as UsersIcon, Plus, Pencil, Trash2 } from "lucide-react";
 import {
-  getEmpresas,
   getUsuarioAdmins,
   createUsuarioAdmin,
   updateUsuarioAdmin,
@@ -39,7 +38,6 @@ import {
   getUsuarioAdminModules,
   getRoles,
   getModules,
-  type Empresa,
   type UserAdminRol,
   type Role,
   type Module,
@@ -54,7 +52,6 @@ function UserFormModal({
   user,
   roles,
   modules,
-  companies,
   userModules = [],
 }: {
   open: boolean;
@@ -66,7 +63,6 @@ function UserFormModal({
   user: UserAdminRol | null;
   roles: Role[];
   modules: Module[];
-  companies: Empresa[];
   userModules?: number[];
 }) {
   const [loading, setLoading] = useState(false);
@@ -75,10 +71,7 @@ function UserFormModal({
   const [email, setEmail] = useState("");
   const [roleId, setRoleId] = useState<number | undefined>();
   const [selectedModules, setSelectedModules] = useState<number[]>([]);
-  const [empresaId, setEmpresaId] = useState<number | undefined>();
   const [error, setError] = useState("");
-
-  const companyOptions = companies;
 
   useEffect(() => {
     if (open) {
@@ -88,14 +81,12 @@ function UserFormModal({
         setEmail(user.email || "");
         setRoleId(user.role_id);
         setSelectedModules(userModules);
-        setEmpresaId(user.empresa_id);
       } else {
         setUsername("");
         setPassword("");
         setEmail("");
         setRoleId(roles[0]?.id);
         setSelectedModules([]);
-        setEmpresaId(undefined);
       }
       setError("");
     }
@@ -113,8 +104,8 @@ function UserFormModal({
       }
 
       const data = user
-        ? { email, role_id: roleId, empresa_id: empresaId }
-        : { username, password, email, role_id: roleId, empresa_id: empresaId };
+        ? { email, role_id: roleId }
+        : { username, password, email, role_id: roleId };
 
       await onSave(
         data as CreateUserRequest | UpdateUserRequest,
@@ -211,24 +202,6 @@ function UserFormModal({
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium">Empresa</label>
-            <select
-              className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-              value={empresaId || ""}
-              onChange={(e) =>
-                setEmpresaId(e.target.value ? Number(e.target.value) : undefined)
-              }
-            >
-              <option value="">Sin empresa</option>
-              {companyOptions.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {modules.length > 0 && (
             <div className="md:col-span-2 space-y-2">
               <label className="block text-sm font-medium">Módulos</label>
@@ -289,7 +262,6 @@ export default function UsuarioAdminPage() {
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
-  const [companies, setCompanies] = useState<Empresa[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<UserAdminRol | null>(null);
   const [editModules, setEditModules] = useState<number[]>([]);
@@ -336,15 +308,6 @@ export default function UsuarioAdminPage() {
     }
   }, []);
 
-  const loadCompanies = useCallback(async () => {
-    try {
-      const resp = await getEmpresas({ limit: 1000 });
-      setCompanies(resp.empresas || []);
-    } catch (err) {
-      console.error("Error loading companies:", err);
-    }
-  }, []);
-
   useEffect(() => {
     const timer = setTimeout(load, 300);
     return () => clearTimeout(timer);
@@ -353,10 +316,6 @@ export default function UsuarioAdminPage() {
   useEffect(() => {
     loadRolesModules();
   }, [loadRolesModules]);
-
-  useEffect(() => {
-    loadCompanies();
-  }, [loadCompanies]);
 
   async function handleSave(
     data: CreateUserRequest | UpdateUserRequest,
@@ -480,7 +439,6 @@ export default function UsuarioAdminPage() {
               <TableRow>
                 <TableHead>Usuario</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Empresa</TableHead>
                 <TableHead>Rol</TableHead>
                 <TableHead>Root</TableHead>
                 <TableHead>Estado</TableHead>
@@ -491,7 +449,7 @@ export default function UsuarioAdminPage() {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={6}
                     className="text-center text-muted-foreground py-8"
                   >
                     Cargando...
@@ -500,7 +458,7 @@ export default function UsuarioAdminPage() {
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={6}
                     className="text-center text-muted-foreground py-8"
                   >
                     <UsersIcon className="h-8 w-8 mx-auto mb-2 opacity-40" />
@@ -515,14 +473,6 @@ export default function UsuarioAdminPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {user.email || "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {user.empresa_id
-                          ? companies.find((c) => c.id === user.empresa_id)
-                              ?.nombre ?? `Empresa #${user.empresa_id}`
-                          : "Global"}
-                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{user.rol}</Badge>
@@ -603,7 +553,6 @@ export default function UsuarioAdminPage() {
         user={editTarget}
         roles={roles}
         modules={modules}
-        companies={companies}
         userModules={editModules}
       />
     </div>

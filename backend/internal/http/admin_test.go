@@ -59,11 +59,10 @@ func TestAdminStartCompanyPhoneConnection(t *testing.T) {
 	}
 	req := httptest.NewRequest(stdhttp.MethodPost, "/api/admin/telefonos/1/connect", nil)
 	req = req.WithContext(domain.WithAdminJWTClaims(req.Context(), &domain.AdminJWTClaims{
-		UserID:    1,
-		Username:  "admin",
-		Rol:       domain.RoleAdmin,
-		EmpresaID: adminTestInt64Ptr(1),
-		IsRoot:    false,
+		UserID:   1,
+		Username: "admin",
+		Rol:      domain.RoleAdmin,
+		IsRoot:   false,
 	}))
 	rr := httptest.NewRecorder()
 
@@ -82,19 +81,14 @@ func TestAdminStartCompanyPhoneConnection(t *testing.T) {
 	}
 }
 
-func TestAdminPhoneAccessDeniedForOtherCompany(t *testing.T) {
+func TestCompanyJWTPhoneAccessDeniedForOtherCompany(t *testing.T) {
 	db := newAdminPhoneTestDB(t)
 	store := storage.NewTelefonoStore(db)
 	insertAdminPhone(t, db, 1, "+51", "999888777", "+51999888777")
 
 	h := &AdminHandler{telefonoStore: store}
 	req := httptest.NewRequest(stdhttp.MethodGet, "/api/admin/telefonos/1", nil)
-	req = req.WithContext(domain.WithAdminJWTClaims(req.Context(), &domain.AdminJWTClaims{
-		UserID:    2,
-		Username:  "admin",
-		Rol:       domain.RoleAdmin,
-		EmpresaID: adminTestInt64Ptr(2),
-	}))
+	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 2, TokenVersion: 1}))
 	rr := httptest.NewRecorder()
 
 	h.GetCompanyPhone(rr, req)
@@ -560,8 +554,6 @@ func insertAdminPhone(t *testing.T, db *sql.DB, empresaID int64, codigoPais, num
 	}
 	return id
 }
-
-func adminTestInt64Ptr(v int64) *int64 { return &v }
 
 func newAdminUserScopeTestDB(t *testing.T) *sql.DB {
 	t.Helper()

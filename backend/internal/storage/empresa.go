@@ -203,5 +203,8 @@ func (s *EmpresaStore) Delete(id int64) error {
 
 func (s *EmpresaStore) Restore(id int64) error {
 	_, err := s.db.Exec(`UPDATE empresas SET activo = TRUE, updated_at = NOW() WHERE id = ?`, id)
-	return err
+	if err != nil {
+		return fmt.Errorf("error al restaurar empresa: %w", err)
+	}
+	return nil
 }

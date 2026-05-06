@@ -477,14 +477,11 @@ func recommendedSessionAction(dbStatus string, runtimeConnected bool) string {
 }
 
 func (h *ApiKeysHandler) canAccessTelefono(r *http.Request, empresaID int64) bool {
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
-	if claims == nil {
+	access, ok := domain.GetPanelAccess(r.Context())
+	if !ok {
 		return false
 	}
-	if claims.IsRoot || claims.Rol == domain.RoleSuperAdmin {
-		return true
-	}
-	return claims.EmpresaID != nil && *claims.EmpresaID == empresaID
+	return access.CanAccessEmpresa(empresaID)
 }
 
 func extractAPIKeyID(path string) int64 {

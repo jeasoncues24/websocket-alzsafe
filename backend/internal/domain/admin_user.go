@@ -62,16 +62,13 @@ const (
 	RoleViewer     UserRole = "viewer"
 )
 
-// AdminJWTClaims representa los claims del JWT
+// AdminJWTClaims representa los claims del JWT administrativo.
 type AdminJWTClaims struct {
-	JTI           string   `json:"jti,omitempty"`
-	UserID        int64    `json:"user_id"`
-	Username      string   `json:"username"`
-	Rol           UserRole `json:"rol"`
-	IsRoot        bool     `json:"is_root"`
-	EmpresaID     *int64   `json:"empresa_id,omitempty"`
-	EmpresaRUC    *string  `json:"empresa_ruc,omitempty"`
-	EmpresaNombre *string  `json:"empresa_nombre,omitempty"`
+	JTI      string   `json:"jti,omitempty"`
+	UserID   int64    `json:"user_id"`
+	Username string   `json:"username"`
+	Rol      UserRole `json:"rol"`
+	IsRoot   bool     `json:"is_root"`
 }
 
 // NewAdminUser crea una nueva instancia de AdminUser

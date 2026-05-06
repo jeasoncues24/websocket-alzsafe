@@ -66,8 +66,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate JWT (admin users don't have empresa_id)
-	token, err := h.generateToken(user, nil, nil)
+	// Generate JWT
+	token, err := h.generateToken(user)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "Error al generar token")
 		return
@@ -173,7 +173,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newToken, err := h.generateToken(user, nil, nil)
+	newToken, err := h.generateToken(user)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "Error al generar token")
 		return
@@ -220,7 +220,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	writeHandlerJSON(w, http.StatusOK, response)
 }
 
-func (h *AuthHandler) generateToken(user *domain.AdminUser, empresaRUC, empresaNombre *string) (string, error) {
+func (h *AuthHandler) generateToken(user *domain.AdminUser) (string, error) {
 	now := time.Now()
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -229,17 +229,15 @@ func (h *AuthHandler) generateToken(user *domain.AdminUser, empresaRUC, empresaN
 	jti := hex.EncodeToString(b)
 
 	claims := jwt.MapClaims{
-		"jti":            jti,
-		"user_id":        float64(user.ID),
-		"username":       user.Username,
-		"rol":            string(user.RoleName),
-		"role_id":        user.RoleID,
-		"is_root":        user.IsRoot,
-		"iat":            now.Unix(),
-		"exp":            now.Add(h.jwtConfig.Expiry).Unix(),
-		"iss":            h.jwtConfig.Issuer,
-		"empresa_ruc":    empresaRUC,
-		"empresa_nombre": empresaNombre,
+		"jti":     jti,
+		"user_id": float64(user.ID),
+		"username": user.Username,
+		"rol":     string(user.RoleName),
+		"role_id": user.RoleID,
+		"is_root": user.IsRoot,
+		"iat":     now.Unix(),
+		"exp":     now.Add(h.jwtConfig.Expiry).Unix(),
+		"iss":     h.jwtConfig.Issuer,
 	}
 
 	if user.RoleID != nil {

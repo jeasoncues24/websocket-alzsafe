@@ -341,11 +341,8 @@ func (h *Handler) HandlePostMessage(w stdhttp.ResponseWriter, r *stdhttp.Request
 	w.WriteHeader(stdhttp.StatusAccepted)
 
 	var empresaNombre string
-
-	if claims, ok := domain.GetAdminJWTClaims(r.Context()); ok {
-		if claims.EmpresaNombre != nil {
-			empresaNombre = *claims.EmpresaNombre
-		}
+	if claims, ok := domain.GetEmpresaJWTClaims(r.Context()); ok {
+		empresaNombre = claims.EmpresaNombre
 	}
 
 	json.NewEncoder(w).Encode(domain.MessageResponse{
@@ -584,8 +581,8 @@ func (h *Handler) HandleGetMessages(w stdhttp.ResponseWriter, r *stdhttp.Request
 	}
 
 	var empresaNombre string
-	if claims, ok := domain.GetAdminJWTClaims(r.Context()); ok && claims.EmpresaNombre != nil {
-		empresaNombre = *claims.EmpresaNombre
+	if claims, ok := domain.GetEmpresaJWTClaims(r.Context()); ok {
+		empresaNombre = claims.EmpresaNombre
 	}
 
 	totalPages := 0
@@ -776,10 +773,8 @@ func (h *Handler) HandlePostBroadcast(w stdhttp.ResponseWriter, r *stdhttp.Reque
 	}
 
 	var empresaNombre string
-	if claims, ok := domain.GetAdminJWTClaims(r.Context()); ok {
-		if claims.EmpresaNombre != nil {
-			empresaNombre = *claims.EmpresaNombre
-		}
+	if claims, ok := domain.GetEmpresaJWTClaims(r.Context()); ok {
+		empresaNombre = claims.EmpresaNombre
 	}
 
 	w.WriteHeader(stdhttp.StatusAccepted)

@@ -203,12 +203,12 @@ func TestCompaniesCreateUpdateDeleteAndTokens(t *testing.T) {
 	}
 }
 
-func TestCompaniesListForNonSuperAdminReturnsOwnCompany(t *testing.T) {
+func TestCompaniesListForAdminJWTIsGlobal(t *testing.T) {
 	store := newMockEmpresaStore()
 	store.empresas[1] = &domain.Empresa{ID: 1, RUC: "20100000001", Nombre: "Empresa Uno", Activo: true}
 	store.empresas[2] = &domain.Empresa{ID: 2, RUC: "20100000002", Nombre: "Empresa Dos", Activo: true}
 	h := &CompaniesHandler{empresaStore: store, jwtConfig: &config.JWTConfig{}}
-	claims := &domain.AdminJWTClaims{UserID: 2, Username: "admin", Rol: domain.RoleAdmin, EmpresaID: int64Ptr(2)}
+	claims := &domain.AdminJWTClaims{UserID: 2, Username: "admin", Rol: domain.RoleAdmin}
 
 	req := httptest.NewRequest(stdhttp.MethodGet, "/api/admin/empresas", nil)
 	req = req.WithContext(domain.WithAdminJWTClaims(req.Context(), claims))
@@ -223,8 +223,8 @@ func TestCompaniesListForNonSuperAdminReturnsOwnCompany(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid response: %v", err)
 	}
-	if len(resp.Empresas) != 1 || resp.Empresas[0].ID != 2 {
-		t.Fatalf("expected only own company, got %+v", resp.Empresas)
+	if len(resp.Empresas) != 2 {
+		t.Fatalf("expected all companies, got %+v", resp.Empresas)
 	}
 }
 
@@ -277,5 +277,3 @@ func TestCompaniesCurrentEndpoints(t *testing.T) {
 		t.Fatalf("expected 400 for readonly ruc, got %d", blockedRR.Code)
 	}
 }
-
-func int64Ptr(v int64) *int64 { return &v }

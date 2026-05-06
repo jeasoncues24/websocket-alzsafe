@@ -320,11 +320,6 @@ func (h *CompaniesHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if empresa.Activo {
-		writeAPIError(w, http.StatusConflict, "La empresa ya está activa")
-		return
-	}
-
 	if err := h.empresaStore.Restore(id); err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "Error al restaurar empresa")
 		return

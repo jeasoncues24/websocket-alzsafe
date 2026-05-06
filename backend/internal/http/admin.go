@@ -73,37 +73,10 @@ type AdminSessionDiagnostic struct {
 	RecommendedAction string `json:"recommended_action"`
 }
 
-type panelAdminAccess struct {
-	EmpresaID *int64
-	IsRoot    bool
-}
+type panelAdminAccess = domain.PanelAccess
 
 func getPanelAdminAccess(r *http.Request) (panelAdminAccess, bool) {
-	if claims, ok := domain.GetAdminJWTClaims(r.Context()); ok && claims != nil {
-		return panelAdminAccess{EmpresaID: claims.EmpresaID, IsRoot: claims.IsRoot}, true
-	}
-	if claims, ok := domain.GetEmpresaJWTClaims(r.Context()); ok && claims != nil {
-		eid := claims.EmpresaID
-		return panelAdminAccess{EmpresaID: &eid, IsRoot: false}, true
-	}
-	return panelAdminAccess{}, false
-}
-
-func (a panelAdminAccess) canAccessEmpresa(empresaID int64) bool {
-	if a.IsRoot {
-		return true
-	}
-	if a.EmpresaID == nil {
-		return false
-	}
-	return *a.EmpresaID == empresaID
-}
-
-func (a panelAdminAccess) companyID() (int64, bool) {
-	if a.EmpresaID == nil || *a.EmpresaID <= 0 {
-		return 0, false
-	}
-	return *a.EmpresaID, true
+	return domain.GetPanelAccess(r.Context())
 }
 
 func extractPanelUserID(path string) (int64, error) {
@@ -178,9 +151,9 @@ func (h *AdminHandler) ListUsuarioAdmins(w http.ResponseWriter, r *http.Request)
 		total int
 		err   error
 	)
-	if companyID, ok := access.companyID(); ok {
+	if companyID, ok := access.CompanyID(); ok && !access.IsAdminJWT {
 		users, total, err = h.userStore.GetAllByEmpresa(companyID, page, limit)
-	} else if access.IsRoot {
+	} else if access.IsAdminJWT || access.IsRoot {
 		users, total, err = h.userStore.GetAll(page, limit)
 	} else {
 		writeAdminError(w, http.StatusForbidden, "acceso denegado")
@@ -281,9 +254,9 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	user := &domain.AdminUser{
 		Username:     req.Username,
 		PasswordHash: hash,
-		Email:       req.Email,
-		RoleID:      req.RoleID,
-		Activo:     true,
+		Email:        req.Email,
+		RoleID:       req.RoleID,
+		Activo:       true,
 	}
 
 	id, err := h.userStore.Create(user)
@@ -316,9 +289,9 @@ func (h *AdminHandler) CreateUsuarioAdmin(w http.ResponseWriter, r *http.Request
 	user := &domain.AdminUser{
 		Username:     req.Username,
 		PasswordHash: string(hashBytes),
-		Email:       req.Email,
-		RoleID:      req.RoleID,
-		Activo:     true,
+		Email:        req.Email,
+		RoleID:       req.RoleID,
+		Activo:       true,
 	}
 
 	id, err := h.userStore.Create(user)
@@ -332,9 +305,9 @@ func (h *AdminHandler) CreateUsuarioAdmin(w http.ResponseWriter, r *http.Request
 }
 
 type UpdateUserRequest struct {
-	Email   string `json:"email"`
-	RoleID  *int64 `json:"role_id"`
-	IsActive bool  `json:"is_active"`
+	Email    string `json:"email"`
+	RoleID   *int64 `json:"role_id"`
+	IsActive bool   `json:"is_active"`
 	// IsRoot se obtiene via rol - no se permite setear directamente
 }
 
@@ -943,12 +916,14 @@ func (h *AdminHandler) ListCompanyPhones(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
-	if claims != nil && !claims.IsRoot {
-		if claims.EmpresaID == nil || *claims.EmpresaID != companyID {
-			writeAdminError(w, http.StatusForbidden, "acceso denegado")
-			return
-		}
+	access, ok := getPanelAdminAccess(r)
+	if !ok {
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
+		return
+	}
+	if !access.CanAccessEmpresa(companyID) {
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
+		return
 	}
 
 	phones, err := h.telefonoStore.GetByEmpresa(companyID)
@@ -996,12 +971,14 @@ func (h *AdminHandler) CreateCompanyPhone(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
-	if claims != nil && !claims.IsRoot {
-		if claims.EmpresaID == nil || *claims.EmpresaID != companyID {
-			writeAdminError(w, http.StatusForbidden, "acceso denegado")
-			return
-		}
+	access, ok := getPanelAdminAccess(r)
+	if !ok {
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
+		return
+	}
+	if !access.CanAccessEmpresa(companyID) {
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
+		return
 	}
 
 	var req adminTelefonoRequest
@@ -1065,12 +1042,14 @@ func (h *AdminHandler) UpdateCompanyPhone(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
-	if claims != nil && !claims.IsRoot {
-		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
-			writeAdminError(w, http.StatusForbidden, "acceso denegado")
-			return
-		}
+	access, ok := getPanelAdminAccess(r)
+	if !ok {
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
+		return
+	}
+	if !access.CanAccessEmpresa(phone.EmpresaID) {
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
+		return
 	}
 
 	var req adminTelefonoRequest
@@ -1124,12 +1103,14 @@ func (h *AdminHandler) DeleteCompanyPhone(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
-	if claims != nil && !claims.IsRoot {
-		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
-			writeAdminError(w, http.StatusForbidden, "acceso denegado")
-			return
-		}
+	access, ok := getPanelAdminAccess(r)
+	if !ok {
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
+		return
+	}
+	if !access.CanAccessEmpresa(phone.EmpresaID) {
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
+		return
 	}
 
 	if h.apiKeyStore != nil {
@@ -1168,12 +1149,14 @@ func (h *AdminHandler) GetCompanyPhone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
-	if claims != nil && !claims.IsRoot {
-		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
-			writeAdminError(w, http.StatusForbidden, "acceso denegado")
-			return
-		}
+	access, ok := getPanelAdminAccess(r)
+	if !ok {
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
+		return
+	}
+	if !access.CanAccessEmpresa(phone.EmpresaID) {
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
+		return
 	}
 
 	writeAdminJSON(w, http.StatusOK, domain.TelefonoResponse{OK: true, Telefono: phone})
@@ -1187,21 +1170,21 @@ func (h *AdminHandler) GetSessionsDiagnostics(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
-	if claims == nil {
+	access, ok := getPanelAdminAccess(r)
+	if !ok {
 		writeAdminError(w, http.StatusUnauthorized, "token requerido")
 		return
 	}
 
 	mismatchOnly, _ := strconv.ParseBool(strings.TrimSpace(r.URL.Query().Get("mismatch_only")))
+	empresaIDRaw := strings.TrimSpace(r.URL.Query().Get("empresa_id"))
 
 	var (
 		telefonos []domain.Telefono
 		err       error
 	)
 
-	if claims.IsRoot {
-		empresaIDRaw := strings.TrimSpace(r.URL.Query().Get("empresa_id"))
+	if access.IsAdminJWT || access.IsRoot {
 		if empresaIDRaw != "" {
 			empresaID, parseErr := strconv.ParseInt(empresaIDRaw, 10, 64)
 			if parseErr != nil || empresaID <= 0 {
@@ -1212,12 +1195,22 @@ func (h *AdminHandler) GetSessionsDiagnostics(w http.ResponseWriter, r *http.Req
 		} else {
 			telefonos, err = h.telefonoStore.ListAll()
 		}
-	} else {
-		if claims.EmpresaID == nil || *claims.EmpresaID <= 0 {
-			writeAdminError(w, http.StatusForbidden, "acceso denegado")
-			return
+	} else if companyID, ok := access.CompanyID(); ok {
+		if empresaIDRaw != "" {
+			empresaID, parseErr := strconv.ParseInt(empresaIDRaw, 10, 64)
+			if parseErr != nil || empresaID <= 0 {
+				writeAdminError(w, http.StatusBadRequest, "empresa_id invalido")
+				return
+			}
+			if empresaID != companyID {
+				writeAdminError(w, http.StatusForbidden, "acceso denegado")
+				return
+			}
 		}
-		telefonos, err = h.telefonoStore.GetByEmpresa(*claims.EmpresaID)
+		telefonos, err = h.telefonoStore.GetByEmpresa(companyID)
+	} else {
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
+		return
 	}
 	if err != nil {
 		writeAdminError(w, http.StatusInternalServerError, "error al obtener sesiones")
@@ -1324,12 +1317,14 @@ func (h *AdminHandler) StartCompanyPhoneConnection(w http.ResponseWriter, r *htt
 		return
 	}
 
-	claims, _ := domain.GetAdminJWTClaims(r.Context())
-	if claims != nil && !claims.IsRoot {
-		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
-			writeAdminError(w, http.StatusForbidden, "acceso denegado")
-			return
-		}
+	access, ok := getPanelAdminAccess(r)
+	if !ok {
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
+		return
+	}
+	if !access.CanAccessEmpresa(phone.EmpresaID) {
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
+		return
 	}
 
 	if h.sessionStore != nil {
@@ -1412,12 +1407,7 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "teléfono no encontrado"}})
 		return
 	}
-	if !claims.IsRoot {
-		if claims.EmpresaID == nil || *claims.EmpresaID != phone.EmpresaID {
-			_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "acceso denegado"}})
-			return
-		}
-	}
+	_ = claims
 
 	_ = writeEvent(r.Context(), wsConn, outboundPayload{
 		Event: "phone-info",
