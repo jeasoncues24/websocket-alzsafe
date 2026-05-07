@@ -34,6 +34,8 @@ func (fakeEmpresaStore) IncrementTokenVersion(int64) (int, error) {
 	return 0, nil
 }
 
+func (fakeEmpresaStore) Restore(int64) error { return nil }
+
 func TestRequireEmpresaAuthAcceptsEmpresaJWT(t *testing.T) {
 	secret := "test-secret"
 	store := fakeEmpresaStore{empresa: &domain.Empresa{ID: 1, RUC: "20123456789", Nombre: "Acme", TokenVersion: 1, Activo: true}}

@@ -2,7 +2,7 @@
 title: 'Story 2.5 — Validar reconexión al reiniciar binario'
 type: 'bugfix+feature'
 created: '2026-05-07'
-status: 'ready-for-dev'
+status: 'done'
 epic: 'epic-2-mejoras-post-revision'
 baseline_commit: 'cee26ae'
 context:
@@ -37,44 +37,50 @@ para que soporte pueda distinguir entre una sesión **verdaderamente caída** y 
 
 ## Tasks / Subtasks
 
-- [ ] **Tarea 1: Actualizar `sessionInfoDTO` y lógica de mismatch en `GetSessions`** (AC: 1, 2)
-  - [ ] Agregar campo `Reconnecting bool` a `sessionInfoDTO` en `backend/internal/http/handlers/admin_sessions.go`
-  - [ ] Agregar campo `"reconnecting"` al JSON: `json:"reconnecting,omitempty"` (solo serializar si `true`)
-  - [ ] En `GetSessions`, después de calcular `runtimeConnected`, consultar `h.sessionStore.Get(t.NumeroCompleto)` para obtener `storeState`
-  - [ ] Calcular `reconnecting = (t.Status == domain.TelefonoStatusActive) && !runtimeConnected && (storeState.Status == "initializing" || storeState.Status == "qr_pending")`
-  - [ ] Actualizar cálculo de mismatch: `mismatch = (t.Status == domain.TelefonoStatusActive) != runtimeConnected && !reconnecting`
-  - [ ] Pasar `Reconnecting: reconnecting` en la construcción de `sessionInfoDTO`
+- [x] **Tarea 1: Actualizar `sessionInfoDTO` y lógica de mismatch en `GetSessions`** (AC: 1, 2)
+  - [x] Agregar campo `Reconnecting bool` a `sessionInfoDTO` en `backend/internal/http/handlers/admin_sessions.go`
+  - [x] Agregar campo `"reconnecting"` al JSON: `json:"reconnecting,omitempty"` (solo serializar si `true`)
+  - [x] En `GetSessions`, después de calcular `runtimeConnected`, consultar `h.sessionStore.Get(t.NumeroCompleto)` para obtener `storeState`
+  - [x] Calcular `reconnecting = (t.Status == domain.TelefonoStatusActive) && !runtimeConnected && (storeState.Status == "initializing" || storeState.Status == "qr_pending")`
+  - [x] Actualizar cálculo de mismatch: `mismatch = (t.Status == domain.TelefonoStatusActive) != runtimeConnected && !reconnecting`
+  - [x] Pasar `Reconnecting: reconnecting` en la construcción de `sessionInfoDTO`
 
-- [ ] **Tarea 2: Actualizar `computeSessionSummary`** (AC: 1)
-  - [ ] En `computeSessionSummary`, no contar sesiones con `Reconnecting == true` en el contador `Mismatch`
-  - [ ] Verificar que el `summary.mismatch` solo refleja mismatches reales (no sesiones en bootstrap)
+- [x] **Tarea 2: Actualizar `computeSessionSummary`** (AC: 1)
+  - [x] En `computeSessionSummary`, no contar sesiones con `Reconnecting == true` en el contador `Mismatch`
+  - [x] Verificar que el `summary.mismatch` solo refleja mismatches reales (no sesiones en bootstrap)
 
-- [ ] **Tarea 3: Integrar `AppendEvent` en `StartupBootstrapper`** (AC: 3, 4)
-  - [ ] En `backend/internal/whatsapp/startup_bootstrap.go`, en el bloque donde se agrega un candidato (después de `b.sessionStore.SetInitializing(accountID)`), agregar:
+- [x] **Tarea 3: Integrar `AppendEvent` en `StartupBootstrapper`** (AC: 3, 4)
+  - [x] En `backend/internal/whatsapp/startup_bootstrap.go`, en el bloque donde se agrega un candidato (después de `b.sessionStore.SetInitializing(accountID)`), agregar:
     ```go
     if b.sessionStore != nil {
         b.sessionStore.AppendEvent(accountID, "initializing", "bootstrap_restart")
     }
     ```
-  - [ ] En la goroutine de `startSessionWithRetry`, en el bloque de error (después de `b.sessionStore.SetDisconnected(c.accountID, "startup_start_failed")`), agregar:
+  - [x] En la goroutine de `startSessionWithRetry`, en el bloque de error (después de `b.sessionStore.SetDisconnected(c.accountID, "startup_start_failed")`), agregar:
     ```go
     b.sessionStore.AppendEvent(c.accountID, "disconnected", "startup_start_failed")
     ```
-  - [ ] Verificar que ambas llamadas tienen nil-guard (`if b.sessionStore != nil`) — el existing code ya lo tiene en el bloque; agregar el mismo patrón
+  - [x] Verificar que ambas llamadas tienen nil-guard (`if b.sessionStore != nil`) — el existing code ya lo tiene en el bloque; agregar el mismo patrón
 
-- [ ] **Tarea 4: Actualizar tipos en `frontend/lib/api.ts`** (AC: 6)
-  - [ ] Agregar `reconnecting?: boolean` a la interfaz `SessionInfo`
+- [x] **Tarea 4: Actualizar tipos en `frontend/lib/api.ts`** (AC: 6)
+  - [x] Agregar `reconnecting?: boolean` a la interfaz `SessionInfo`
 
-- [ ] **Tarea 5: Actualizar lógica de badge en `frontend/app/sessions/page.tsx`** (AC: 5)
-  - [ ] En `getStatusBadge`, agregar caso específico para `reconnecting`:
+- [x] **Tarea 5: Actualizar lógica de badge en `frontend/app/sessions/page.tsx`** (AC: 5)
+  - [x] En `getStatusBadge`, agregar caso específico para `reconnecting`:
     - Si `session.reconnecting === true` → badge azul/gris "Reconectando" (sobrescribe el badge de status)
-  - [ ] En el bloque de badges del card, mostrar el badge "Inconsistente" SOLO si `session.mismatch === true && !session.reconnecting`
-  - [ ] El botón "Reconectar" NO aparece cuando `session.reconnecting === true` (la sesión ya se está reconectando sola)
+  - [x] En el bloque de badges del card, mostrar el badge "Inconsistente" SOLO si `session.mismatch === true && !session.reconnecting`
+  - [x] El botón "Reconectar" NO aparece cuando `session.reconnecting === true` (la sesión ya se está reconectando sola)
 
-- [ ] **Tarea 6: Verificar build, tests y lint** (AC: 7, 8, 9)
-  - [ ] `cd backend && go build ./...`
-  - [ ] `cd backend && go test ./...` — verificar especialmente `startup_bootstrap_test.go` y `internal/http`
-  - [ ] `cd frontend && npm run lint`
+- [x] **Tarea 6: Verificar build, tests y lint** (AC: 7, 8, 9)
+  - [x] `cd backend && go build ./...`
+  - [x] `cd backend && go test ./...` — verificar especialmente `startup_bootstrap_test.go` y `internal/http`
+  - [x] `cd frontend && npm run lint`
+
+### Review Findings
+
+- [x] [Review][Patch] Task checkboxes unchecked despite complete implementation — corregido
+- [x] [Review][Defer] UX: botón "Reconectar" oculto sin feedback visual (spinner/disabled) — deferred, mejora futura en story de UI
+- [x] [Review][Defer] Magic strings `"initializing"/"qr_pending"` sin constantes — deferred, patrón pre-existente en todo el store
 
 ## Dev Notes
 

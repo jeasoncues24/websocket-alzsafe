@@ -24,6 +24,7 @@ type sessionInfoDTO struct {
 	Status           string            `json:"status"`
 	RuntimeConnected bool              `json:"runtime_connected"`
 	Mismatch         bool              `json:"mismatch"`
+	Reconnecting     bool              `json:"reconnecting,omitempty"`
 	QRString         string            `json:"qr_string,omitempty"`
 	LastConnected    *time.Time        `json:"last_connected,omitempty"`
 	UpdatedAt        time.Time         `json:"updated_at"`
@@ -82,10 +83,11 @@ func (h *AdminSessionsHandler) GetSessions(w http.ResponseWriter, r *http.Reques
 							runtimeConnected = true
 						}
 					}
-					mismatch := (t.Status == domain.TelefonoStatusActive) != runtimeConnected
 					var events []sessionEventDTO
+					var storeStatus string
 					if h.sessionStore != nil {
 						if state, ok := h.sessionStore.Get(t.NumeroCompleto); ok {
+							storeStatus = state.Status
 							last := state.Events
 							if len(last) > 10 {
 								last = last[len(last)-10:]
@@ -99,6 +101,10 @@ func (h *AdminSessionsHandler) GetSessions(w http.ResponseWriter, r *http.Reques
 							}
 						}
 					}
+					reconnecting := (t.Status == domain.TelefonoStatusActive) &&
+						!runtimeConnected &&
+						(storeStatus == "initializing" || storeStatus == "qr_pending")
+					mismatch := (t.Status == domain.TelefonoStatusActive) != runtimeConnected && !reconnecting
 					qr := ""
 					if t.Status == domain.TelefonoStatusQRPending {
 						qr = t.QRString
@@ -111,6 +117,7 @@ func (h *AdminSessionsHandler) GetSessions(w http.ResponseWriter, r *http.Reques
 						Status:           string(t.Status),
 						RuntimeConnected: runtimeConnected,
 						Mismatch:         mismatch,
+						Reconnecting:     reconnecting,
 						QRString:         qr,
 						LastConnected:    t.LastConnected,
 						UpdatedAt:        t.UpdatedAt,
@@ -166,7 +173,7 @@ func computeSessionSummary(sessions []sessionInfoDTO) sessionSummaryDTO {
 		case "initializing":
 			s.Initializing++
 		}
-		if sess.Mismatch {
+		if sess.Mismatch && !sess.Reconnecting {
 			s.Mismatch++
 		}
 	}

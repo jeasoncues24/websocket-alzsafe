@@ -175,7 +175,12 @@ export default function SessionsPage() {
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {getStatusBadge(session.status)}
-                      {session.mismatch && (
+                      {session.reconnecting && (
+                        <Badge variant="outline" className="border-blue-400 text-blue-500">
+                          Reconectando
+                        </Badge>
+                      )}
+                      {session.mismatch && !session.reconnecting && (
                         <Badge variant="outline" className="border-yellow-500 text-yellow-600">
                           Inconsistente
                         </Badge>
@@ -210,7 +215,7 @@ export default function SessionsPage() {
                         Desconectar
                       </Button>
                     )}
-                    {session.status !== "active" && session.telefono_id != null && (
+                    {session.status !== "active" && session.telefono_id != null && !session.reconnecting && (
                       <Button
                         variant="outline"
                         size="sm"

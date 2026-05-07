@@ -54,6 +54,8 @@ func (m *mockEmpresaStore) IncrementTokenVersion(id int64) (int, error) {
 	return 2, nil
 }
 
+func (m *mockEmpresaStore) Restore(id int64) error { return nil }
+
 func TestGetEmpresaFilter_AdminJWTGlobal(t *testing.T) {
 	claims := &AdminJWTClaims{
 		UserID:   1,

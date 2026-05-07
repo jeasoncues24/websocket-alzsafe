@@ -404,6 +404,7 @@ export interface SessionInfo {
   empresa_nombre?: string;
   runtime_connected?: boolean;
   mismatch?: boolean;
+  reconnecting?: boolean;
   last_connected?: string;
   events?: SessionEvent[];
 }

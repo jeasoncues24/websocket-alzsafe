@@ -2,7 +2,7 @@
 title: 'Story 2.3 — Investigar y corregir assets en mensajes'
 type: 'bugfix'
 created: '2026-05-06'
-status: 'review'
+status: 'done'
 epic: 'epic-2-mejoras-post-revision'
 baseline_commit: 'cee26ae'
 context:
@@ -60,6 +60,13 @@ para que soporte pueda diagnosticar y operar mensajes con adjuntos sin errores s
   - [x] `cd backend && go build ./...` — pasa sin errores
   - [x] `cd backend && go test ./...` — sin nuevas regresiones (fallos pre-existentes en mocks de EmpresaStoreInterface confirmados como anteriores a esta story)
   - [x] `cd frontend && npm run lint` — sin nuevos errores (3 errores pre-existentes en lib/api.ts confirmados como anteriores a esta story)
+
+### Review Findings
+
+- [x] [Review][Defer] `GetMessages` sin auth check por empresa — deferred, endpoint admin-only, comportamiento heredado del handler anterior
+- [x] [Review][Defer] Limit aplicado por empresa antes de truncar globalmente — deferred, pre-existente, riesgo bajo en sistemas pequeños
+- [x] [Review][Defer] `RetryMessage` responde 200 con `ok:false` en fallo — deferred, convenio heredado del handler anterior
+- [x] [Review][Defer] Hard-cap de 1000 empresas en GetAll — deferred, pre-existente
 
 ## Dev Notes
 

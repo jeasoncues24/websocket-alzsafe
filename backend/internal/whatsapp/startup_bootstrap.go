@@ -106,6 +106,7 @@ func (b *StartupBootstrapper) Run(ctx context.Context) StartupBootstrapSummary {
 			candidates = append(candidates, candidate{id: t.ID, accountID: accountID})
 			if b.sessionStore != nil {
 				b.sessionStore.SetInitializing(accountID)
+				b.sessionStore.AppendEvent(accountID, "initializing", "bootstrap_restart")
 			}
 			continue
 		}
@@ -150,6 +151,7 @@ func (b *StartupBootstrapper) Run(ctx context.Context) StartupBootstrapSummary {
 					fmt.Printf("[WARN] startup bootstrap: no se pudo iniciar sesion %s: %v\n", c.accountID, err)
 					if b.sessionStore != nil {
 						b.sessionStore.SetDisconnected(c.accountID, "startup_start_failed")
+						b.sessionStore.AppendEvent(c.accountID, "disconnected", "startup_start_failed")
 					}
 					if setErr := b.telefonoStore.SetDisconnected(c.id); setErr != nil {
 						fmt.Printf("[WARN] startup bootstrap: no se pudo marcar disconnected telefono %d: %v\n", c.id, setErr)

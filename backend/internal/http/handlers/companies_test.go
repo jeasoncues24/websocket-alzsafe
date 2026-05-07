@@ -96,6 +96,8 @@ func (m *mockEmpresaStore) IncrementTokenVersion(id int64) (int, error) {
 	return 0, nil
 }
 
+func (m *mockEmpresaStore) Restore(id int64) error { return nil }
+
 func TestCompaniesListFiltersAndPagination(t *testing.T) {
 	store := newMockEmpresaStore()
 	store.empresas[1] = &domain.Empresa{ID: 1, RUC: "20100000001", Nombre: "Empresa Uno", Activo: true}
