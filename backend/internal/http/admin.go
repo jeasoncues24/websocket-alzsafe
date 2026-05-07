@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"time"
+
 	"github.com/coder/websocket"
 	"golang.org/x/crypto/bcrypt"
 
@@ -1368,17 +1370,20 @@ func (h *AdminHandler) StartCompanyPhoneConnection(w http.ResponseWriter, r *htt
 }
 
 func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Request) {
+	// — Upgrade a WebSocket —
 	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if err != nil {
 		return
 	}
 	defer wsConn.CloseNow()
 
+	// — Validar configuración JWT —
 	if h.jwtCfg == nil {
 		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "configuracion JWT no disponible"}})
 		return
 	}
 
+	// — Autenticar token admin (query param o header Authorization) —
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
@@ -1389,27 +1394,49 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "Token requerido"}})
 		return
 	}
-
 	claims, err := middleware.NewAuthMiddleware(h.jwtCfg, nil).ValidateToken(token)
 	if err != nil {
 		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "Token inválido"}})
 		return
 	}
+	_ = claims
 
+	// — Resolver teléfono desde la ruta —
 	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
 	if err != nil || telefonoID <= 0 {
 		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "ID de teléfono inválido"}})
 		return
 	}
-
 	phone, err := h.telefonoStore.GetByID(telefonoID)
 	if err != nil || phone == nil {
 		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "teléfono no encontrado"}})
 		return
 	}
-	_ = claims
+	accountID := whatsapp.NormalizeAccountID(phone.NumeroCompleto)
 
-	_ = writeEvent(r.Context(), wsConn, outboundPayload{
+	fmt.Printf("[INFO] WS connect opened telefono=%d account=%s\n", phone.ID, accountID)
+
+	// El contexto del request se cancela cuando el cliente WS cierra la conexión.
+	ctx := r.Context()
+
+	// — Cleanup al cerrar el WS (por cualquier causa) —
+	// Si la sesión estaba en QR o initializing cuando el WS se cerró, cancelamos
+	// el runtime de la sesión para liberar el goroutine, SQLite y canal de eventos.
+	// Sesiones en estado "active" no se interrumpen — el cliente WhatsApp permanece conectado.
+	defer func() {
+		fmt.Printf("[INFO] WS connect closed telefono=%d account=%s reason=%v\n", phone.ID, accountID, ctx.Err())
+		if h.sessionStore != nil && h.manager != nil {
+			if state, ok := h.sessionStore.Get(phone.NumeroCompleto); ok {
+				if state.Status == "initializing" || state.Status == "qr_pending" {
+					// Sesión abandonada durante QR — cancelar runtime para evitar fuga de goroutine
+					h.manager.Delete(accountID)
+				}
+			}
+		}
+	}()
+
+	// — Enviar estado inicial del teléfono —
+	_ = writeEvent(ctx, wsConn, outboundPayload{
 		Event: "phone-info",
 		Data: map[string]any{
 			"telefono_id":    phone.ID,
@@ -1420,23 +1447,42 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 		},
 	})
 
+	// — Iniciar o unirse a sesión existente —
+	// StartSession es idempotente: si ya existe un runtime para este accountID,
+	// devuelve un canal sintético con el estado actual y no crea una segunda goroutine.
+	// Esto evita duplicar sesiones cuando el WS reconecta sobre una sesión viva.
 	events, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
 	if err != nil {
-		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "error al iniciar conexión: " + err.Error()}})
+		_ = writeEvent(ctx, wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "error al iniciar conexión: " + err.Error()}})
 		return
 	}
 
-	ctx := r.Context()
+	// — Keepalive: enviar ping cada 25s para evitar que proxies corten la conexión idle —
+	ticker := time.NewTicker(25 * time.Second)
+	defer ticker.Stop()
+
+	// — Loop principal: este WS es un puente entre el manager de la sesión y el cliente —
+	// Los eventos del runtime (QR, connected, disconnected) se reenvían directamente al browser.
+	// El loop termina cuando: el canal de eventos se cierra (sesión terminó),
+	// el cliente WS se desconecta (ctx.Done), o falla un write.
 	for {
 		select {
 		case event, ok := <-events:
 			if !ok {
+				// Canal cerrado — la sesión terminó (conectó, desconectó, o timeout QR)
 				return
 			}
 			if err := writeEvent(ctx, wsConn, outboundPayload{Event: event.Event, Data: event.Data}); err != nil {
+				// Write falló — el cliente WS probablemente se desconectó
+				return
+			}
+		case <-ticker.C:
+			// Keepalive ping — mantiene el WS activo a través de proxies con idle timeout
+			if err := writeEvent(ctx, wsConn, outboundPayload{Event: "ping", Data: map[string]any{}}); err != nil {
 				return
 			}
 		case <-ctx.Done():
+			// El cliente WS cerró la conexión (cierre normal del browser, timeout de red, etc.)
 			return
 		}
 	}

@@ -71,7 +71,7 @@ development_status:
   2-3-assets-mensajes-investigar-corregir: done
   2-4-sesiones-herramientas-logs: done
   2-5-validar-reconexion-reinicio-binario: done
-  2-6-fix-ws-timer-simplificar-ui-conexion: ready-for-dev
+  2-6-fix-ws-timer-simplificar-ui-conexion: review
   2-7-qr-api-token-ws-fallback-rest: backlog
   2-8-enlace-qr-compartible-token-provisional: backlog
   2-9-enriquecer-metricas-dashboard: backlog

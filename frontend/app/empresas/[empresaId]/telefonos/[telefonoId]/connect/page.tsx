@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Loader2, QrCode, Smartphone, Wifi, WifiOff } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, RefreshCw, Smartphone } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { QRRender } from "@/components/qr/qr-render";
@@ -24,7 +23,7 @@ export default function AdminPhoneConnectPage() {
   const wsRef = useRef<WebSocket | null>(null);
 
   const [phone, setPhone] = useState<EmpresaTelefonoSessionData | null>(null);
-  const [countdown, setCountdown] = useState(300);
+  const [countdown, setCountdown] = useState(60);
   const [wsConnected, setWsConnected] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
@@ -81,6 +80,9 @@ export default function AdminPhoneConnectPage() {
           const type = payload.event || "";
           const data = payload.data ?? {};
 
+          // Keepalive ping del servidor — ignorar silenciosamente
+          if (type === "ping") return;
+
           if (type === "phone-info") {
             mergePhone({
               telefono_id: Number(data.telefono_id ?? telefonoId),
@@ -99,7 +101,8 @@ export default function AdminPhoneConnectPage() {
               status: "qr_pending",
               qr_string: String(data.qrString ?? data.qr_string ?? ""),
             });
-            setCountdown(300);
+            const expiresIn = typeof data.expires_in === "number" ? data.expires_in : 60;
+            setCountdown(expiresIn);
             setStarting(true);
             setSuccess("");
             setError("");
@@ -187,7 +190,7 @@ export default function AdminPhoneConnectPage() {
       const response = await connectEmpresaTelefono(telefonoId);
       if (response.ok && response.data) {
         mergePhone(response.data);
-        setCountdown(response.data.expires_in ?? 300);
+        setCountdown(response.data.expires_in ?? 60);
         setSuccess("Conexión iniciada manualmente");
         if (!wsRef.current) {
           openSocket();
@@ -241,15 +244,9 @@ export default function AdminPhoneConnectPage() {
             </Alert>
           )}
 
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Badge variant={wsConnected ? "default" : "secondary"}>
-              {wsConnected ? "WS activo" : "WS inactivo"}
-            </Badge>
-            <Badge variant={status === "active" ? "default" : "secondary"}>{status}</Badge>
-            <span className="text-muted-foreground">Empresa #{empresaId}</span>
-            <span className="text-muted-foreground">Teléfono #{telefonoId}</span>
-            {phone?.numeroCompleto && <span className="text-muted-foreground">{phone.numeroCompleto}</span>}
-          </div>
+          {phone?.numeroCompleto && (
+            <p className="font-mono text-sm text-muted-foreground">{phone.numeroCompleto}</p>
+          )}
 
           {starting && !qrString && status !== "active" ? (
             <div className="text-center">
@@ -276,15 +273,29 @@ export default function AdminPhoneConnectPage() {
             </div>
           )}
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button onClick={startFallback} disabled={starting}>
-              {starting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <QrCode className="mr-2 h-4 w-4" />}
-              Iniciar / regenerar
-            </Button>
-            <Button variant="outline" onClick={openSocket}>
-              {wsConnected ? <Wifi className="mr-2 h-4 w-4" /> : <WifiOff className="mr-2 h-4 w-4" />}
-              Reconectar WS
-            </Button>
+          <div className="flex flex-col gap-2">
+            {status !== "active" && (
+              wsConnected ? (
+                <Button variant="outline" onClick={() => {
+                  closeSocket();
+                  router.push(`/empresas/${empresaId}/telefonos`);
+                }}>
+                  Cancelar
+                </Button>
+              ) : (
+                <Button onClick={openSocket} disabled={starting}>
+                  {starting
+                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    : <RefreshCw className="mr-2 h-4 w-4" />}
+                  Reconectar
+                </Button>
+              )
+            )}
+            {error && (
+              <Button variant="ghost" size="sm" onClick={startFallback} disabled={starting}>
+                Forzar conexión REST
+              </Button>
+            )}
           </div>
 
           <Button variant="ghost" className="w-full" onClick={() => router.push(`/empresas/${empresaId}/telefonos`)}>

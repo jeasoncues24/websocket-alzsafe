@@ -15,6 +15,10 @@ import (
 
 var logger waLog.Logger = NewModuleLogger("Service")
 
+// qrExpiresInSec es la validez aproximada de cada código QR emitido por whatsmeow.
+// El cliente usa este valor para el countdown visual; el timeout real lo maneja el servidor.
+const qrExpiresInSec = 60
+
 type SessionEvent struct {
 	Event string
 	Data  map[string]any
@@ -321,8 +325,9 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 					}
 					s.syncTelefonoQR(accountID, evt.Code)
 					emit("qr-"+accountID, map[string]any{
-						"message":  "Escanee el codigo QR para iniciar sesion.",
-						"qrString": evt.Code,
+						"message":    "Escanee el codigo QR para iniciar sesion.",
+						"qrString":   evt.Code,
+						"expires_in": qrExpiresInSec,
 					})
 				case "timeout":
 					s.markDisconnected(accountID, "qr_timeout")

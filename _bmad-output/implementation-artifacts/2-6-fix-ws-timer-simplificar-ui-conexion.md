@@ -2,7 +2,7 @@
 title: 'Story 2.6 — Fix WS timer + simplificar UI de conexión'
 type: 'bugfix+ux'
 created: '2026-05-07'
-status: 'ready-for-dev'
+status: 'review'
 epic: 'epic-2-mejoras-post-revision'
 baseline_commit: '1960bec'
 context:
@@ -52,42 +52,42 @@ Existen tests en `backend/internal/http/` (mismo paquete `http`) que cubren:
 
 ## Tasks / Subtasks
 
-- [ ] **Tarea 1: Backend — Logging + cleanup en ConnectCompanyPhoneWS** (AC: 1, 2, 3, 7)
-  - [ ] Al inicio de `ConnectCompanyPhoneWS` (justo después de validar el teléfono), agregar log de apertura:
+- [x] **Tarea 1: Backend — Logging + cleanup en ConnectCompanyPhoneWS** (AC: 1, 2, 3, 7)
+  - [x] Al inicio de `ConnectCompanyPhoneWS` (justo después de validar el teléfono), agregar log de apertura:
     `fmt.Printf("[INFO] WS connect opened telefono=%d account=%s\n", phone.ID, accountID)`
-  - [ ] Agregar `defer` de cleanup ANTES del loop de eventos:
+  - [x] Agregar `defer` de cleanup ANTES del loop de eventos:
     - Log de cierre con razón (ver Dev Notes para código exacto)
     - Si `sessionStore.Get(phone.NumeroCompleto).Status` es `"initializing"` o `"qr_pending"` → llamar `h.manager.Delete(accountID)`
-  - [ ] Agregar comentarios de bloque explicativos en cada sección del handler (auth, start session, loop, ping, defer cleanup)
+  - [x] Agregar comentarios de bloque explicativos en cada sección del handler (auth, start session, loop, ping, defer cleanup)
 
-- [ ] **Tarea 2: Backend — Keepalive ping en el loop de ConnectCompanyPhoneWS** (AC: 4)
-  - [ ] Crear `ticker := time.NewTicker(25 * time.Second)` + `defer ticker.Stop()` justo antes del `for { select { ... } }`
-  - [ ] Agregar `case <-ticker.C:` en el select que llame `writeEvent(ctx, wsConn, outboundPayload{Event: "ping"})` y retorne si hay error
+- [x] **Tarea 2: Backend — Keepalive ping en el loop de ConnectCompanyPhoneWS** (AC: 4)
+  - [x] Crear `ticker := time.NewTicker(25 * time.Second)` + `defer ticker.Stop()` justo antes del `for { select { ... } }`
+  - [x] Agregar `case <-ticker.C:` en el select que llame `writeEvent(ctx, wsConn, outboundPayload{Event: "ping"})` y retorne si hay error
 
-- [ ] **Tarea 3: Backend — expires_in en evento qr-** (AC: 5)
-  - [ ] En `service.go`, función `runSession`, bloque `case "code":` (línea ~322):
+- [x] **Tarea 3: Backend — expires_in en evento qr-** (AC: 5)
+  - [x] En `service.go`, función `runSession`, bloque `case "code":` (línea ~322):
     - Definir `const qrExpiresInSec = 60` a nivel de paquete (o como constante local)
     - Agregar `"expires_in": qrExpiresInSec` al map del emit `qr-{accountID}`
 
-- [ ] **Tarea 4: Frontend — Manejar ping y corregir countdown** (AC: 4, 5)
-  - [ ] En `ws.onmessage`: agregar `if (type === "ping") return;` antes de cualquier otro handler
-  - [ ] Bloque `qr-`: `const expiresIn = typeof data.expires_in === "number" ? data.expires_in : 60` → `setCountdown(expiresIn)`
-  - [ ] `startFallback`: `setCountdown(response.data.expires_in ?? 60)`
+- [x] **Tarea 4: Frontend — Manejar ping y corregir countdown** (AC: 4, 5)
+  - [x] En `ws.onmessage`: agregar `if (type === "ping") return;` antes de cualquier otro handler
+  - [x] Bloque `qr-`: `const expiresIn = typeof data.expires_in === "number" ? data.expires_in : 60` → `setCountdown(expiresIn)`
+  - [x] `startFallback`: `setCountdown(response.data.expires_in ?? 60)`
 
-- [ ] **Tarea 5: Frontend — UI simplificada** (AC: 6)
-  - [ ] Eliminar el bloque `<div className="flex flex-wrap items-center gap-2 text-sm">` con badges WS y spans de IDs numéricos
-  - [ ] Mostrar `phone?.numeroCompleto` si disponible (span mono debajo del título)
-  - [ ] Reemplazar el grid de dos botones por botón único inteligente (ver Dev Notes para JSX exacto)
-  - [ ] `startFallback` permanece en código pero solo aparece como botón ghost "Forzar conexión REST" cuando hay un `error` visible
+- [x] **Tarea 5: Frontend — UI simplificada** (AC: 6)
+  - [x] Eliminar el bloque `<div className="flex flex-wrap items-center gap-2 text-sm">` con badges WS y spans de IDs numéricos
+  - [x] Mostrar `phone?.numeroCompleto` si disponible (span mono debajo del título)
+  - [x] Reemplazar el grid de dos botones por botón único inteligente (ver Dev Notes para JSX exacto)
+  - [x] `startFallback` permanece en código pero solo aparece como botón ghost "Forzar conexión REST" cuando hay un `error` visible
 
-- [ ] **Tarea 6: Backend — Tests del flujo WS** (AC: 8)
-  - [ ] Crear o ampliar `backend/internal/http/admin_ws_test.go` con los 3 tests descritos en Dev Notes
-  - [ ] Los tests usan `httptest.NewServer`, `websocket.Dial` de `github.com/coder/websocket` y `storage.NewSessionStore()`
+- [x] **Tarea 6: Backend — Tests del flujo WS** (AC: 8)
+  - [x] Crear o ampliar `backend/internal/http/admin_ws_test.go` con los 3 tests descritos en Dev Notes
+  - [x] Los tests usan `httptest.NewServer`, `websocket.Dial` de `github.com/coder/websocket` y `storage.NewSessionStore()`
 
-- [ ] **Tarea 7: Verificar build, tests y lint** (AC: 9, 10, 11)
-  - [ ] `cd backend && go build ./...`
-  - [ ] `cd backend && go test ./...`
-  - [ ] `cd frontend && npm run lint`
+- [x] **Tarea 7: Verificar build, tests y lint** (AC: 9, 10, 11)
+  - [x] `cd backend && go build ./...`
+  - [x] `cd backend && go test ./...`
+  - [x] `cd frontend && npm run lint`
 
 ## Dev Notes
 
