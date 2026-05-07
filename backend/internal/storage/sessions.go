@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+type SessionEventEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	Type      string    `json:"type"`
+	Details   string    `json:"details,omitempty"`
+}
+
 type SessionState struct {
 	AccountID string
 	Status    string
@@ -14,6 +20,7 @@ type SessionState struct {
 	Reason    string
 	UpdatedAt time.Time
 	SessionID string
+	Events    []SessionEventEntry
 }
 
 type SessionStore struct {
@@ -79,7 +86,29 @@ func (s *SessionStore) set(v SessionState) {
 	v.AccountID = normalizeSessionAccountID(v.AccountID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if existing, ok := s.state[v.AccountID]; ok {
+		v.Events = existing.Events
+	}
 	s.state[v.AccountID] = v
+}
+
+func (s *SessionStore) AppendEvent(accountID, eventType, details string) {
+	accountID = normalizeSessionAccountID(accountID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, ok := s.state[accountID]
+	if !ok {
+		state = SessionState{AccountID: accountID}
+	}
+	state.Events = append(state.Events, SessionEventEntry{
+		Timestamp: time.Now(),
+		Type:      eventType,
+		Details:   details,
+	})
+	if len(state.Events) > 20 {
+		state.Events = state.Events[len(state.Events)-20:]
+	}
+	s.state[accountID] = state
 }
 
 func (s *SessionStore) ActiveCount() int {

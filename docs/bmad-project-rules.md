@@ -21,6 +21,54 @@ Este documento define las reglas de trabajo para agentes BMad y cualquier colabo
 - Sprint status: `_bmad-output/implementation-artifacts/sprint-status.yaml`.
 - Overrides de BMad: `_bmad/custom/`.
 
+## Convención de nombres de archivos en `implementation-artifacts/`
+
+Todos los archivos bajo `_bmad-output/implementation-artifacts/` siguen estas reglas sin excepción:
+
+### Stories
+```
+{epic-n}-{story-n}-{nombre-slug}.md
+```
+Ejemplos: `2-1-eliminar-select-empresa-usuario-admin.md`, `2-2-5-limpiar-empresa-del-jwt-admin.md`
+
+- El slug es kebab-case, sin prefijos `spec-` ni `story-`.
+- La clave en `sprint-status.yaml` es exactamente el nombre del archivo sin la extensión `.md`.
+- Las stories intermedias usan `{epic-n}-{story-n}-{decimal}` (ej. `2-2-5`). El filesystem puede ordenarlas distinto al orden lógico; el orden autoritativo es `sprint-status.yaml`.
+- Nunca crear dos archivos para la misma story (uno de "tracking" y uno de "spec"). Un solo archivo por story.
+
+### Epics
+```
+epic-{n}-{nombre-slug}.md
+```
+Ejemplo: `epic-2-mejoras-post-revision.md`
+
+- El prefijo `epic-` distingue los archivos de resumen de epic de los archivos de story.
+- La clave en `sprint-status.yaml` es `epic-{n}` (sin nombre slug).
+
+### Documentos suplementarios
+```
+spec-{nombre-slug}.md
+```
+Ejemplos: `spec-readme-deploy-produccion.md`
+
+- El prefijo `spec-` indica un documento de referencia o contexto que **no es una story** y **no se trackea en sprint-status**.
+- No usar `spec-` para story files. Si un archivo tiene `spec-` y un ID de story (ej. `spec-1-9-*`), es un artefacto legacy que no debe replicarse.
+
+### Resumen visual
+```
+implementation-artifacts/
+├── 1-1-dockerfile-optimizado.md          ← story (epic 1, story 1)
+├── 1-9-frontend-env-example.md           ← story (epic 1, story 9)
+├── 2-1-eliminar-select-empresa-usuario-admin.md  ← story (epic 2, story 1)
+├── 2-2-restaurar-empresas-desactivadas.md        ← story (epic 2, story 2)
+├── 2-2-5-limpiar-empresa-del-jwt-admin.md        ← story intermedia (entre 2-2 y 2-3)
+├── epic-2-mejoras-post-revision.md       ← epic overview
+├── spec-readme-deploy-produccion.md      ← doc suplementario (no story)
+└── sprint-status.yaml                    ← fuente de verdad de estados y orden
+```
+
+**Regla de oro:** si el archivo es una story, su nombre empieza con `{n}-{m}`. Si es un epic, empieza con `epic-`. Si es un doc de referencia, empieza con `spec-`. Nunca mezclar.
+
 ## Reglas de Epics
 
 Cada epic debe incluir como mínimo:

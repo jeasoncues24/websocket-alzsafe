@@ -6,22 +6,56 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { QRRender } from "@/components/qr/qr-render"
-import { Building2, QrCode, LogOut, RefreshCw } from "lucide-react"
-import { getAdminSessions, postAdminSession, type SessionInfo } from "@/lib/api"
+import { Building2, QrCode, LogOut, RefreshCw, Wifi, WifiOff, Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import { getAdminSessions, postAdminSession, reconnectAdminSession, type SessionInfo, type SessionSummary } from "@/lib/api"
+
+function relativeTime(ts: string): string {
+  const diff = Date.now() - new Date(ts).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return "ahora"
+  if (m < 60) return `hace ${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `hace ${h}h`
+  return `hace ${Math.floor(h / 24)}d`
+}
+
+function EventIcon({ type }: { type: string }) {
+  switch (type) {
+    case "connected": return <Wifi className="h-3 w-3 text-green-500" />
+    case "disconnected": return <WifiOff className="h-3 w-3 text-red-400" />
+    case "initializing": return <Loader2 className="h-3 w-3 text-gray-400" />
+    default: return <QrCode className="h-3 w-3 text-blue-400" />
+  }
+}
+
+function MetricsTile({ label, value, colorClass }: { label: string; value: number; colorClass: string }) {
+  return (
+    <Card>
+      <CardContent className="pt-4 pb-4">
+        <div className={`text-2xl font-bold ${colorClass}`}>{value}</div>
+        <div className="text-sm text-muted-foreground">{label}</div>
+      </CardContent>
+    </Card>
+  )
+}
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<SessionInfo[]>([])
+  const [summary, setSummary] = useState<SessionSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null)
   const [qrOpen, setQrOpen] = useState(false)
   const [disconnectOpen, setDisconnectOpen] = useState(false)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [reconnectingId, setReconnectingId] = useState<number | null>(null)
+  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set())
 
   const loadSessions = useCallback(async () => {
     setLoading(true)
     try {
       const data = await getAdminSessions()
       setSessions(data.sessions)
+      setSummary(data.summary ?? null)
     } catch (error) {
       console.error("Failed to load sessions:", error)
     } finally {
@@ -49,6 +83,27 @@ export default function SessionsPage() {
       setDisconnectOpen(false)
       setDisconnectingId(null)
     }
+  }
+
+  const handleReconnect = async (telefonoId: number) => {
+    setReconnectingId(telefonoId)
+    try {
+      await reconnectAdminSession(telefonoId)
+      await loadSessions()
+    } catch (error) {
+      console.error("Failed to reconnect session:", error)
+    } finally {
+      if (reconnectingId === telefonoId) setReconnectingId(null)
+    }
+  }
+
+  const toggleEvents = (accountId: string) => {
+    setExpandedEvents(prev => {
+      const next = new Set(prev)
+      if (next.has(accountId)) next.delete(accountId)
+      else next.add(accountId)
+      return next
+    })
   }
 
   const getStatusBadge = (status: string) => {
@@ -81,6 +136,15 @@ export default function SessionsPage() {
         </Button>
       </div>
 
+      {summary && (
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <MetricsTile label="Activas" value={summary.active} colorClass="text-green-600" />
+          <MetricsTile label="Desconectadas" value={summary.disconnected} colorClass="text-red-600" />
+          <MetricsTile label="Inconsistentes" value={summary.mismatch} colorClass="text-yellow-600" />
+          <MetricsTile label="QR Pendiente" value={summary.qr_pending} colorClass="text-blue-600" />
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {loading ? (
           <Card>
@@ -95,48 +159,101 @@ export default function SessionsPage() {
             </CardContent>
           </Card>
         ) : (
-          sessions.map((session) => (
-            <Card key={session.account_id}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5" />
-                    <CardTitle className="text-lg">{session.account_id}</CardTitle>
+          sessions.map((session) => {
+            const hasEvents = session.events && session.events.length > 0
+            const eventsOpen = expandedEvents.has(session.account_id)
+            const isReconnecting = reconnectingId === session.telefono_id
+            return (
+              <Card key={session.account_id}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Building2 className="h-5 w-5 shrink-0" />
+                      <CardTitle className="text-lg truncate">
+                        {session.empresa_nombre ?? session.account_id}
+                      </CardTitle>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {getStatusBadge(session.status)}
+                      {session.mismatch && (
+                        <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                          Inconsistente
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  {getStatusBadge(session.status)}
-                </div>
-                <CardDescription>
-                  Última actualización: {session.updated_at ? new Date(session.updated_at).toLocaleString() : "-"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-2">
-                  {session.status === "qr_pending" && (
-                    <Button variant="outline" size="sm" onClick={() => {
-                      setSelectedSession(session)
-                      setQrOpen(true)
-                    }}>
-                      <QrCode className="h-4 w-4 mr-2" />
-                      Ver QR
-                    </Button>
+                  <CardDescription className="flex items-center gap-2">
+                    <span className={session.runtime_connected ? "text-green-500" : "text-red-400"}>●</span>
+                    <span className="font-mono text-xs">{session.account_id}</span>
+                  </CardDescription>
+                  <CardDescription>
+                    Última conexión:{" "}
+                    {session.last_connected
+                      ? relativeTime(session.last_connected)
+                      : "Nunca"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex gap-2 flex-wrap">
+                    {session.status === "qr_pending" && (
+                      <Button variant="outline" size="sm" onClick={() => {
+                        setSelectedSession(session)
+                        setQrOpen(true)
+                      }}>
+                        <QrCode className="h-4 w-4 mr-2" />
+                        Ver QR
+                      </Button>
+                    )}
+                    {session.status === "active" && (
+                      <Button variant="outline" size="sm" onClick={() => disconnect(session.account_id)}>
+                        <LogOut className="h-4 w-4 mr-2" />
+                        Desconectar
+                      </Button>
+                    )}
+                    {session.status !== "active" && session.telefono_id != null && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isReconnecting}
+                        onClick={() => handleReconnect(session.telefono_id!)}
+                      >
+                        <RefreshCw className={`h-4 w-4 mr-2 ${isReconnecting ? "animate-spin" : ""}`} />
+                        Reconectar
+                      </Button>
+                    )}
+                    {hasEvents && (
+                      <Button variant="ghost" size="sm" onClick={() => toggleEvents(session.account_id)}>
+                        {eventsOpen ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                        Ver eventos
+                      </Button>
+                    )}
+                  </div>
+
+                  {eventsOpen && hasEvents && (
+                    <div className="border-t pt-2 space-y-1">
+                      {[...session.events!].reverse().map((evt, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <EventIcon type={evt.type} />
+                          <span className="capitalize">{evt.type}</span>
+                          <span className="ml-auto">{relativeTime(evt.timestamp)}</span>
+                          {evt.details && (
+                            <span className="text-xs opacity-60">{evt.details}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
-                  {session.status === "active" && (
-                    <Button variant="outline" size="sm" onClick={() => disconnect(session.account_id)}>
-                      <LogOut className="h-4 w-4 mr-2" />
-                      Desconectar
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))
+                </CardContent>
+              </Card>
+            )
+          })
         )}
       </div>
 
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>QR - {selectedSession?.account_id}</DialogTitle>
+            <DialogTitle>QR - {selectedSession?.empresa_nombre ?? selectedSession?.account_id}</DialogTitle>
             <DialogDescription>
               Escanea este código con WhatsApp en tu teléfono
             </DialogDescription>
@@ -157,7 +274,7 @@ export default function SessionsPage() {
           <DialogHeader>
             <DialogTitle>Confirmar desconexión</DialogTitle>
             <DialogDescription>
-              ¿Estás seguro de que deseas desconectar la sesión de {disconnectingId}? 
+              ¿Estás seguro de que deseas desconectar la sesión de {disconnectingId}?
               El dispositivo deberá escanear el código QR nuevamente para reconectar.
             </DialogDescription>
           </DialogHeader>

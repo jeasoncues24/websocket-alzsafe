@@ -74,10 +74,14 @@ func RegisterAdminRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 		mux.Handle("GET /api/admin/metricas", adminStack(http.HandlerFunc(c.DashboardHandler.GetMetrics)))
 	}
 
-	mux.Handle("GET /api/admin/mensajes", adminStack(http.HandlerFunc(HandleGetAdminMessages)))
-	mux.Handle("POST /api/admin/mensajes/{id}", adminStack(http.HandlerFunc(HandleAdminRetryMessage)))
-	mux.Handle("GET /api/admin/sesiones", adminStack(http.HandlerFunc(HandleGetAdminSessions)))
-	mux.Handle("POST /api/admin/sesiones", adminStack(http.HandlerFunc(HandlePostAdminSessions)))
+	if c.AdminMessagesHandler != nil {
+		mux.Handle("GET /api/admin/mensajes", adminStack(http.HandlerFunc(c.AdminMessagesHandler.GetMessages)))
+		mux.Handle("POST /api/admin/mensajes/{id}", adminStack(http.HandlerFunc(c.AdminMessagesHandler.RetryMessage)))
+	}
+	if c.AdminSessionsHandler != nil {
+		mux.Handle("GET /api/admin/sesiones", adminStack(http.HandlerFunc(c.AdminSessionsHandler.GetSessions)))
+		mux.Handle("POST /api/admin/sesiones", adminStack(http.HandlerFunc(c.AdminSessionsHandler.PostSession)))
+	}
 	mux.Handle("GET /api/admin/difusiones", adminStack(http.HandlerFunc(HandleGetAdminBroadcasts)))
 
 	mux.Handle("GET /metrics", http.HandlerFunc(HandleGetMetrics))

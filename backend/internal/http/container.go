@@ -32,8 +32,10 @@ type Container struct {
 	V1MetricsHandler      *handlers.V1MetricsHandler
 	V1PhonesHandler       *handlers.V1PhonesHandler
 	V1SessionsHandler     *handlers.V1SessionsHandler
-	V1WSHandler           *handlers.V1WSHandler
-	AuthMiddleware        *middleware.AuthMiddleware
+	V1WSHandler              *handlers.V1WSHandler
+	AdminMessagesHandler     *handlers.AdminMessagesHandler
+	AdminSessionsHandler     *handlers.AdminSessionsHandler
+	AuthMiddleware           *middleware.AuthMiddleware
 	EmpresaAuthMiddleware *middleware.EmpresaAuthMiddleware
 	ApiKeyAuthMiddleware  *middleware.ApiKeyAuthMiddleware
 	DashboardHandler      *DashboardHandler
@@ -91,6 +93,8 @@ func NewContainer() *Container {
 	v1PhonesHandler := handlers.NewV1PhonesHandler(telefonoStore, sessionStore)
 	v1SessionsHandler := handlers.NewV1SessionsHandler(telefonoStore, sessionStore, manager)
 	v1WSHandler := handlers.NewV1WSHandler(manager, jwtCfg)
+	adminMessagesHandler := handlers.NewAdminMessagesHandler(msgRepo, empresaStore, telefonoStore, manager)
+	adminSessionsHandler := handlers.NewAdminSessionsHandler(empresaStore, telefonoStore, manager, sessionStore)
 	dashboardHandler := NewDashboardHandler(msgRepo, sessionStore, empresaStore)
 
 	authMiddleware := middleware.NewAuthMiddleware(jwtCfg, blacklistStore)
@@ -123,8 +127,10 @@ func NewContainer() *Container {
 		V1MetricsHandler:      v1MetricsHandler,
 		V1PhonesHandler:       v1PhonesHandler,
 		V1SessionsHandler:     v1SessionsHandler,
-		V1WSHandler:           v1WSHandler,
-		AuthMiddleware:        authMiddleware,
+		V1WSHandler:              v1WSHandler,
+		AdminMessagesHandler:     adminMessagesHandler,
+		AdminSessionsHandler:     adminSessionsHandler,
+		AuthMiddleware:           authMiddleware,
 		EmpresaAuthMiddleware: empresaAuthMiddleware,
 		ApiKeyAuthMiddleware:  apiKeyAuthMiddleware,
 		DashboardHandler:      dashboardHandler,

@@ -379,19 +379,58 @@ export async function getAdminMessages(filters?: {
   return fetchWithAuth(`${API_BASE}/api/admin/mensajes?${params}`);
 }
 
+export interface SessionEvent {
+  timestamp: string;
+  type: string;
+  details?: string;
+}
+
+export interface SessionSummary {
+  total: number;
+  active: number;
+  disconnected: number;
+  mismatch: number;
+  qr_pending: number;
+  initializing: number;
+}
+
 export interface SessionInfo {
   account_id: string;
   status: string;
   qr_string?: string;
   updated_at: string;
+  telefono_id?: number;
+  empresa_id?: number;
+  empresa_nombre?: string;
+  runtime_connected?: boolean;
+  mismatch?: boolean;
+  last_connected?: string;
+  events?: SessionEvent[];
 }
 
 export interface SessionsResponse {
   sessions: SessionInfo[];
+  summary?: SessionSummary;
 }
 
 export async function getAdminSessions(): Promise<SessionsResponse> {
   return fetchWithAuth(`${API_BASE}/api/admin/sesiones`);
+}
+
+export interface ReconnectSessionResponse {
+  ok: boolean;
+  status?: string;
+  qr_string?: string;
+  error?: string;
+}
+
+export async function reconnectAdminSession(
+  telefonoId: number,
+): Promise<ReconnectSessionResponse> {
+  return fetchWithAuth(
+    `${API_BASE}/api/admin/telefonos/${telefonoId}/connect`,
+    { method: "POST" },
+  ) as Promise<ReconnectSessionResponse>;
 }
 
 export interface MessageRetryResponse {

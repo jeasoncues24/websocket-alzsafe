@@ -214,6 +214,7 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 
 	if s.sessionStore != nil {
 		s.sessionStore.SetInitializing(accountID)
+		s.sessionStore.AppendEvent(accountID, "initializing", "")
 	}
 	emitActive("Sesion en proceso de inicializacion", false, nil)
 
@@ -316,6 +317,7 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 				case "code":
 					if s.sessionStore != nil {
 						s.sessionStore.SetQRPending(accountID, evt.Code)
+						s.sessionStore.AppendEvent(accountID, "qr_generated", "")
 					}
 					s.syncTelefonoQR(accountID, evt.Code)
 					emit("qr-"+accountID, map[string]any{
@@ -355,6 +357,7 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 func (s *Service) markConnected(accountID string) {
 	if s.sessionStore != nil {
 		s.sessionStore.SetActive(accountID)
+		s.sessionStore.AppendEvent(accountID, "connected", "")
 	}
 	s.syncTelefonoConnected(accountID)
 }
@@ -362,6 +365,7 @@ func (s *Service) markConnected(accountID string) {
 func (s *Service) markDisconnected(accountID, reason string) {
 	if s.sessionStore != nil {
 		s.sessionStore.SetDisconnected(accountID, reason)
+		s.sessionStore.AppendEvent(accountID, "disconnected", reason)
 	}
 	s.syncTelefonoDisconnected(accountID)
 }
