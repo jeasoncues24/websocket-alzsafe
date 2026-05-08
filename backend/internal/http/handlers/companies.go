@@ -503,12 +503,10 @@ func (h *CompaniesHandler) RevokeToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// extractIDFromPath extrae el ID del path para rutas de compatibilidad como /api/admin/empresas/{id}/token.
+// extractIDFromPath extrae el ID del path desde rutas de admin como /api/admin/empresas/{id}/token.
 func (h *CompaniesHandler) extractIDFromPath(path string) int64 {
 	paths := []string{
 		"/api/admin/empresas/",
-		"/api/empresas/",
-		"/api/companies/",
 	}
 	for _, p := range paths {
 		idStr := strings.TrimPrefix(path, p)

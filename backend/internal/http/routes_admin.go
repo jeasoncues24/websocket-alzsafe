@@ -11,8 +11,6 @@ func RegisterAdminRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 		mux.Handle("POST /api/auth/refresh", http.HandlerFunc(c.AuthHandler.Refresh))
 		mux.Handle("GET /api/auth/me", adminStack(http.HandlerFunc(c.AuthHandler.Me)))
 	}
-	mux.Handle("POST /admin/login", http.HandlerFunc(HandleAdminLogin))
-
 	if c.AdminHandler != nil {
 		mux.Handle("GET /api/admin/users", adminStack(http.HandlerFunc(c.AdminHandler.ListUsers)))
 		mux.Handle("GET /api/admin/users/{id}", adminStack(http.HandlerFunc(c.AdminHandler.GetUser)))

@@ -274,11 +274,6 @@ func HandleGetAdminBroadcasts(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
 type DashboardMetricsResponse struct {
 	OK                   bool  `json:"ok"`
 	TotalMensajes        int64 `json:"total_mensajes"`
@@ -397,34 +392,6 @@ func (h *DashboardHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func HandleAdminLogin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method != "POST" {
-		writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid request")
-		return
-	}
-
-	// Demo: accept admin/admin123
-	// In production, this should query the database with hashed passwords
-	if req.Username == "admin" && req.Password == "admin123" {
-		token := "demo-token-" + time.Now().Format("20060102150405")
-		writeJSON(w, http.StatusOK, domain.LoginResponse{
-			OK:    true,
-			Token: token,
-		})
-		return
-	}
-
-	writeAPIError(w, http.StatusUnauthorized, "invalid credentials")
-}
-
 func HandleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -494,41 +461,54 @@ func handleOtherMethods(w http.ResponseWriter, r *http.Request) {
 }
 
 var registeredRoutes = map[string][]string{
-	"/api/auth/login":                 {"POST"},
-	"/api/auth/logout":                {"POST"},
-	"/api/auth/refresh":               {"POST"},
-	"/api/auth/me":                    {"GET"},
-	"/api/me":                         {"GET"},
-	"/api/sesion":                     {"GET"},
-	"/api/companies":                  {"GET", "POST"},
-	"/api/companies/":                 {"GET", "PUT", "DELETE"},
-	"/api/message":                    {"POST"},
-	"/api/messages":                   {"GET"},
-	"/api/broadcast":                  {"POST"},
-	"/api/broadcast/":                 {"GET"},
-	"/api/sessions":                   {"GET", "POST"},
-	"/api/admin/messages":             {"GET"},
-	"/api/admin/sesiones/diagnostico": {"GET"},
-	"/api/admin/broadcasts":           {"GET"},
-	"/api/admin/users":                {"GET", "POST"},
-	"/api/admin/users/":               {"GET", "PUT", "DELETE"},
-	"/api/admin/users/promote/":       {"POST"},
-	"/api/admin/users/modules/":       {"PUT"},
-	"/api/admin/roles":                {"GET"},
-	"/api/admin/modules":              {"GET"},
-	"/api/admin/empresas/{id}/restore": {"POST"},
-	"/api/dashboard/metricas":         {"GET"},
-	"/message":                        {"POST"},
-	"/messages":                       {"GET"},
-	"/broadcast":                      {"POST"},
-	"/broadcast/":                     {"GET"},
-	"/metrics":                        {"GET"},
-	"/companies":                      {"GET"},
-	"/admin/messages":                 {"GET"},
-	"/admin/sessions":                 {"GET", "POST"},
-	"/admin/broadcasts":               {"GET"},
-	"/admin/login":                    {"POST"},
-	"/ws":                             {"GET"},
+	// Admin panel — JWT auth
+	"/api/auth/login":                          {"POST"},
+	"/api/auth/logout":                         {"POST"},
+	"/api/auth/refresh":                        {"POST"},
+	"/api/auth/me":                             {"GET"},
+	"/api/admin/users":                         {"GET", "POST"},
+	"/api/admin/usuarios_admin":                {"GET", "POST"},
+	"/api/admin/roles":                         {"GET", "POST"},
+	"/api/admin/modules":                       {"GET"},
+	"/api/admin/empresas":                      {"GET", "POST"},
+	"/api/admin/empresas/{id}":                 {"GET", "PUT", "DELETE"},
+	"/api/admin/empresas/{id}/restore":         {"POST"},
+	"/api/admin/empresas/{id}/token":           {"POST"},
+	"/api/admin/empresas/{id}/token/revoke":    {"POST"},
+	"/api/admin/telefonos":                     {"GET", "POST"},
+	"/api/admin/telefonos/{id}/connect":        {"POST"},
+	"/api/admin/telefonos/{id}/connect/ws":     {"GET"},
+	"/api/admin/telefonos/{id}/api-keys":       {"GET", "POST"},
+	"/api/admin/api-keys/{id}":                 {"GET"},
+	"/api/admin/api-keys/{id}/rotate":          {"POST"},
+	"/api/admin/api-keys/{id}/revoke":          {"POST"},
+	"/api/admin/api-keys/{id}/usage":           {"GET"},
+	"/api/admin/api-keys/{id}/audit":           {"GET"},
+	"/api/admin/sesiones":                      {"GET", "POST"},
+	"/api/admin/sesiones/diagnostico":          {"GET"},
+	"/api/admin/mensajes":                      {"GET", "POST"},
+	"/api/admin/metricas":                      {"GET"},
+	"/api/admin/difusiones":                    {"GET"},
+	// Service API — API token por teléfono
+	"/api/service/v1/auth/empresa/validate":    {"POST"},
+	"/api/service/v1/empresas":                 {"GET", "PUT"},
+	"/api/service/v1/metricas":                 {"GET"},
+	"/api/service/v1/telefonos":                {"GET"},
+	"/api/service/v1/telefonos/{id}/qr":        {"POST"},
+	"/api/service/v1/telefonos/{id}/estado":    {"GET"},
+	"/api/service/v1/sesiones":                 {"GET", "POST"},
+	"/api/service/v1/sesiones/{id}":            {"GET", "DELETE"},
+	"/api/service/v1/sesiones/{id}/connect":    {"POST"},
+	"/api/service/v1/me":                       {"GET"},
+	"/api/service/v1/sesion":                   {"GET"},
+	"/api/service/v1/mensajes":                 {"GET", "POST"},
+	"/api/service/v1/mensajes/{id}":            {"GET", "PATCH", "POST"},
+	"/api/service/v1/difusiones":               {"GET", "POST"},
+	"/api/service/v1/difusiones/{id}":          {"GET"},
+	"/api/service/v1/ws":                       {"GET"},
+	// Infraestructura
+	"/metrics":                                 {"GET"},
+	"/health":                                  {"GET"},
 }
 
 func routeExists(path, method string) bool {
