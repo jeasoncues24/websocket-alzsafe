@@ -77,6 +77,17 @@ Este archivo contiene reglas críticas y patrones que los agentes IA deben segui
 - Preferir cambios pequeños, testeables y reversibles.
 - Mantener compatibilidad con los nombres de endpoints y payloads existentes.
 
+### MySQL / Migraciones
+
+- **OBLIGATORIO:** Para cualquier tarea que involucre MySQL (escribir o modificar un CREATE TABLE, ALTER TABLE, consulta con JOIN/GROUP BY/agregaciones, decisión de índices), invocar primero la skill `/sql-optimization` instalada en `.agents/skills/sql-optimization/`.
+- Las migraciones se definen en `backend/internal/storage/migrations/` con el patrón `NNN_descripcion_accion.up.sql` / `.down.sql`. Cada par de archivos define exactamente una acción (crear, eliminar o modificar una tabla). No distribuir columnas de una misma tabla en múltiples archivos de migración.
+- El `.down.sql` de una migración debe revertir exactamente lo que hace el `.up.sql`, sin efectos secundarios sobre otras tablas.
+- En fase de desarrollo activo se permite renombrar/eliminar archivos de migración existentes siempre que el mantenedor recree la BD desde cero. Nunca modificar migraciones históricas en producción.
+- Tablas canónicas de telemetría (no usar las obsoletas `api_key_usage_events` ni `api_key_usage_daily`):
+  - `telefono_request_logs` — trazas individuales de request.
+  - `telefono_metrics_min` — agregados por minuto (bucket_min).
+  - `api_key_audit_events` — eventos de ciclo de vida de una API key.
+
 ### Backend Go
 
 - Usar el módulo `wsapi`; imports internos deben comenzar con `wsapi/internal/...`.

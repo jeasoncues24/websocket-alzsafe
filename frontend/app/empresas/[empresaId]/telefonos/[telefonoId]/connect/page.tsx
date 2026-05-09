@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Loader2, RefreshCw, Smartphone } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, RefreshCw, Share2, Smartphone } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { QRRender } from "@/components/qr/qr-render";
-import { buildAdminWsUrl, connectEmpresaTelefono, type EmpresaTelefonoSessionData } from "@/lib/api";
+import { buildAdminWsUrl, connectEmpresaTelefono, generateQRLink, getAdminSessions, type EmpresaTelefonoSessionData } from "@/lib/api";
 
 type WsPayload = {
   event?: string;
@@ -21,6 +21,7 @@ export default function AdminPhoneConnectPage() {
   const telefonoId = Number(params?.telefonoId);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [phone, setPhone] = useState<EmpresaTelefonoSessionData | null>(null);
   const [countdown, setCountdown] = useState(60);
@@ -28,6 +29,9 @@ export default function AdminPhoneConnectPage() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [shareUrl, setShareUrl] = useState("");
+  const [sharing, setSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const closeSocket = useCallback(() => {
     if (wsRef.current) {
@@ -46,6 +50,31 @@ export default function AdminPhoneConnectPage() {
       expires_in: next.expires_in ?? current?.expires_in,
     }));
   }, [telefonoId]);
+
+  const stopStatusPoll = useCallback(() => {
+    if (statusPollRef.current) {
+      clearInterval(statusPollRef.current);
+      statusPollRef.current = null;
+    }
+  }, []);
+
+  const startStatusPoll = useCallback(() => {
+    stopStatusPoll();
+    statusPollRef.current = setInterval(async () => {
+      try {
+        const res = await getAdminSessions();
+        const session = res.sessions?.find((s) => s.telefono_id === telefonoId);
+        if (session?.status === "active") {
+          mergePhone({ status: "active" });
+          setSuccess("Teléfono conectado");
+          setError("");
+          stopStatusPoll();
+        }
+      } catch {
+        // ignorar errores de poll
+      }
+    }, 3000);
+  }, [telefonoId, mergePhone, stopStatusPoll]);
 
   const openSocket = useCallback(() => {
     const token = localStorage.getItem("admin_token");
@@ -69,6 +98,7 @@ export default function AdminPhoneConnectPage() {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        stopStatusPoll();
         setWsConnected(true);
         setStarting(true);
         setSuccess("");
@@ -156,12 +186,15 @@ export default function AdminPhoneConnectPage() {
         setStarting(false);
         if (wsRef.current === ws) {
           wsRef.current = null;
+          // Si el teléfono no está activo todavía, hacer poll REST para detectar
+          // cuando se conecta por otra vía (ej: enlace QR compartido).
+          startStatusPoll();
         }
       };
     } catch {
       setError("No se pudo abrir el WebSocket");
     }
-  }, [closeSocket, mergePhone, router, telefonoId]);
+  }, [closeSocket, mergePhone, router, telefonoId, startStatusPoll, stopStatusPoll]);
 
   useEffect(() => {
     const token = localStorage.getItem("admin_token");
@@ -171,8 +204,18 @@ export default function AdminPhoneConnectPage() {
     }
 
     openSocket();
-    return () => closeSocket();
-  }, [closeSocket, openSocket, router]);
+    return () => {
+      closeSocket();
+      stopStatusPoll();
+    };
+  }, [closeSocket, openSocket, router, stopStatusPoll]);
+
+  // Detener el poll cuando el teléfono llega a activo (por WS o por poll)
+  useEffect(() => {
+    if (phone?.status === "active") {
+      stopStatusPoll();
+    }
+  }, [phone?.status, stopStatusPoll]);
 
   useEffect(() => {
     if (!phone?.qr_string || phone.status !== "qr_pending" || countdown <= 0) {
@@ -203,6 +246,24 @@ export default function AdminPhoneConnectPage() {
     } finally {
       setStarting(false);
     }
+  };
+
+  const handleShare = async () => {
+    setSharing(true);
+    try {
+      const data = await generateQRLink(telefonoId);
+      if (data.ok && data.token) {
+        setShareUrl(`${window.location.origin}/qr?token=${data.token}`);
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const formatTime = (seconds: number) => {
@@ -295,6 +356,22 @@ export default function AdminPhoneConnectPage() {
               <Button variant="ghost" size="sm" onClick={startFallback} disabled={starting}>
                 Forzar conexión REST
               </Button>
+            )}
+            {status !== "active" && (
+              <Button variant="outline" size="sm" onClick={handleShare} disabled={sharing}>
+                {sharing
+                  ? <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                  : <Share2 className="mr-2 h-3 w-3" />}
+                Compartir enlace QR
+              </Button>
+            )}
+            {shareUrl && (
+              <div className="rounded border p-2 text-xs space-y-1">
+                <p className="break-all text-muted-foreground">{shareUrl}</p>
+                <Button size="sm" variant="ghost" onClick={handleCopy} className="h-6 text-xs">
+                  {copied ? "✓ Copiado" : "Copiar enlace"}
+                </Button>
+              </div>
             )}
           </div>
 

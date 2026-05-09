@@ -47,38 +47,6 @@ type ApiKeyListResponse struct {
 	Error   string   `json:"error,omitempty"`
 }
 
-// ApiKeyUsageDaily representa un rollup diario de uso.
-type ApiKeyUsageDaily struct {
-	Day            string `json:"day"`
-	ApiKeyID       int64  `json:"api_key_id"`
-	EmpresaID      int64  `json:"empresa_id"`
-	TelefonoID     int64  `json:"telefono_id"`
-	RequestCount   int    `json:"request_count"`
-	SuccessCount   int    `json:"success_count"`
-	ErrorCount     int    `json:"error_count"`
-	LatencyAvgMS   int    `json:"latency_avg_ms"`
-	MessagesSent   int    `json:"messages_sent"`
-	BroadcastsSent int    `json:"broadcasts_sent"`
-	BytesIn        int64  `json:"bytes_in"`
-	BytesOut       int64  `json:"bytes_out"`
-}
-
-// ApiKeyUsageEvent representa una traza de uso por request.
-type ApiKeyUsageEvent struct {
-	ID            int64     `json:"id"`
-	ApiKeyID      int64     `json:"api_key_id"`
-	EmpresaID     int64     `json:"empresa_id"`
-	TelefonoID    int64     `json:"telefono_id"`
-	Method        string    `json:"method"`
-	Endpoint      string    `json:"endpoint"`
-	StatusCode    int       `json:"status_code"`
-	LatencyMS     int       `json:"latency_ms"`
-	RequestUnits  int       `json:"request_units"`
-	ResponseUnits int       `json:"response_units"`
-	RequestID     string    `json:"request_id,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-}
-
 // ApiKeyAuditEvent representa una acción auditable sobre una key.
 type ApiKeyAuditEvent struct {
 	ID          int64           `json:"id"`

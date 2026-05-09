@@ -2,8 +2,10 @@ package http
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,7 +42,7 @@ func NewRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	c := NewContainer()
-	k := NewKernel(c.AuthMiddleware, c.EmpresaAuthMiddleware, c.ApiKeyAuthMiddleware)
+	k := NewKernel(c.AuthMiddleware, c.EmpresaAuthMiddleware, c.ApiKeyAuthMiddleware, c.TelemetryMW)
 
 	RegisterAdminRoutes(mux, c, k)
 	RegisterAPIRoutes(mux, c, k)
@@ -275,27 +277,40 @@ func HandleGetAdminBroadcasts(w http.ResponseWriter, r *http.Request) {
 }
 
 type DashboardMetricsResponse struct {
-	OK                   bool  `json:"ok"`
-	TotalMensajes        int64 `json:"total_mensajes"`
-	MensajesHoy          int64 `json:"mensajes_hoy"`
-	MensajesSemana       int64 `json:"mensajes_semana"`
-	MensajesExitosos     int64 `json:"mensajes_exitosos"`
-	MensajesFallidos     int64 `json:"mensajes_fallidos"`
-	SesionesActivas      int   `json:"sesiones_activas"`
-	BroadcastsEjecutados int64 `json:"broadcasts_ejecutados"`
+	OK                bool    `json:"ok"`
+	ActiveCompanies   int     `json:"active_companies"`
+	SessionsActive    int     `json:"sessions_active"`
+	MessagesToday     int64   `json:"messages_today"`
+	MessagesSent      int64   `json:"messages_sent"`
+	MessagesFailed    int64   `json:"messages_failed"`
+	BroadcastsToday   int64   `json:"broadcasts_today"`
+	BroadcastsCreated int64   `json:"broadcasts_created"`
+	SuccessRate       float64 `json:"success_rate"`
+	LastUpdate        string  `json:"last_update"`
+	Alerts            []Alert `json:"alerts"`
 }
 
 type DashboardHandler struct {
-	msgRepo      storage.MessagesRepository
-	sessionStore *storage.SessionStore
-	empresaStore domain.EmpresaStoreInterface
+	msgRepo       storage.MessagesRepository
+	sessionStore  *storage.SessionStore
+	empresaStore  domain.EmpresaStoreInterface
+	telefonoStore *storage.TelefonoStore
+	db            *sql.DB
 }
 
-func NewDashboardHandler(msgRepo storage.MessagesRepository, sessionStore *storage.SessionStore, empresaStore domain.EmpresaStoreInterface) *DashboardHandler {
+func NewDashboardHandler(
+	msgRepo storage.MessagesRepository,
+	sessionStore *storage.SessionStore,
+	empresaStore domain.EmpresaStoreInterface,
+	telefonoStore *storage.TelefonoStore,
+	db *sql.DB,
+) *DashboardHandler {
 	return &DashboardHandler{
-		msgRepo:      msgRepo,
-		sessionStore: sessionStore,
-		empresaStore: empresaStore,
+		msgRepo:       msgRepo,
+		sessionStore:  sessionStore,
+		empresaStore:  empresaStore,
+		telefonoStore: telefonoStore,
+		db:            db,
 	}
 }
 
@@ -305,68 +320,73 @@ func (h *DashboardHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	filter, ok := domain.GetEmpresaFilter(r.Context(), r.Header.Get("X-Empresa-ID"))
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
+		json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false, Alerts: []Alert{}})
 		return
 	}
 
 	if h.msgRepo == nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
+		json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false, Alerts: []Alert{}})
 		return
 	}
 
-	var metrics *storage.MessageMetrics
+	var msgMetrics *storage.MessageMetrics
 	var err error
 
 	if filter.IsRoot && filter.EmpresaID == nil {
 		empresaIDStr := strings.TrimSpace(r.URL.Query().Get("empresa_id"))
 		if empresaIDStr != "" {
-			if empresaID, err := strconv.ParseInt(empresaIDStr, 10, 64); err == nil && empresaID > 0 {
+			if empresaID, parseErr := strconv.ParseInt(empresaIDStr, 10, 64); parseErr == nil && empresaID > 0 {
 				empresa, err := h.empresaStore.GetByID(empresaID)
 				if err != nil || empresa == nil {
 					w.WriteHeader(http.StatusNotFound)
-					json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
+					json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false, Alerts: []Alert{}})
 					return
 				}
-				metrics, err = h.msgRepo.GetMessageMetricsByEmpresa(empresa.ID)
+				msgMetrics, err = h.msgRepo.GetMessageMetricsByEmpresa(empresa.ID)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
+					json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false, Alerts: []Alert{}})
 					return
 				}
 			} else {
-				metrics, err = h.msgRepo.GetAllMessageMetrics()
+				msgMetrics, err = h.msgRepo.GetAllMessageMetrics()
 			}
 		} else {
-			metrics, err = h.msgRepo.GetAllMessageMetrics()
+			msgMetrics, err = h.msgRepo.GetAllMessageMetrics()
 		}
 	} else {
 		empresa, err := domain.GetRUCFromContext(r.Context(), filter, h.empresaStore)
 		if err != nil || empresa == "" {
 			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
+			json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false, Alerts: []Alert{}})
 			return
 		}
 		if empresaID, ok := domain.GetEmpresaIDFromContext(r.Context(), filter); ok {
-			metrics, err = h.msgRepo.GetMessageMetricsByEmpresa(empresaID)
+			msgMetrics, err = h.msgRepo.GetMessageMetricsByEmpresa(empresaID)
 		} else {
 			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
+			json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false, Alerts: []Alert{}})
 			return
 		}
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
+			json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false, Alerts: []Alert{}})
 			return
 		}
 	}
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false})
+		json.NewEncoder(w).Encode(DashboardMetricsResponse{OK: false, Alerts: []Alert{}})
 		return
 	}
 
+	if msgMetrics == nil {
+		msgMetrics = &storage.MessageMetrics{}
+	}
+
+	// — Sesiones activas —
 	sessionCount := 0
 	if filter.IsRoot && filter.EmpresaID == nil {
 		sessionCount = h.sessionStore.ActiveCount()
@@ -379,16 +399,63 @@ func (h *DashboardHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// — Empresas activas —
+	activeCompanies := 0
+	if h.db != nil {
+		_ = h.db.QueryRow("SELECT COUNT(*) FROM empresas WHERE activo = TRUE").Scan(&activeCompanies)
+	}
+
+	// — Broadcasts hoy —
+	var broadcastsToday int64
+	if h.db != nil {
+		now := time.Now()
+		todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		_ = h.db.QueryRow("SELECT COUNT(*) FROM broadcasts WHERE created_at >= ?", todayStart).Scan(&broadcastsToday)
+	}
+
+	// — Success rate —
+	var successRate float64
+	total := msgMetrics.MensajesExitosos + msgMetrics.MensajesFallidos
+	if total > 0 {
+		successRate = math.Round(float64(msgMetrics.MensajesExitosos)/float64(total)*100*10) / 10
+	}
+
+	// — Alertas de mismatch —
+	alerts := []Alert{}
+	if h.telefonoStore != nil && h.sessionStore != nil && filter.IsRoot && filter.EmpresaID == nil {
+		telefonos, listErr := h.telefonoStore.ListAll()
+		if listErr == nil {
+			mismatchCount := 0
+			for _, phone := range telefonos {
+				if phone.Status == domain.TelefonoStatusActive {
+					if state, ok := h.sessionStore.Get(phone.NumeroCompleto); !ok || state.Status != "active" {
+						mismatchCount++
+					}
+				}
+			}
+			if mismatchCount > 0 {
+				alerts = append(alerts, Alert{
+					Type:    "session_mismatch",
+					Level:   "warning",
+					Message: fmt.Sprintf("%d teléfonos marcados activos pero desconectados", mismatchCount),
+				})
+			}
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(DashboardMetricsResponse{
-		OK:                   true,
-		TotalMensajes:        metrics.TotalMensajes,
-		MensajesHoy:          metrics.MensajesHoy,
-		MensajesSemana:       metrics.MensajesSemana,
-		MensajesExitosos:     metrics.MensajesExitosos,
-		MensajesFallidos:     metrics.MensajesFallidos,
-		SesionesActivas:      sessionCount,
-		BroadcastsEjecutados: metrics.BroadcastsEjecutados,
+		OK:                true,
+		ActiveCompanies:   activeCompanies,
+		SessionsActive:    sessionCount,
+		MessagesToday:     msgMetrics.MensajesHoy,
+		MessagesSent:      msgMetrics.MensajesExitosos,
+		MessagesFailed:    msgMetrics.MensajesFallidos,
+		BroadcastsToday:   broadcastsToday,
+		BroadcastsCreated: msgMetrics.BroadcastsEjecutados,
+		SuccessRate:       successRate,
+		LastUpdate:        time.Now().UTC().Format(time.RFC3339),
+		Alerts:            alerts,
 	})
 }
 
@@ -483,11 +550,15 @@ var registeredRoutes = map[string][]string{
 	"/api/admin/api-keys/{id}/rotate":          {"POST"},
 	"/api/admin/api-keys/{id}/revoke":          {"POST"},
 	"/api/admin/api-keys/{id}/usage":           {"GET"},
+	"/api/admin/api-keys/{id}/usage/stats":      {"GET"},
+	"/api/admin/api-keys/{id}/usage/timeseries": {"GET"},
 	"/api/admin/api-keys/{id}/audit":           {"GET"},
+	"/api/admin/api-keys/{id}/audit/stats":     {"GET"},
 	"/api/admin/sesiones":                      {"GET", "POST"},
 	"/api/admin/sesiones/diagnostico":          {"GET"},
 	"/api/admin/mensajes":                      {"GET", "POST"},
 	"/api/admin/metricas":                      {"GET"},
+	"/api/admin/clientes/buscar":               {"GET"},
 	"/api/admin/difusiones":                    {"GET"},
 	// Service API — API token por teléfono
 	"/api/service/v1/auth/empresa/validate":    {"POST"},

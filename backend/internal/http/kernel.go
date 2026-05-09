@@ -3,10 +3,11 @@ package http
 import "net/http"
 
 type Kernel struct {
-	AdminAuth   func(http.Handler) http.Handler
-	EmpresaAuth func(http.Handler) http.Handler
-	ClientAuth  func(http.Handler) http.Handler
-	Global      []func(http.Handler) http.Handler
+	AdminAuth    func(http.Handler) http.Handler
+	EmpresaAuth  func(http.Handler) http.Handler
+	ClientAuth   func(http.Handler) http.Handler
+	ServiceStack func(http.Handler) http.Handler
+	Global       []func(http.Handler) http.Handler
 }
 
 func identityMiddleware(next http.Handler) http.Handler {
@@ -14,7 +15,7 @@ func identityMiddleware(next http.Handler) http.Handler {
 }
 
 // NewKernel inicializa el stack de middlewares globales y de auth.
-func NewKernel(auth AdminAuthProvider, empresaAuth EmpresaAuthProvider, apiKeyAuth ClientAuthProvider) *Kernel {
+func NewKernel(auth AdminAuthProvider, empresaAuth EmpresaAuthProvider, apiKeyAuth ClientAuthProvider, telemetryMW func(http.Handler) http.Handler) *Kernel {
 	k := &Kernel{
 		AdminAuth:   identityMiddleware,
 		EmpresaAuth: identityMiddleware,
@@ -33,6 +34,13 @@ func NewKernel(auth AdminAuthProvider, empresaAuth EmpresaAuthProvider, apiKeyAu
 	}
 	if apiKeyAuth != nil {
 		k.ClientAuth = apiKeyAuth.RequireApiKeyAuth()
+	}
+	if telemetryMW != nil {
+		k.ServiceStack = func(next http.Handler) http.Handler {
+			return k.ClientAuth(telemetryMW(next))
+		}
+	} else {
+		k.ServiceStack = k.ClientAuth
 	}
 	return k
 }

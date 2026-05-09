@@ -3,7 +3,7 @@ package http
 import "net/http"
 
 func RegisterAPIRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
-	clientStack := k.ClientAuth
+	clientStack := k.ServiceStack
 	empresaStack := k.EmpresaAuth
 
 	if c.CompaniesHandler != nil {

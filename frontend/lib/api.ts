@@ -39,7 +39,7 @@ type ApiEnvelope = {
   ok?: boolean;
   error?: string;
   message?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 async function parseApiBody(res: Response): Promise<ApiEnvelope> {
@@ -189,6 +189,17 @@ export interface EmpresaCreateRequest {
   direccion?: string;
 }
 
+export interface ClienteLookupData {
+  cliente: string;
+  direccion: string;
+  correo: string;
+}
+
+export interface ClienteLookupResponse {
+  ok: boolean;
+  cliente: ClienteLookupData;
+}
+
 function authHeaders(): HeadersInit {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
@@ -297,6 +308,16 @@ export async function restoreEmpresa(
   });
 }
 
+export async function buscarClientePorDocumento(
+  documento: string,
+): Promise<ClienteLookupResponse> {
+  const q = new URLSearchParams({ documento: documento.trim() });
+  return requestJSON(`${API_BASE}/api/admin/clientes/buscar?${q}`, {
+    method: "GET",
+    headers: authHeaders(),
+  }) as Promise<ClienteLookupResponse>;
+}
+
 export async function getAdminTelefonoApiKeys(
   telefonoId: number,
 ): Promise<ApiKeyListResponse> {
@@ -336,16 +357,84 @@ export async function revokeAdminApiKey(id: number): Promise<ApiKeyResponse> {
   });
 }
 
-export async function getAdminApiKeyUsage(
-  id: number,
-): Promise<{ ok: boolean; usage: ApiKeyUsageDaily[] }> {
-  return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}/usage`);
-}
-
 export async function getAdminApiKeyAudit(
   id: number,
 ): Promise<{ ok: boolean; audit: ApiKeyAuditEvent[] }> {
   return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}/audit`);
+}
+
+// ---- Telemetry / Métricas API Key ----
+
+export interface TelemetryUsageStats {
+  error_rate: number;
+  latency_p50_ms: number;
+  latency_p95_ms: number;
+  latency_p99_ms: number;
+  trend_direction: string;
+  peak_hour: number;
+  peak_day: string;
+  messages_per_request_ratio: number;
+  uptime_ratio: number;
+  total_requests: number;
+  total_errors: number;
+  period_days: number;
+}
+
+export interface TelemetryTimeSeriesPoint {
+  bucket: string;
+  request_count: number;
+  success_count: number;
+  error_count: number;
+  latency_avg_ms: number;
+  error_rate: number;
+}
+
+export interface TelemetryAuditStats {
+  rotations_per_month: number;
+  time_since_last_rotation_days: number | null;
+  actor_distribution: { user_id: number; actions: number }[];
+  revocation_rate: number;
+  total_keys: number;
+  total_revoked: number;
+}
+
+export interface TelemetryMetricsResponse {
+  ok: boolean;
+  stats?: TelemetryUsageStats;
+  series?: TelemetryTimeSeriesPoint[];
+  error?: string;
+}
+
+export interface TelemetryAuditResponse {
+  ok: boolean;
+  stats?: TelemetryAuditStats;
+  error?: string;
+}
+
+export async function getApiKeyUsageStats(id: number, desde?: string, hasta?: string): Promise<TelemetryMetricsResponse> {
+  const params = new URLSearchParams();
+  if (desde) params.set("desde", desde);
+  if (hasta) params.set("hasta", hasta);
+  const qs = params.toString();
+  return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}/usage/stats${qs ? `?${qs}` : ""}`);
+}
+
+export async function getApiKeyUsageTimeSeries(
+  id: number,
+  desde?: string,
+  hasta?: string,
+  granularidad?: string,
+): Promise<TelemetryMetricsResponse> {
+  const params = new URLSearchParams();
+  if (desde) params.set("desde", desde);
+  if (hasta) params.set("hasta", hasta);
+  if (granularidad) params.set("granularidad", granularidad);
+  const qs = params.toString();
+  return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}/usage/timeseries${qs ? `?${qs}` : ""}`);
+}
+
+export async function getApiKeyAuditStats(id: number): Promise<TelemetryAuditResponse> {
+  return fetchWithAuth(`${API_BASE}/api/admin/api-keys/${id}/audit/stats`);
 }
 
 export interface AdminMessage {
@@ -558,6 +647,23 @@ export async function postAdminSession(
   });
 }
 
+export async function generateQRLink(telefonoId: number): Promise<{
+  ok: boolean;
+  token?: string;
+  phone_id?: number;
+  expires_in?: number;
+  error?: string;
+}> {
+  const token = localStorage.getItem("admin_token");
+  const res = await fetch(`${API_BASE}/api/admin/telefonos/${telefonoId}/qr-link`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.json();
+}
+
 export interface BroadcastInfo {
   reference_id: string;
   ruc_empresa: string;
@@ -642,15 +748,15 @@ async function fetchWithAuth<T = ApiEnvelope>(url: string, options?: RequestInit
   });
 }
 
-function normalizeUserPayload(payload: any): UserAdminRol {
-  return payload?.user ?? payload;
+function normalizeUserPayload(payload: ApiEnvelope): UserAdminRol {
+  return (payload?.user ?? payload) as UserAdminRol;
 }
 
-function normalizeUsersResponse(payload: any): UsersResponse {
+function normalizeUsersResponse(payload: ApiEnvelope): UsersResponse {
   return {
-    ok: payload?.ok,
-    users: payload?.users ?? [],
-    total: payload?.total ?? 0,
+    ok: payload?.ok as boolean | undefined,
+    users: (payload?.users ?? []) as UserAdminRol[],
+    total: (payload?.total ?? 0) as number,
   };
 }
 

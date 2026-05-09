@@ -55,6 +55,12 @@ func (m *EmpresaAuthMiddleware) RequireEmpresaAuth() func(http.Handler) http.Han
 				return
 			}
 
+			// Rechazar tokens provisionales (QR link) en endpoints REST.
+			if claims.Scope == "qr_link" {
+				writeEmpresaError(w, http.StatusUnauthorized, "INVALID_TOKEN", "JWT inválido o expirado")
+				return
+			}
+
 			// Verificar token_version contra DB (revocación).
 			empresa, err := m.empresaStore.GetByID(claims.EmpresaID)
 			if err != nil || empresa == nil {

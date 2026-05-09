@@ -94,7 +94,7 @@ func (h *V1PhonesHandler) PostPhoneQr(w http.ResponseWriter, r *http.Request) {
 	writeV1Success(w, map[string]interface{}{
 		"telefono_id": telefonoID,
 		"qr_string":   qrString,
-		"expires_in":  300,
+		"expires_in":  60,
 	}, claims.EmpresaID)
 }
 

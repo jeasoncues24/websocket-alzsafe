@@ -56,6 +56,7 @@ export default function MessagesPage() {
 
   const companyByRuc = useMemo(() => {
     const map = new Map<string, Empresa>()
+    if (!Array.isArray(companies)) return map
     companies.forEach((company) => map.set(company.ruc, company))
     return map
   }, [companies])
@@ -68,9 +69,9 @@ export default function MessagesPage() {
         getAdminMessages({ status: statusFilter, account_id: filterAccount, limit: 50 }),
         getEmpresas({ limit: 1000 }),
       ])
-      setMessages(msgsData.messages)
-      setTotal(msgsData.total)
-      setCompanies(compsData.empresas)
+      setMessages(msgsData.messages ?? [])
+      setTotal(msgsData.total ?? 0)
+      setCompanies(compsData.empresas ?? [])
     } catch (error) {
       console.error("Failed to load data:", error)
     } finally {

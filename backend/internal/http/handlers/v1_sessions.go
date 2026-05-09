@@ -114,7 +114,7 @@ func (h *V1SessionsHandler) PostSessions(w http.ResponseWriter, r *http.Request)
 		"telefono_id":    id,
 		"numeroCompleto": numeroCompleto,
 		"status":         "qr_pending",
-		"expires_in":     300,
+		"expires_in":     60,
 		"qr_string":      qrString,
 	}, claims.EmpresaID)
 }
@@ -255,7 +255,7 @@ func (h *V1SessionsHandler) StartPhoneConnection(w http.ResponseWriter, r *http.
 		"numeroCompleto": phone.NumeroCompleto,
 		"status":         "initializing",
 		"qr_string":      phone.QRString,
-		"expires_in":     300,
+		"expires_in":     60,
 	}, claims.EmpresaID)
 }
 

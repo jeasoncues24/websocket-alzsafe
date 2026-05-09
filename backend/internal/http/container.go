@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"wsapi/internal/config"
 	"wsapi/internal/domain"
 	handlers "wsapi/internal/http/handlers"
 	"wsapi/internal/http/middleware"
 	"wsapi/internal/storage"
+	"wsapi/internal/telemetry"
 	"wsapi/internal/whatsapp"
 )
 
@@ -26,21 +28,24 @@ type Container struct {
 	AuthHandler           *handlers.AuthHandler
 	CompaniesHandler      *handlers.CompaniesHandler
 	ApiKeysHandler        *handlers.ApiKeysHandler
+	ApiKeyMetricsHandler  *handlers.ApiKeyMetricsHandler
 	AdminHandler          *AdminHandler
 	V1MessagesHandler     *handlers.V1MessagesHandler
 	V1BroadcastsHandler   *handlers.V1BroadcastsHandler
 	V1MetricsHandler      *handlers.V1MetricsHandler
 	V1PhonesHandler       *handlers.V1PhonesHandler
 	V1SessionsHandler     *handlers.V1SessionsHandler
-	V1WSHandler              *handlers.V1WSHandler
-	AdminMessagesHandler     *handlers.AdminMessagesHandler
-	AdminSessionsHandler     *handlers.AdminSessionsHandler
-	AuthMiddleware           *middleware.AuthMiddleware
+	V1WSHandler           *handlers.V1WSHandler
+	AdminMessagesHandler  *handlers.AdminMessagesHandler
+	AdminSessionsHandler  *handlers.AdminSessionsHandler
+	AdminClientsHandler   *handlers.AdminClientsHandler
+	AuthMiddleware        *middleware.AuthMiddleware
 	EmpresaAuthMiddleware *middleware.EmpresaAuthMiddleware
 	ApiKeyAuthMiddleware  *middleware.ApiKeyAuthMiddleware
 	DashboardHandler      *DashboardHandler
 	Config                *config.Config
 	JWTCfg                *config.JWTConfig
+	TelemetryMW           func(http.Handler) http.Handler
 }
 
 // NewContainer inicializa todas las dependencias y handlers
@@ -92,14 +97,27 @@ func NewContainer() *Container {
 	v1MetricsHandler := handlers.NewV1MetricsHandler(msgRepo, telefonoStore)
 	v1PhonesHandler := handlers.NewV1PhonesHandler(telefonoStore, sessionStore)
 	v1SessionsHandler := handlers.NewV1SessionsHandler(telefonoStore, sessionStore, manager)
-	v1WSHandler := handlers.NewV1WSHandler(manager, jwtCfg)
+	v1WSHandler := handlers.NewV1WSHandler(manager, jwtCfg, telefonoStore, sessionStore)
 	adminMessagesHandler := handlers.NewAdminMessagesHandler(msgRepo, empresaStore, telefonoStore, manager)
-	adminSessionsHandler := handlers.NewAdminSessionsHandler(empresaStore, telefonoStore, manager, sessionStore)
-	dashboardHandler := NewDashboardHandler(msgRepo, sessionStore, empresaStore)
+	adminSessionsHandler := handlers.NewAdminSessionsHandler(empresaStore, telefonoStore, manager, sessionStore, jwtCfg)
+	adminClientsHandler := handlers.NewAdminClientsHandler(db)
+	dashboardHandler := NewDashboardHandler(msgRepo, sessionStore, empresaStore, telefonoStore, db)
 
 	authMiddleware := middleware.NewAuthMiddleware(jwtCfg, blacklistStore)
 	empresaAuthMiddleware := middleware.NewEmpresaAuthMiddleware(jwtCfg, empresaStore, telefonoStore)
 	apiKeyAuthMiddleware := middleware.NewApiKeyAuthMiddleware(apiKeyStore, empresaStore, telefonoStore)
+
+	var telemetryMW func(http.Handler) http.Handler
+	var apiKeyMetricsHandler *handlers.ApiKeyMetricsHandler
+	if db != nil {
+		teleCfg := telemetry.DefaultConfig()
+		teleStore := telemetry.NewMySQLStore(db, teleCfg)
+		teleMiddleware := telemetry.NewTelemetryMiddleware(teleStore, teleCfg)
+		telemetryMW = teleMiddleware.Capture
+
+		teleStoreSvc := storage.NewTelemetryStore(db)
+		apiKeyMetricsHandler = handlers.NewApiKeyMetricsHandler(teleStoreSvc)
+	}
 
 	// AdminHandler requiere tipos propios, ajústalo según tu implementación
 	adminHandler := NewAdminHandler(db, sessionStore, manager, jwtCfg)
@@ -118,10 +136,11 @@ func NewContainer() *Container {
 		TelefonoStore:         telefonoStore,
 		DB:                    db,
 		StartupTasks:          buildStartupBootstrap(cfg, manager, sessionStore, telefonoStore),
-		AuthHandler:           authHandler,
-		CompaniesHandler:      companiesHandler,
-		ApiKeysHandler:        apiKeysHandler,
-		AdminHandler:          adminHandler,
+		AuthHandler:              authHandler,
+		CompaniesHandler:         companiesHandler,
+		ApiKeysHandler:           apiKeysHandler,
+		ApiKeyMetricsHandler:     apiKeyMetricsHandler,
+		AdminHandler:             adminHandler,
 		V1MessagesHandler:     v1MessagesHandler,
 		V1BroadcastsHandler:   v1BroadcastsHandler,
 		V1MetricsHandler:      v1MetricsHandler,
@@ -130,11 +149,13 @@ func NewContainer() *Container {
 		V1WSHandler:              v1WSHandler,
 		AdminMessagesHandler:     adminMessagesHandler,
 		AdminSessionsHandler:     adminSessionsHandler,
+		AdminClientsHandler:      adminClientsHandler,
 		AuthMiddleware:           authMiddleware,
 		EmpresaAuthMiddleware: empresaAuthMiddleware,
 		ApiKeyAuthMiddleware:  apiKeyAuthMiddleware,
 		DashboardHandler:      dashboardHandler,
 		Config:                cfg,
 		JWTCfg:                jwtCfg,
+		TelemetryMW:           telemetryMW,
 	}
 }

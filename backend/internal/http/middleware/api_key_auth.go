@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"wsapi/internal/domain"
 	"wsapi/internal/storage"
@@ -71,46 +70,7 @@ func (m *ApiKeyAuthMiddleware) RequireApiKeyAuth() func(http.Handler) http.Handl
 				Permissions:   key.Scopes,
 			})
 
-			started := time.Now()
-			rw := &apiKeyResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-			next.ServeHTTP(rw, r.WithContext(ctx))
-
-			_ = m.apiKeyStore.RecordUsageEvent(&domain.ApiKeyUsageEvent{
-				ApiKeyID:      key.ID,
-				EmpresaID:     key.EmpresaID,
-				TelefonoID:    key.TelefonoID,
-				Method:        r.Method,
-				Endpoint:      r.URL.Path,
-				StatusCode:    rw.statusCode,
-				LatencyMS:     int(time.Since(started).Milliseconds()),
-				RequestUnits:  1,
-				ResponseUnits: 0,
-				RequestID:     strings.TrimSpace(r.Header.Get("X-Correlation-ID")),
-			})
-			_ = m.apiKeyStore.UpsertDailyUsage(&domain.ApiKeyUsageDaily{
-				Day:          started.Format("2006-01-02"),
-				ApiKeyID:     key.ID,
-				EmpresaID:    key.EmpresaID,
-				TelefonoID:   key.TelefonoID,
-				RequestCount: 1,
-				SuccessCount: func() int {
-					if rw.statusCode < 400 {
-						return 1
-					}
-					return 0
-				}(),
-				ErrorCount: func() int {
-					if rw.statusCode >= 400 {
-						return 1
-					}
-					return 0
-				}(),
-				LatencyAvgMS:   int(time.Since(started).Milliseconds()),
-				MessagesSent:   0,
-				BroadcastsSent: 0,
-				BytesIn:        0,
-				BytesOut:       0,
-			})
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
@@ -142,12 +102,3 @@ func writeAPIKeyError(w http.ResponseWriter, status int, code, message string) {
 	fmt.Fprintf(w, `{"ok":false,"error":%q,"message":%q}`, code, message)
 }
 
-type apiKeyResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (w *apiKeyResponseWriter) WriteHeader(statusCode int) {
-	w.statusCode = statusCode
-	w.ResponseWriter.WriteHeader(statusCode)
-}

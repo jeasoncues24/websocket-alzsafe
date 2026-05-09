@@ -3,8 +3,11 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
+	"wsapi/internal/auth"
+	"wsapi/internal/config"
 	"wsapi/internal/domain"
 	"wsapi/internal/storage"
 	"wsapi/internal/whatsapp"
@@ -45,6 +48,7 @@ type AdminSessionsHandler struct {
 	telefonoStore *storage.TelefonoStore
 	manager       *whatsapp.Manager
 	sessionStore  *storage.SessionStore
+	jwtCfg        *config.JWTConfig
 }
 
 func NewAdminSessionsHandler(
@@ -52,13 +56,44 @@ func NewAdminSessionsHandler(
 	telefonoStore *storage.TelefonoStore,
 	manager *whatsapp.Manager,
 	sessionStore *storage.SessionStore,
+	jwtCfg *config.JWTConfig,
 ) *AdminSessionsHandler {
 	return &AdminSessionsHandler{
 		empresaStore:  empresaStore,
 		telefonoStore: telefonoStore,
 		manager:       manager,
 		sessionStore:  sessionStore,
+		jwtCfg:        jwtCfg,
 	}
+}
+
+func (h *AdminSessionsHandler) GenerateQRLink(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	telefonoID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || telefonoID <= 0 {
+		writeAPIError(w, http.StatusBadRequest, "telefono_id inválido")
+		return
+	}
+	if h.telefonoStore == nil || h.jwtCfg == nil {
+		writeAPIError(w, http.StatusInternalServerError, "servicio no disponible")
+		return
+	}
+	phone, err := h.telefonoStore.GetByID(telefonoID)
+	if err != nil || phone == nil {
+		writeAPIError(w, http.StatusNotFound, "Teléfono no encontrado")
+		return
+	}
+	token, err := auth.GenerateQRLinkToken(phone.EmpresaID, phone.ID, h.jwtCfg.Secret)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "Error generando token")
+		return
+	}
+	writeHandlerJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":         true,
+		"token":      token,
+		"phone_id":   phone.ID,
+		"expires_in": 600,
+	})
 }
 
 func (h *AdminSessionsHandler) GetSessions(w http.ResponseWriter, r *http.Request) {

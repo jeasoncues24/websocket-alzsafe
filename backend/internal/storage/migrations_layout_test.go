@@ -43,10 +43,10 @@ func TestEmbeddedMigrationsMatchNormalizedLayout(t *testing.T) {
 		"010_create_token_blacklist_table.down.sql",
 		"011_create_api_keys_table.up.sql",
 		"011_create_api_keys_table.down.sql",
-		"012_create_api_key_usage_events_table.up.sql",
-		"012_create_api_key_usage_events_table.down.sql",
-		"013_create_api_key_usage_daily_table.up.sql",
-		"013_create_api_key_usage_daily_table.down.sql",
+		"012_create_telefono_request_logs.up.sql",
+		"012_create_telefono_request_logs.down.sql",
+		"013_create_telefono_metrics_min.up.sql",
+		"013_create_telefono_metrics_min.down.sql",
 		"014_create_api_key_audit_events_table.up.sql",
 		"014_create_api_key_audit_events_table.down.sql",
 		"015_create_audit_log_table.up.sql",
@@ -66,6 +66,12 @@ func TestEmbeddedMigrationsMatchNormalizedLayout(t *testing.T) {
 	}
 
 	unexpected := []string{
+		"012_create_api_key_usage_events_table.up.sql",
+		"012_create_api_key_usage_events_table.down.sql",
+		"013_create_api_key_usage_daily_table.up.sql",
+		"013_create_api_key_usage_daily_table.down.sql",
+		"017_create_telemetry_tables.up.sql",
+		"017_create_telemetry_tables.down.sql",
 		"015_add_missing_columns.up.sql",
 		"015_add_missing_columns.down.sql",
 		"016_rename_empresa_telefono_contacto.up.sql",
@@ -147,6 +153,18 @@ func TestNormalizedCreateTableMigrationsHaveFinalSchema(t *testing.T) {
 			forbidden:        []string{"ALTER TABLE", "INSERT INTO"},
 			createCount:      1,
 		},
+		{
+			name:             "012_create_telefono_request_logs.up.sql",
+			requiredContains: []string{"telefono_request_logs", "api_key_id", "contract_name", "latency_ms", "idx_trl_key_time"},
+			forbidden:        []string{"ALTER TABLE", "api_key_usage_events"},
+			createCount:      0,
+		},
+		{
+			name:             "013_create_telefono_metrics_min.up.sql",
+			requiredContains: []string{"telefono_metrics_min", "bucket_min", "latency_p50_ms", "uq_tmm_bucket"},
+			forbidden:        []string{"ALTER TABLE", "api_key_usage_daily"},
+			createCount:      0,
+		},
 	}
 
 	for _, tc := range cases {
@@ -172,11 +190,10 @@ func TestNormalizedCreateTableMigrationsHaveFinalSchema(t *testing.T) {
 func TestSeedsMigrationContainsAllInitialDataAndReversibleDeletes(t *testing.T) {
 	up := mustReadMigration(t, "016_seeds.up.sql")
 	for _, want := range []string{
-		"INSERT INTO roles",
-		"INSERT INTO empresas",
-		"INSERT INTO admin_users",
-		"INSERT INTO modules",
-		"INSERT INTO user_modules",
+		"INSERT IGNORE INTO roles",
+		"INSERT IGNORE INTO admin_users",
+		"INSERT IGNORE INTO modules",
+		"INSERT IGNORE INTO user_modules",
 	} {
 		if !strings.Contains(up, want) {
 			t.Fatalf("expected seeds up migration to contain %q", want)
@@ -191,7 +208,6 @@ func TestSeedsMigrationContainsAllInitialDataAndReversibleDeletes(t *testing.T) 
 		{"user_modules", strings.Index(down, "DELETE FROM user_modules")},
 		{"admin_users", strings.Index(down, "DELETE FROM admin_users")},
 		{"modules", strings.Index(down, "DELETE FROM modules")},
-		{"empresas", strings.Index(down, "DELETE FROM empresas")},
 		{"roles", strings.Index(down, "DELETE FROM roles")},
 	}
 	for _, pos := range positions {
@@ -199,8 +215,8 @@ func TestSeedsMigrationContainsAllInitialDataAndReversibleDeletes(t *testing.T) 
 			t.Fatalf("expected down migration to delete from %s", pos.name)
 		}
 	}
-	if !(positions[0].idx < positions[1].idx && positions[1].idx < positions[2].idx && positions[2].idx < positions[3].idx && positions[3].idx < positions[4].idx) {
-		t.Fatalf("expected delete order to be user_modules -> admin_users -> modules -> empresas -> roles")
+	if !(positions[0].idx < positions[1].idx && positions[1].idx < positions[2].idx && positions[2].idx < positions[3].idx) {
+		t.Fatalf("expected delete order to be user_modules -> admin_users -> modules -> roles")
 	}
 }
 

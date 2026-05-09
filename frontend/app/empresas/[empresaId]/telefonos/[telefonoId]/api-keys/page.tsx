@@ -11,10 +11,7 @@ import {
   Loader2,
   RefreshCw,
   ShieldAlert,
-  ShieldCheck,
   Smartphone,
-  Activity,
-  FileText,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -31,11 +28,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import {
   createAdminTelefonoApiKey,
-  getAdminApiKeyAudit,
-  getAdminApiKeyUsage,
   getAdminEmpresaTelefonos,
   getAdminTelefonoApiKeys,
   getEmpresa,
@@ -43,10 +37,9 @@ import {
   rotateAdminApiKey,
   type AdminTelefono,
   type ApiKey,
-  type ApiKeyAuditEvent,
-  type ApiKeyUsageDaily,
   type Empresa,
 } from "@/lib/api";
+import { UsageTabContent, AuditTabContent } from "@/components/api-key-metrics";
 
 type ApiKeyAction = "rotate" | "revoke" | null;
 
@@ -71,6 +64,13 @@ function formatStatus(status: string) {
   }
 }
 
+const AVAILABLE_SCOPES = [
+  "messages:read",
+  "messages:write",
+  "broadcasts:read",
+  "broadcasts:write",
+];
+
 export default function PhoneApiKeysPage() {
   const router = useRouter();
   const params = useParams<{ empresaId: string; telefonoId: string }>();
@@ -81,12 +81,8 @@ export default function PhoneApiKeysPage() {
   const [telefono, setTelefono] = useState<AdminTelefono | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null);
-  const [usage, setUsage] = useState<ApiKeyUsageDaily[]>([]);
-  const [audit, setAudit] = useState<ApiKeyAuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [keysLoading, setKeysLoading] = useState(false);
-  const [usageLoading, setUsageLoading] = useState(false);
-  const [auditLoading, setAuditLoading] = useState(false);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -100,7 +96,7 @@ export default function PhoneApiKeysPage() {
   const [creating, setCreating] = useState(false);
   const [acting, setActing] = useState(false);
   const [createName, setCreateName] = useState("");
-  const [createScopes, setCreateScopes] = useState("messages:read\nmessages:write\nbroadcasts:read\nbroadcasts:write");
+  const [createScopes, setCreateScopes] = useState<string[]>([...AVAILABLE_SCOPES]);
   const [createExpiresAt, setCreateExpiresAt] = useState("");
 
   const selectedKey = useMemo(
@@ -162,49 +158,6 @@ export default function PhoneApiKeysPage() {
     };
   }, [empresaId, router, telefonoId]);
 
-  useEffect(() => {
-    if (!selectedKey?.id) {
-      setUsage([]);
-      setAudit([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadKeyDetails() {
-      setUsageLoading(true);
-      setAuditLoading(true);
-
-      try {
-        const [usageResp, auditResp] = await Promise.all([
-          getAdminApiKeyUsage(selectedKey.id),
-          getAdminApiKeyAudit(selectedKey.id),
-        ]);
-
-        if (cancelled) return;
-
-        setUsage(usageResp.usage ?? []);
-        setAudit(auditResp.audit ?? []);
-      } catch {
-        if (!cancelled) {
-          setUsage([]);
-          setAudit([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setUsageLoading(false);
-          setAuditLoading(false);
-        }
-      }
-    }
-
-    loadKeyDetails();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedKey?.id]);
-
   async function refreshKeys(nextSelectedKeyId?: number | null) {
     setKeysLoading(true);
     try {
@@ -222,10 +175,16 @@ export default function PhoneApiKeysPage() {
     }
   }
 
+  function toggleScope(scope: string) {
+    setCreateScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
+    );
+  }
+
   function openCreate() {
     setActionError("");
     setCreateName(`API key ${telefono?.numero_completo ?? telefonoId}`);
-    setCreateScopes("messages:read\nmessages:write\nbroadcasts:read\nbroadcasts:write");
+    setCreateScopes([...AVAILABLE_SCOPES]);
     setCreateExpiresAt("");
     setCreateOpen(true);
   }
@@ -234,14 +193,9 @@ export default function PhoneApiKeysPage() {
     setCreating(true);
     setActionError("");
     try {
-      const scopes = createScopes
-        .split("\n")
-        .map((item) => item.trim())
-        .filter(Boolean);
-
       const payload: { nombre: string; scopes: string[]; expires_at?: string } = {
         nombre: createName.trim() || `API key ${telefono?.numero_completo ?? telefonoId}`,
-        scopes,
+        scopes: createScopes,
       };
 
       if (createExpiresAt) {
@@ -509,91 +463,11 @@ export default function PhoneApiKeysPage() {
         </TabsContent>
 
         <TabsContent value="usage">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-4 w-4" />
-                Uso diario
-              </CardTitle>
-              <CardDescription>Métricas agregadas para la key seleccionada.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {usageLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                </div>
-              ) : usage.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                  Sin datos de uso todavía.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {usage.map((row) => (
-                    <div key={`${row.day}-${row.api_key_id}`} className="rounded-xl border p-4 text-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="font-medium">{row.day}</div>
-                        <Badge variant="outline">{row.request_count} requests</Badge>
-                      </div>
-                      <div className="mt-3 grid gap-2 text-muted-foreground md:grid-cols-4">
-                        <span>Éxitos: {row.success_count}</span>
-                        <span>Errores: {row.error_count}</span>
-                        <span>Latencia: {row.latency_avg_ms} ms</span>
-                        <span>Mensajes: {row.messages_sent}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <UsageTabContent apiKeyId={selectedKey?.id ?? null} />
         </TabsContent>
 
         <TabsContent value="audit">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Auditoría
-              </CardTitle>
-              <CardDescription>Eventos de creación, rotación y revocación.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {auditLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-16 w-full" />
-                  <Skeleton className="h-16 w-full" />
-                </div>
-              ) : audit.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                  Sin eventos de auditoría.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {audit.map((item) => (
-                    <div key={item.id} className="rounded-xl border p-4 text-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          {item.action === "created" ? (
-                            <ShieldCheck className="h-4 w-4 text-green-600" />
-                          ) : item.action === "rotated" ? (
-                            <RefreshCw className="h-4 w-4 text-blue-600" />
-                          ) : (
-                            <ShieldAlert className="h-4 w-4 text-red-600" />
-                          )}
-                          <span className="font-medium">{item.action}</span>
-                        </div>
-                        <span className="text-muted-foreground">{formatDate(item.created_at)}</span>
-                      </div>
-                      <p className="mt-2 text-muted-foreground">
-                        Actor: {item.actor_user_id ?? "sistema"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <AuditTabContent apiKeyId={selectedKey?.id ?? null} />
         </TabsContent>
       </Tabs>
 
@@ -613,12 +487,18 @@ export default function PhoneApiKeysPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Scopes</label>
-              <Textarea
-                value={createScopes}
-                onChange={(e) => setCreateScopes(e.target.value)}
-                className="min-h-32 font-mono text-xs"
-                placeholder="messages:read\nmessages:write"
-              />
+              <div className="flex flex-wrap gap-2">
+                {AVAILABLE_SCOPES.map((scope) => (
+                  <Badge
+                    key={scope}
+                    variant={createScopes.includes(scope) ? "default" : "outline"}
+                    className="cursor-pointer select-none"
+                    onClick={() => toggleScope(scope)}
+                  >
+                    {scope}
+                  </Badge>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Expiración opcional</label>

@@ -64,8 +64,13 @@ func RegisterAdminRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 		mux.Handle("GET /api/admin/api-keys/{id}", adminStack(http.HandlerFunc(c.ApiKeysHandler.Get)))
 		mux.Handle("POST /api/admin/api-keys/{id}/rotate", adminStack(http.HandlerFunc(c.ApiKeysHandler.Rotate)))
 		mux.Handle("POST /api/admin/api-keys/{id}/revoke", adminStack(http.HandlerFunc(c.ApiKeysHandler.Revoke)))
-		mux.Handle("GET /api/admin/api-keys/{id}/usage", adminStack(http.HandlerFunc(c.ApiKeysHandler.Usage)))
 		mux.Handle("GET /api/admin/api-keys/{id}/audit", adminStack(http.HandlerFunc(c.ApiKeysHandler.Audit)))
+	}
+
+	if c.ApiKeyMetricsHandler != nil {
+		mux.Handle("GET /api/admin/api-keys/{id}/usage/stats", adminStack(http.HandlerFunc(c.ApiKeyMetricsHandler.UsageStats)))
+		mux.Handle("GET /api/admin/api-keys/{id}/usage/timeseries", adminStack(http.HandlerFunc(c.ApiKeyMetricsHandler.UsageTimeSeries)))
+		mux.Handle("GET /api/admin/api-keys/{id}/audit/stats", adminStack(http.HandlerFunc(c.ApiKeyMetricsHandler.AuditStats)))
 	}
 
 	if c.DashboardHandler != nil {
@@ -79,6 +84,10 @@ func RegisterAdminRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 	if c.AdminSessionsHandler != nil {
 		mux.Handle("GET /api/admin/sesiones", adminStack(http.HandlerFunc(c.AdminSessionsHandler.GetSessions)))
 		mux.Handle("POST /api/admin/sesiones", adminStack(http.HandlerFunc(c.AdminSessionsHandler.PostSession)))
+		mux.Handle("POST /api/admin/telefonos/{id}/qr-link", adminStack(http.HandlerFunc(c.AdminSessionsHandler.GenerateQRLink)))
+	}
+	if c.AdminClientsHandler != nil {
+		mux.Handle("GET /api/admin/clientes/buscar", adminStack(http.HandlerFunc(c.AdminClientsHandler.BuscarCliente)))
 	}
 	mux.Handle("GET /api/admin/difusiones", adminStack(http.HandlerFunc(HandleGetAdminBroadcasts)))
 

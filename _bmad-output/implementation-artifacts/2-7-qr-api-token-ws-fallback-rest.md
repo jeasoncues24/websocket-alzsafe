@@ -2,7 +2,7 @@
 title: 'Story 2.7 — QR vía API token: WS primario + fallback REST'
 type: 'bugfix+feature'
 created: '2026-05-07'
-status: 'ready-for-dev'
+status: 'review'
 epic: 'epic-2-mejoras-post-revision'
 baseline_commit: '3fe8a86'
 context:
@@ -59,32 +59,32 @@ El handler imprime `[INFO] V1 WS opened empresa=%d` al inicio y `[INFO] V1 WS cl
 
 ## Tasks / Subtasks
 
-- [ ] **Tarea 1: Actualizar `V1WSHandler` struct y constructor** (AC: 7)
-  - [ ] Agregar campos `telefonoStore *storage.TelefonoStore` y `sessionStore *storage.SessionStore` al struct
-  - [ ] Actualizar `NewV1WSHandler` para aceptar los nuevos parámetros
-  - [ ] En `container.go`, pasar `telefonoStore` y `sessionStore` a `NewV1WSHandler`
+- [x] **Tarea 1: Actualizar `V1WSHandler` struct y constructor** (AC: 7)
+  - [x] Agregar campos `telefonoStore *storage.TelefonoStore` y `sessionStore *storage.SessionStore` al struct
+  - [x] Actualizar `NewV1WSHandler` para aceptar los nuevos parámetros
+  - [x] En `container.go`, pasar `telefonoStore` y `sessionStore` a `NewV1WSHandler`
 
-- [ ] **Tarea 2: Reescribir `HandleWS` con bridge real** (AC: 1, 2, 3, 4, 5, 8)
-  - [ ] Fase 1 — auth: extraer JWT de query param o header, validar con `auth.ParseEmpresaJWT`
-  - [ ] Fase 2 — esperar subscribe: leer primer mensaje del WS, verificar `type == "subscribe"`, extraer `phone_id`
-  - [ ] Verificar que el teléfono existe y pertenece a la empresa (usar `telefonoStore.BelongsToEmpresa`)
-  - [ ] Agregar log apertura: `fmt.Printf("[INFO] V1 WS opened empresa=%d\n", claims.EmpresaID)`
-  - [ ] Registrar `defer` de cleanup (igual que admin handler): si sessionStore reporta `initializing`/`qr_pending` → `h.manager.Delete(accountID)`
-  - [ ] Agregar log de cierre en el defer
-  - [ ] Llamar `whatsapp.StartSession(h.manager, phone.NumeroCompleto)` para obtener canal de eventos
-  - [ ] Ticker de 25s para keepalive ping
-  - [ ] Loop `select` sobre `events chan`, `ticker.C`, `ctx.Done()` (ver Dev Notes para código exacto)
-  - [ ] Mapear `SessionEvent.Event` → tipo V1 al reenviar (ver Dev Notes)
+- [x] **Tarea 2: Reescribir `HandleWS` con bridge real** (AC: 1, 2, 3, 4, 5, 8)
+  - [x] Fase 1 — auth: extraer JWT de query param o header, validar con `auth.ParseEmpresaJWT`
+  - [x] Fase 2 — esperar subscribe: leer primer mensaje del WS, verificar `type == "subscribe"`, extraer `phone_id`
+  - [x] Verificar que el teléfono existe y pertenece a la empresa (usar `telefonoStore.BelongsToEmpresa`)
+  - [x] Agregar log apertura: `fmt.Printf("[INFO] V1 WS opened empresa=%d\n", claims.EmpresaID)`
+  - [x] Registrar `defer` de cleanup (igual que admin handler): si sessionStore reporta `initializing`/`qr_pending` → `h.manager.Delete(accountID)`
+  - [x] Agregar log de cierre en el defer
+  - [x] Llamar `whatsapp.StartSession(h.manager, phone.NumeroCompleto)` para obtener canal de eventos
+  - [x] Ticker de 25s para keepalive ping
+  - [x] Loop `select` sobre `events chan`, `ticker.C`, `ctx.Done()` (ver Dev Notes para código exacto)
+  - [x] Mapear `SessionEvent.Event` → tipo V1 al reenviar (ver Dev Notes)
 
-- [ ] **Tarea 3: Corregir `expires_in` en V1 REST** (AC: 6)
-  - [ ] `v1_phones.go` → `PostPhoneQr`: cambiar `"expires_in": 300` → `"expires_in": 60`
-  - [ ] `v1_sessions.go` → `PostSessions`: cambiar `"expires_in": 300` → `"expires_in": 60`
-  - [ ] `v1_sessions.go` → `StartPhoneConnection`: cambiar `"expires_in": 300` → `"expires_in": 60`
+- [x] **Tarea 3: Corregir `expires_in` en V1 REST** (AC: 6)
+  - [x] `v1_phones.go` → `PostPhoneQr`: cambiar `"expires_in": 300` → `"expires_in": 60`
+  - [x] `v1_sessions.go` → `PostSessions`: cambiar `"expires_in": 300` → `"expires_in": 60`
+  - [x] `v1_sessions.go` → `StartPhoneConnection`: cambiar `"expires_in": 300` → `"expires_in": 60`
 
-- [ ] **Tarea 4: Verificar build, tests y lint** (AC: 9, 10, 11)
-  - [ ] `cd backend && go build ./...`
-  - [ ] `cd backend && go test ./...`
-  - [ ] `cd frontend && npm run lint`
+- [x] **Tarea 4: Verificar build, tests y lint** (AC: 9, 10, 11)
+  - [x] `cd backend && go build ./...`
+  - [x] `cd backend && go test ./...`
+  - [x] `cd frontend && npm run lint`
 
 ## Dev Notes
 
@@ -398,6 +398,22 @@ claude-sonnet-4-6
 
 ### Completion Notes List
 
+- Reescrito `V1WSHandler.HandleWS` con bridge real: auth JWT → subscribe → validación teléfono → `StartSession` → loop select con eventos/ticker/ctx
+- `mapV1EventType` convierte `"qr-{id}"` → `"qr"`, `"active-{id}"` → `"connected"`, resto pasa directo
+- Defer cleanup idéntico al admin handler (story 2-6): `manager.Delete(accountID)` solo si `initializing` o `qr_pending`
+- Ticker de 25s para keepalive ping, igual que handler admin
+- Logs de apertura y cierre con `empresa`, `phone` y `account`
+- `NewV1WSHandler` extendido con `telefonoStore` y `sessionStore`; `container.go` actualizado
+- `expires_in` corregido de 300 → 60 en los 3 endpoints REST (PostPhoneQr, PostSessions, StartPhoneConnection)
+- Los 3 errores de lint pre-existentes en `frontend/lib/api.ts` no son nuevos — AC11 cumplido
+
 ### File List
 
+- backend/internal/http/handlers/v1_ws.go
+- backend/internal/http/container.go
+- backend/internal/http/handlers/v1_phones.go
+- backend/internal/http/handlers/v1_sessions.go
+
 ### Change Log
+
+- 2026-05-08: Implementación completa story 2-7 — bridge WS empresa, corrección expires_in REST

@@ -43,6 +43,7 @@ export default function BroadcastsPage() {
 
   const companyByRuc = useMemo(() => {
     const map = new Map<string, Empresa>()
+    if (!Array.isArray(companies)) return map
     companies.forEach((company) => map.set(company.ruc, company))
     return map
   }, [companies])
@@ -54,8 +55,8 @@ export default function BroadcastsPage() {
         getAdminBroadcasts(filterRuc || undefined),
         getEmpresas({ limit: 1000 }),
       ])
-      setBroadcasts(bcData.broadcasts)
-      setCompanies(compsData.empresas)
+      setBroadcasts(bcData.broadcasts ?? [])
+      setCompanies(compsData.empresas ?? [])
     } catch (error) {
       console.error("Failed to load data:", error)
     } finally {

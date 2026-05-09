@@ -124,8 +124,8 @@ export default function DashboardPage() {
           href="/empresas"
           title="Empresas Activas"
           icon={Building2}
-          value={fmt(metrics?.sessions_active || 0)}
-          sub="Sesiones activas"
+          value={fmt(metrics?.active_companies || 0)}
+          sub="empresas registradas"
         />
         <MetricCard
           href="/messages"
@@ -210,6 +210,14 @@ export default function DashboardPage() {
                       </span>
                       <span className="font-medium">
                         {fmt(metrics?.active_companies || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Sesiones activas
+                      </span>
+                      <span className="font-medium">
+                        {fmt(metrics?.sessions_active || 0)}
                       </span>
                     </div>
                   </>

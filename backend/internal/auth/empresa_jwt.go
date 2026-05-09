@@ -40,6 +40,27 @@ func GenerateEmpresaJWT(empresa *domain.Empresa, secret, issuer string) (string,
 	return signed, nil
 }
 
+const qrLinkTokenExpirySeconds = 600 // 10 minutos
+
+// GenerateQRLinkToken genera un JWT de corta duración (10 min) para compartir
+// el enlace de QR de un teléfono específico sin acceso completo a la API de empresa.
+func GenerateQRLinkToken(empresaID, phoneID int64, secret string) (string, error) {
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"sub":      empresaID,
+		"phone_id": phoneID,
+		"scope":    "qr_link",
+		"iat":      now.Unix(),
+		"exp":      now.Add(qrLinkTokenExpirySeconds * time.Second).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(secret))
+	if err != nil {
+		return "", fmt.Errorf("error al firmar QR link token: %w", err)
+	}
+	return signed, nil
+}
+
 // ParseEmpresaJWT valida y parsea un JWT de empresa.
 // Retorna EmpresaJWTClaims o error si el JWT es inválido/expirado.
 func ParseEmpresaJWT(tokenString, secret string) (*domain.EmpresaJWTClaims, error) {
@@ -104,11 +125,21 @@ func extractEmpresaJWTClaims(m jwt.MapClaims) (*domain.EmpresaJWTClaims, error) 
 		}
 	}
 
-	return &domain.EmpresaJWTClaims{
+	claims := &domain.EmpresaJWTClaims{
 		EmpresaID:     empresaID,
 		TokenVersion:  tokenVersion,
 		EmpresaRUC:    ruc,
 		EmpresaNombre: nombre,
 		Permissions:   permissions,
-	}, nil
+	}
+
+	// Campos opcionales para tokens provisionales (QR link)
+	if v, ok := m["scope"].(string); ok {
+		claims.Scope = v
+	}
+	if v, ok := m["phone_id"].(float64); ok {
+		claims.PhoneID = int64(v)
+	}
+
+	return claims, nil
 }

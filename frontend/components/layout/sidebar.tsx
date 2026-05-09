@@ -52,7 +52,7 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        "flex flex-col h-screen bg-background border-r transition-all duration-300",
+        "hidden md:flex flex-col h-screen bg-background border-r transition-all duration-300",
         sidebarOpen ? "w-64" : "w-16",
       )}
     >

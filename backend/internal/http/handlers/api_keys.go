@@ -293,38 +293,6 @@ func (h *ApiKeysHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(domain.ApiKeyResponse{OK: true, ApiKey: apiKey})
 }
 
-func (h *ApiKeysHandler) Usage(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
-		return
-	}
-
-	apiKeyID := extractAPIKeyID(strings.TrimSuffix(r.URL.Path, "/usage"))
-	if apiKeyID <= 0 {
-		writeAPIError(w, http.StatusBadRequest, "ID inválido")
-		return
-	}
-
-	apiKey, err := h.apiKeyStore.GetByID(apiKeyID)
-	if err != nil || apiKey == nil {
-		writeAPIError(w, http.StatusNotFound, "API key no encontrada")
-		return
-	}
-	if !h.canAccessTelefono(r, apiKey.EmpresaID) {
-		writeAPIError(w, http.StatusForbidden, "Acceso denegado a esta API key")
-		return
-	}
-
-	usage, err := h.apiKeyStore.GetUsageDailyByKey(apiKeyID)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "Error al obtener uso")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"ok": true, "usage": usage})
-}
-
 func (h *ApiKeysHandler) Audit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
