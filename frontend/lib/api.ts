@@ -579,6 +579,21 @@ export interface EmpresaTelefonoResponse {
   error?: string;
 }
 
+interface EmpresaTelefonoDetailApiResponse extends ApiEnvelope {
+  ok: boolean;
+  telefono?: AdminTelefono;
+}
+
+interface EmpresaTelefonoConnectApiResponse extends ApiEnvelope {
+  ok: boolean;
+  telefono_id: number;
+  numeroCompleto: string;
+  status: string;
+  lastConnected?: string | null;
+  qr_string?: string;
+  expires_in?: number;
+}
+
 async function fetchWithEmpresaAuth<T = ApiEnvelope>(url: string, options?: RequestInit): Promise<T> {
   return requestJSON<T>(url, {
     ...options,
@@ -592,7 +607,7 @@ async function fetchWithEmpresaAuth<T = ApiEnvelope>(url: string, options?: Requ
 export async function getEmpresaTelefono(
   telefonoId: number,
 ): Promise<EmpresaTelefonoResponse> {
-  const json = await fetchWithEmpresaAuth(
+  const json = await fetchWithEmpresaAuth<EmpresaTelefonoDetailApiResponse>(
     `${API_BASE}/api/admin/telefonos/${telefonoId}`,
   );
   return {
@@ -614,7 +629,7 @@ export async function getEmpresaTelefono(
 export async function connectEmpresaTelefono(
   telefonoId: number,
 ): Promise<EmpresaTelefonoResponse> {
-  const json = await fetchWithEmpresaAuth(
+  const json = await fetchWithEmpresaAuth<EmpresaTelefonoConnectApiResponse>(
     `${API_BASE}/api/admin/telefonos/${telefonoId}/connect`,
     {
       method: "POST",
@@ -622,16 +637,14 @@ export async function connectEmpresaTelefono(
   );
   return {
     ok: !!json.ok,
-    data: json.ok
-      ? {
-          telefono_id: json.telefono_id,
-          numeroCompleto: json.numeroCompleto,
-          status: json.status,
-          lastConnected: json.lastConnected ?? null,
-          qr_string: json.qr_string,
-          expires_in: json.expires_in,
-        }
-      : undefined,
+    data: {
+      telefono_id: json.telefono_id,
+      numeroCompleto: json.numeroCompleto,
+      status: json.status,
+      lastConnected: json.lastConnected ?? null,
+      qr_string: json.qr_string,
+      expires_in: json.expires_in,
+    },
     message: json.message,
     error: json.error,
   };
