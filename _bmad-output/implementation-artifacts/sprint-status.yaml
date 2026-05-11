@@ -46,7 +46,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-26T18:43:24-05:00
-last_updated: 2026-05-09T18:00:00-05:00
+last_updated: 2026-05-11T00:00:00-05:00
 project: wsapi
 project_key: NOKEY
 tracking_system: file-system
@@ -79,3 +79,13 @@ development_status:
   2-11-documentar-arquitectura-ws: done
   2-12-refactorizar-metricas-api-key: review
   epic-2-retrospective: optional
+  epic-3: backlog
+  3-1-jwt-cookie-httponly: backlog
+  3-2-websocket-auth-segura: backlog
+  3-3-security-headers-nextconfig: backlog
+  3-4-fix-correctness-metriccard-hydration-keys: backlog
+  3-5-refactor-estado-usereducer-cascading: backlog
+  3-6-fix-accesibilidad-labels-events-headings: backlog
+  3-7-limpieza-dead-code: backlog
+  3-8-tailwind-shortcuts-font-userouter: backlog
+  epic-3-retrospective: optional

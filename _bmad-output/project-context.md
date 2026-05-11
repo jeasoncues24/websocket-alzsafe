@@ -67,6 +67,24 @@ Este archivo contiene reglas críticas y patrones que los agentes IA deben segui
 - `frontend/lib/utils.ts`: utilidades compartidas como `cn`.
 - `frontend/stores`: stores Zustand.
 
+## 🚨 Regla de Rama por Epic — IMPERATIVA
+
+Cada epic de seguridad o experimental tiene una rama Git dedicada. El código fuente (`frontend/`, `backend/`) **solo puede modificarse en la rama asignada al epic**.
+
+| Epic | Rama obligatoria |
+|------|-----------------|
+| Epic 3 — Hardening de Seguridad y Calidad Frontend | `feature/security` |
+
+**Verificación previa obligatoria para agentes de implementación:**
+```bash
+git branch --show-current  # debe coincidir con la rama del epic activo
+```
+Si no coincide → detener implementación, notificar al usuario, cambiar de rama primero.
+
+Los artefactos BMad (`_bmad-output/`, `docs/`) pueden editarse en cualquier rama.
+
+---
+
 ## Critical Implementation Rules
 
 ### General
