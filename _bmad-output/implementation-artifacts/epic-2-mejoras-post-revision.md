@@ -40,7 +40,8 @@ Cerrar las brechas funcionales detectadas en la revisión del Epic 1: correccion
 | 2-8   | Enlace QR compartible: token provisional        | Backend+Frontend  | Alta      | backlog       | — |
 | 2-9   | Enriquecer métricas + rediseñar dashboard       | Backend+Frontend  | Media     | backlog       | — |
 | 2-10  | Responsive mode del panel administrativo        | Frontend          | Baja      | backlog       | — |
-| 2-11  | Documentar arquitectura WS                      | Documentación     | Baja      | backlog       | — |
+| 2-11  | Documentar arquitectura WS                      | Documentación     | Baja      | done          | — |
+| 2-12  | Refactorizar métricas API key                   | Backend+Frontend  | Media     | review        | — |
 
 ## Orden de implementación y dependencias
 

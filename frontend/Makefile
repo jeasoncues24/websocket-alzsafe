@@ -1,7 +1,10 @@
 .DEFAULT_GOAL := help
 
 APP_NAME  := wsapi-frontend
-PORT      ?= 3000
+PORT      ?= $(shell grep -m1 '^PORT=' .env 2>/dev/null | cut -d= -f2)
+ifeq ($(strip $(PORT)),)
+PORT      := 3001
+endif
 
 .PHONY: help install build start restart stop logs dev
 
@@ -41,5 +44,5 @@ stop: ## Detiene wsapi-frontend en PM2
 logs: ## Muestra los logs de wsapi-frontend en PM2 en tiempo real
 	pm2 logs $(APP_NAME)
 
-dev: ## Inicia el servidor de desarrollo (next dev)
-	npm run dev
+dev: ## Inicia el servidor de desarrollo en puerto $(PORT)
+	npm run dev -- --port $(PORT)
