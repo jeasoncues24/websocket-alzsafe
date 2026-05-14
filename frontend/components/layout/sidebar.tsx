@@ -1,50 +1,28 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import {
-  LayoutDashboard,
-  Building2,
-  MessageSquare,
-  Wifi,
-  Send,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  Users,
-  Shield,
-  LayoutGrid,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, Moon, Sun, LogOut } from "lucide-react";
 import { useAppStore } from "@/stores/useAppStore";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
-import { Moon, Sun, LogOut } from "lucide-react";
-
-const navItems = [
-  {
-    id: "dashboard",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    href: "/dashboard",
-  },
-  { id: "companies", label: "Empresas", icon: Building2, href: "/empresas" },
-  { id: "messages", label: "Mensajes", icon: MessageSquare, href: "/messages" },
-  { id: "sessions", label: "Sesiones", icon: Wifi, href: "/sessions" },
-  { id: "broadcasts", label: "Broadcasts", icon: Send, href: "/broadcasts" },
-  { id: "users", label: "Usuario Admin", icon: Users, href: "/usuario_admin" },
-  { id: "roles", label: "Roles", icon: Shield, href: "/roles" },
-  { id: "modules", label: "Módulos", icon: LayoutGrid, href: "/modules" },
-  { id: "settings", label: "Settings", icon: Settings, href: "/settings" },
-];
+import { getActiveNavItem, navItems } from "@/components/layout/nav-items";
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { sidebarOpen, setSidebarOpen, setActiveNav } =
-    useAppStore();
+  const { sidebarOpen, setSidebarOpen, setActiveNav } = useAppStore();
+  const activeItem = getActiveNavItem(pathname);
+
+  useEffect(() => {
+    if (activeItem) {
+      setActiveNav(activeItem.id);
+    }
+  }, [activeItem, setActiveNav]);
   const { setTheme, resolvedTheme } = useTheme();
 
-  const handleNavClick = (item: (typeof navItems)[0]) => {
+  const handleNavClick = (item: (typeof navItems)[number]) => {
     setActiveNav(item.id);
     router.push(item.href);
   };
@@ -52,13 +30,18 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        "hidden md:flex flex-col h-screen bg-background border-r transition-all duration-300",
+        "hidden md:flex flex-col h-screen bg-background border-r motion-fade-in transition-[width] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-emphasized)]",
         sidebarOpen ? "w-64" : "w-16",
       )}
     >
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between border-b p-4">
         {sidebarOpen && (
-          <span className="font-semibold text-lg">WhatsApp API</span>
+          <div className="motion-enter-up flex flex-col gap-0.5">
+            <span className="text-lg font-semibold">WhatsApp API</span>
+            <span className="text-xs text-muted-foreground">
+              {activeItem?.label ?? "Panel administrativo"}
+            </span>
+          </div>
         )}
         <Button
           variant="ghost"
@@ -73,7 +56,7 @@ export function Sidebar() {
         </Button>
       </div>
 
-      <nav className="flex-1 p-2 space-y-1">
+      <nav className="flex flex-1 flex-col gap-1 p-2">
         {navItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
           return (
@@ -81,15 +64,24 @@ export function Sidebar() {
               key={item.id}
               variant="ghost"
               onClick={() => handleNavClick(item)}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "w-full h-11 transition-colors",
+                "motion-transition relative h-11 w-full overflow-hidden rounded-lg",
                 sidebarOpen ? "justify-start px-3" : "justify-center px-0",
-                isActive &&
-                  "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
+                isActive
+                  ? "bg-primary/10 text-primary shadow-sm hover:bg-primary/15 hover:text-primary"
+                  : "hover:bg-muted/60",
               )}
             >
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "absolute inset-y-2 left-1 w-1 rounded-full bg-primary motion-transform",
+                  isActive ? "opacity-100" : "opacity-0",
+                )}
+              />
               <item.icon className="h-5 w-5 flex-shrink-0" />
-              {sidebarOpen && <span className="ml-3">{item.label}</span>}
+              {sidebarOpen && <span className="ml-3 truncate">{item.label}</span>}
             </Button>
           );
         })}

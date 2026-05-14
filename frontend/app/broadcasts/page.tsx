@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Eye, FileText, MessageSquareMore } from "lucide-react"
+import { DataEmptyState } from "@/components/feedback/data-empty-state"
+import { TableLoadingRows } from "@/components/feedback/table-loading-rows"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { getAdminBroadcasts, getEmpresas, type BroadcastInfo, type Empresa } from "@/lib/api"
 
@@ -17,7 +18,7 @@ function formatDate(value?: string) {
 function statusBadge(status: string) {
   switch (status) {
     case "completed":
-      return <Badge className="bg-emerald-500 text-white hover:bg-emerald-500">Completado</Badge>
+      return <Badge variant="default">Completado</Badge>
     case "processing":
       return <Badge variant="secondary">Procesando</Badge>
     case "pending":
@@ -76,16 +77,16 @@ export default function BroadcastsPage() {
   const selectedCompany = selectedBroadcast ? companyByRuc.get(selectedBroadcast.ruc_empresa) : undefined
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-bold tracking-tight">Broadcasts</h1>
         <p className="text-muted-foreground">Historial de difusiones masivas con una vista más limpia y fácil de leer.</p>
       </div>
 
       <Card>
-        <CardHeader className="space-y-4">
+        <CardHeader className="flex flex-col gap-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-1">
+            <div className="flex flex-col gap-1">
               <CardTitle>Lista de broadcasts</CardTitle>
               <CardDescription>{loading ? "Cargando broadcasts..." : `${broadcasts.length} broadcast(s) encontrado(s)`}</CardDescription>
             </div>
@@ -107,13 +108,13 @@ export default function BroadcastsPage() {
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="flex flex-col gap-4">
           {!loading && broadcasts.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-8 text-center">
-              <MessageSquareMore className="mx-auto h-10 w-10 text-muted-foreground" />
-              <h3 className="mt-4 text-lg font-medium">No hay broadcasts para mostrar</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Prueba con otra empresa o revisa si ya se enviaron difusiones.</p>
-            </div>
+            <DataEmptyState
+              icon={MessageSquareMore}
+              title="No hay broadcasts para mostrar"
+              description="Prueba con otra empresa o revisa si ya se enviaron difusiones."
+            />
           ) : null}
 
           {loading || broadcasts.length > 0 ? (
@@ -130,16 +131,7 @@ export default function BroadcastsPage() {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-12" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
-                      <TableCell><Skeleton className="ml-auto h-8 w-28" /></TableCell>
-                    </TableRow>
-                  ))
+                  <TableLoadingRows columns={["w-28", "w-32", "w-12", "w-24", "w-28"]} />
                 ) : broadcasts.map((bc) => {
                   const company = companyByRuc.get(bc.ruc_empresa)
                   const attachmentCount = bc.adjuntos?.length ?? 0
@@ -148,13 +140,13 @@ export default function BroadcastsPage() {
                     <TableRow key={bc.reference_id}>
                       <TableCell className="font-mono text-sm">{bc.reference_id.slice(0, 8)}...</TableCell>
                       <TableCell>
-                        <div className="space-y-0.5">
+                        <div className="flex flex-col gap-0.5">
                           <div className="font-medium">{company?.nombre || bc.ruc_empresa}</div>
                           <div className="text-xs text-muted-foreground">{company?.ruc || bc.ruc_empresa}</div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
+                        <div className="flex flex-col gap-1">
                           <div className="font-medium">{bc.total}</div>
                           {attachmentCount > 0 ? (
                             <Badge variant="outline" className="gap-1">
@@ -169,7 +161,7 @@ export default function BroadcastsPage() {
                       <TableCell>
                         <div className="flex justify-end">
                           <Button variant="outline" size="sm" onClick={() => openDetails(bc)}>
-                            <Eye className="mr-2 h-4 w-4" />
+                            <Eye className="mr-2 h-4 w-4" data-icon="inline-start" />
                             Ver detalles
                           </Button>
                         </div>

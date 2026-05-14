@@ -50,6 +50,13 @@
     --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.43);
     --tracking-normal: 0.025em;
     --spacing: 0.25rem;
+    --motion-duration-fast: 150ms;
+    --motion-duration-base: 220ms;
+    --motion-duration-slow: 320ms;
+    --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --motion-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --motion-scale-press: 0.98;
+    --motion-lift-y: -2px;
   }
 
   .dark {
@@ -99,6 +106,13 @@
     --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.43);
     --tracking-normal: 0.025em;
     --spacing: 0.25rem;
+    --motion-duration-fast: 150ms;
+    --motion-duration-base: 220ms;
+    --motion-duration-slow: 320ms;
+    --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --motion-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --motion-scale-press: 0.98;
+    --motion-lift-y: -2px;
   }
 
   * {
@@ -109,6 +123,277 @@
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
     letter-spacing: var(--tracking-normal);
+  }
+}
+
+@layer utilities {
+  .motion-transition {
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+    transition-duration: var(--motion-duration-base);
+    transition-timing-function: var(--motion-ease-standard);
+  }
+
+  .motion-transform {
+    transition-property: transform, opacity;
+    transition-duration: var(--motion-duration-base);
+    transition-timing-function: var(--motion-ease-standard);
+  }
+
+  .motion-panel {
+    transition-property: background-color, border-color, box-shadow, opacity, transform;
+    transition-duration: var(--motion-duration-base);
+    transition-timing-function: var(--motion-ease-standard);
+  }
+
+  .motion-lift {
+    @media (hover: hover) {
+      &:hover {
+        transform: translateY(var(--motion-lift-y));
+        box-shadow: var(--shadow-md);
+      }
+    }
+  }
+
+  .motion-press {
+    &:active {
+      transform: scale(var(--motion-scale-press));
+    }
+  }
+
+  .motion-enter-up {
+    animation: motion-enter-up var(--motion-duration-slow) var(--motion-ease-emphasized) both;
+  }
+
+  .motion-fade-in {
+    animation: motion-fade-in var(--motion-duration-slow) var(--motion-ease-standard) both;
+  }
+}
+
+@keyframes motion-enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes motion-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overlay-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overlay-exit {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes dialog-exit {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 6px)) scale(0.99);
+  }
+}
+
+@keyframes sheet-enter-left {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes sheet-exit-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+@keyframes sheet-enter-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes sheet-exit-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@keyframes sheet-enter-top {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-exit-top {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes sheet-enter-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-exit-bottom {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@layer utilities {
+  .motion-overlay-smooth[data-state="open"] {
+    animation: overlay-enter 220ms var(--motion-ease-emphasized) forwards;
+  }
+
+  .motion-overlay-smooth[data-state="closed"] {
+    animation: overlay-exit 180ms var(--motion-ease-standard) forwards;
+  }
+
+  .motion-dialog-smooth[data-state="open"] {
+    animation: dialog-enter 240ms var(--motion-ease-emphasized) forwards;
+  }
+
+  .motion-dialog-smooth[data-state="closed"] {
+    animation: dialog-exit 180ms var(--motion-ease-standard) forwards;
+  }
+
+  .motion-sheet-smooth[data-side="left"][data-state="open"] {
+    animation: sheet-enter-left 240ms var(--motion-ease-emphasized) forwards;
+  }
+
+  .motion-sheet-smooth[data-side="left"][data-state="closed"] {
+    animation: sheet-exit-left 180ms var(--motion-ease-standard) forwards;
+  }
+
+  .motion-sheet-smooth[data-side="right"][data-state="open"] {
+    animation: sheet-enter-right 240ms var(--motion-ease-emphasized) forwards;
+  }
+
+  .motion-sheet-smooth[data-side="right"][data-state="closed"] {
+    animation: sheet-exit-right 180ms var(--motion-ease-standard) forwards;
+  }
+
+  .motion-sheet-smooth[data-side="top"][data-state="open"] {
+    animation: sheet-enter-top 220ms var(--motion-ease-emphasized) forwards;
+  }
+
+  .motion-sheet-smooth[data-side="top"][data-state="closed"] {
+    animation: sheet-exit-top 180ms var(--motion-ease-standard) forwards;
+  }
+
+  .motion-sheet-smooth[data-side="bottom"][data-state="open"] {
+    animation: sheet-enter-bottom 220ms var(--motion-ease-emphasized) forwards;
+  }
+
+  .motion-sheet-smooth[data-side="bottom"][data-state="closed"] {
+    animation: sheet-exit-bottom 180ms var(--motion-ease-standard) forwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .motion-lift:hover,
+  .motion-press:active {
+    transform: none;
   }
 }
 

@@ -1,76 +1,78 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Menu,
-  LayoutDashboard,
-  Building2,
-  MessageSquare,
-  Wifi,
-  Send,
-  Settings,
-  Users,
-  Shield,
-  LayoutGrid,
-} from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetClose,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-
-const navItems = [
-  { id: "dashboard",  label: "Dashboard",     icon: LayoutDashboard, href: "/dashboard" },
-  { id: "companies",  label: "Empresas",       icon: Building2,       href: "/empresas" },
-  { id: "messages",   label: "Mensajes",       icon: MessageSquare,   href: "/messages" },
-  { id: "sessions",   label: "Sesiones",       icon: Wifi,            href: "/sessions" },
-  { id: "broadcasts", label: "Broadcasts",     icon: Send,            href: "/broadcasts" },
-  { id: "users",      label: "Usuario Admin",  icon: Users,           href: "/usuario_admin" },
-  { id: "roles",      label: "Roles",          icon: Shield,          href: "/roles" },
-  { id: "modules",    label: "Módulos",        icon: LayoutGrid,      href: "/modules" },
-  { id: "settings",   label: "Settings",       icon: Settings,        href: "/settings" },
-];
+import { getActiveNavItem, navItems } from "@/components/layout/nav-items";
 
 export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const activeItem = getActiveNavItem(pathname);
+
+  const handleNavigate = (href: string) => {
+    setOpen(false);
+    router.push(href);
+  };
 
   return (
-    <div className="flex md:hidden items-center justify-between px-4 h-14 border-b bg-background flex-shrink-0">
-      <span className="font-semibold text-lg">WhatsApp API</span>
-      <Sheet>
+    <div className="motion-fade-in flex h-14 flex-shrink-0 items-center justify-between border-b bg-background px-4 md:hidden">
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate text-sm font-semibold">WhatsApp API</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {activeItem?.label ?? "Panel administrativo"}
+        </span>
+      </div>
+      <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" aria-label="Abrir navegación">
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="p-0">
-          <SheetHeader className="px-4 pt-6 pb-2">
+          <SheetHeader className="border-b px-4 pt-6 pb-3">
             <SheetTitle>Navegación</SheetTitle>
+            <SheetDescription>
+              Accede rápido a los módulos del panel.
+            </SheetDescription>
           </SheetHeader>
-          <nav className="flex flex-col p-2 space-y-1">
+          <nav className="flex flex-col gap-1 p-2">
             {navItems.map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
-                <SheetClose asChild key={item.id}>
-                  <Button
-                    variant="ghost"
-                    onClick={() => router.push(item.href)}
+                <Button
+                  key={item.id}
+                  variant="ghost"
+                  onClick={() => handleNavigate(item.href)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "motion-transition relative h-11 w-full justify-start overflow-hidden rounded-lg px-3",
+                    isActive
+                      ? "bg-primary/10 text-primary shadow-sm hover:bg-primary/15 hover:text-primary"
+                      : "hover:bg-muted/60",
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
                     className={cn(
-                      "w-full h-11 justify-start px-3 transition-colors",
-                      isActive &&
-                        "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
+                      "absolute inset-y-2 left-1 w-1 rounded-full bg-primary motion-transform",
+                      isActive ? "opacity-100" : "opacity-0",
                     )}
-                  >
-                    <item.icon className="h-5 w-5 flex-shrink-0" />
-                    <span className="ml-3">{item.label}</span>
-                  </Button>
-                </SheetClose>
+                  />
+                  <item.icon className="h-5 w-5 flex-shrink-0" />
+                  <span className="ml-3 truncate">{item.label}</span>
+                </Button>
               );
             })}
           </nav>

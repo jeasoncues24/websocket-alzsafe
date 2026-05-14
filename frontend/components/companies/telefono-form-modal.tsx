@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import type { AdminTelefono } from "@/lib/api";
 
@@ -83,27 +86,37 @@ export function TelefonoFormModal({ open, onClose, onSave, telefono }: Props) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{telefono ? "Editar teléfono" : "Nuevo teléfono"}</DialogTitle>
+          <DialogDescription>
+            {telefono
+              ? "Ajusta el número y su estado operativo."
+              : "Registra un nuevo teléfono para la empresa seleccionada."}
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Código país *</label>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="telefono-codigo-pais">Código país *</Label>
             <Input
+              id="telefono-codigo-pais"
               value={form.codigo_pais}
               onChange={(e) => setField("codigo_pais", e.target.value)}
               placeholder="+51"
+              aria-invalid={!form.codigo_pais.trim() && !!error}
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Número *</label>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="telefono-numero">Número *</Label>
             <Input
+              id="telefono-numero"
               value={form.numero}
               onChange={(e) => setField("numero", e.target.value)}
               placeholder="999999999"
+              aria-invalid={!form.numero.trim() && !!error}
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Estado</label>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="telefono-status">Estado</Label>
             <Select
+              id="telefono-status"
               value={form.status ?? "disconnected"}
               onChange={(e) => setField("status", e.target.value)}
             >
@@ -112,13 +125,22 @@ export function TelefonoFormModal({ open, onClose, onSave, telefono }: Props) {
               <option value="active">active</option>
             </Select>
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
               Cancelar
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Guardando..." : telefono ? "Guardar cambios" : "Crear teléfono"}
+              {saving ? (
+                <>
+                  <Loader2 className="animate-spin" data-icon="inline-start" />
+                  Guardando...
+                </>
+              ) : telefono ? (
+                "Guardar cambios"
+              ) : (
+                "Crear teléfono"
+              )}
             </Button>
           </DialogFooter>
         </form>

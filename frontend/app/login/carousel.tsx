@@ -103,13 +103,13 @@ export function LoginCarousel() {
   );
 
   return (
-    <div className="relative flex h-full w-full flex-col justify-between bg-zinc-950 p-8 overflow-hidden lg:p-12">
+    <div className="motion-fade-in relative flex h-full w-full flex-col justify-between overflow-hidden bg-zinc-950 p-8 lg:p-12">
       <ChatBubblePattern />
 
       {/* Header: logo + flags */}
       <div className="relative z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center shrink-0">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/20 shadow-sm">
             <MessageSquareText className="h-5 w-5 text-primary" />
           </div>
           <span className="text-white font-semibold text-lg tracking-tight">
@@ -140,11 +140,11 @@ export function LoginCarousel() {
       {/* Slides */}
       <div className="relative z-10 flex-1 flex flex-col justify-center overflow-hidden">
         <div
-          className="flex transition-transform duration-500 ease-in-out"
+          className="flex motion-transform duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-emphasized)]"
           style={{ transform: `translateX(-${current * 100}%)` }}
         >
           {slides.map((slide, index) => (
-            <div key={index} className="w-full flex-none space-y-4 pr-4">
+            <div key={index} className="flex w-full flex-none flex-col gap-4 pr-4">
               <h1 className="text-balance text-3xl font-bold leading-tight text-white lg:text-4xl xl:text-5xl">
                 {slide.title}
                 {slide.highlight && (
@@ -187,7 +187,7 @@ export function LoginCarousel() {
       </div>
 
       {/* Footer */}
-      <div className="relative z-10 space-y-4">
+      <div className="relative z-10 flex flex-col gap-4">
         <p className="whitespace-pre-line text-sm text-zinc-400 lg:text-base">
           {slides[current].footer}
         </p>
@@ -201,7 +201,7 @@ export function LoginCarousel() {
               aria-label={`Ir a slide ${index + 1}`}
               onClick={() => goTo(index)}
               className={cn(
-                "h-2 rounded-full transition-all duration-300",
+                "motion-transition h-2 rounded-full",
                 index === current
                   ? "w-8 bg-white"
                   : "w-2 bg-white/30 hover:bg-white/50"
@@ -212,9 +212,9 @@ export function LoginCarousel() {
 
         <div className="flex items-center justify-between text-xs text-zinc-500">
           <span className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
+            <span className="relative flex size-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+              <span className="relative inline-flex size-2 rounded-full bg-primary" />
             </span>
             Sistema en línea
           </span>

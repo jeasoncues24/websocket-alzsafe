@@ -1,6 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  Building2,
+  MessageSquare,
+  Send,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -12,21 +21,54 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Building2,
-  MessageSquare,
-  Send,
-  CheckCircle2,
-  AlertCircle,
-  RefreshCw,
-} from "lucide-react";
 import { getMetrics, type DashboardMetrics } from "@/lib/api";
-import Link from "next/link";
 
 function alertVariant(level: string): "default" | "secondary" | "destructive" {
   if (level === "error") return "destructive";
   if (level === "warning") return "secondary";
   return "default";
+}
+
+function MetricCard({
+  href,
+  title,
+  icon: Icon,
+  value,
+  sub,
+  loading,
+  delay = 0,
+}: {
+  href?: string;
+  title: string;
+  icon: React.ElementType;
+  value: string;
+  sub: string;
+  loading: boolean;
+  delay?: number;
+}) {
+  const card = (
+    <Card
+      className={href ? "motion-panel motion-lift motion-enter-up cursor-pointer hover:bg-muted/50" : "motion-panel motion-enter-up"}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent className="flex flex-col gap-1">
+        {loading ? (
+          <Skeleton className="h-8 w-20" />
+        ) : (
+          <>
+            <div className="text-2xl font-semibold">{value}</div>
+            <p className="text-xs text-muted-foreground">{sub}</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  return href ? <Link href={href}>{card}</Link> : card;
 }
 
 export default function DashboardPage() {
@@ -55,52 +97,17 @@ export default function DashboardPage() {
     n >= 1000 ? (n / 1000).toFixed(1) + "k" : n.toLocaleString();
   const fmtPct = (n: number) => n.toFixed(1) + "%";
 
-  const MetricCard = ({
-    href,
-    title,
-    icon: Icon,
-    value,
-    sub,
-  }: {
-    href?: string;
-    title: string;
-    icon: React.ElementType;
-    value: string;
-    sub: string;
-  }) => {
-    const card = (
-      <Card
-        className={
-          href ? "hover:bg-muted/50 transition-colors cursor-pointer" : ""
-        }
-      >
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <Skeleton className="h-8 w-20" />
-          ) : (
-            <>
-              <div className="text-2xl font-bold">{value}</div>
-              <p className="text-xs text-muted-foreground">{sub}</p>
-            </>
-          )}
-        </CardContent>
-      </Card>
-    );
-    return href ? <Link href={href}>{card}</Link> : card;
-  };
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Resumen global del sistema WhatsApp API
-          </p>
+    <div className="motion-fade-in flex flex-col gap-6">
+      <div className="motion-enter-up flex items-center justify-between">
+        <div className="flex flex-col gap-2">
+          <Badge variant="secondary" className="w-fit">Vista general</Badge>
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground">
+              Resumen global del sistema WhatsApp API
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {lastUpdate && (
@@ -114,7 +121,8 @@ export default function DashboardPage() {
             onClick={loadMetrics}
             disabled={loading}
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} data-icon="inline-start" />
+            Actualizar
           </Button>
         </div>
       </div>
@@ -126,6 +134,8 @@ export default function DashboardPage() {
           icon={Building2}
           value={fmt(metrics?.active_companies || 0)}
           sub="empresas registradas"
+          loading={loading}
+          delay={0}
         />
         <MetricCard
           href="/messages"
@@ -133,6 +143,8 @@ export default function DashboardPage() {
           icon={MessageSquare}
           value={fmt(metrics?.messages_today || 0)}
           sub="Enviados"
+          loading={loading}
+          delay={40}
         />
         <MetricCard
           href="/broadcasts"
@@ -140,17 +152,21 @@ export default function DashboardPage() {
           icon={Send}
           value={fmt(metrics?.broadcasts_today || 0)}
           sub="Creados"
+          loading={loading}
+          delay={80}
         />
         <MetricCard
           title="Tasa de Éxito"
           icon={CheckCircle2}
           value={fmtPct(metrics?.success_rate || 0)}
           sub="Mensajes entregados"
+          loading={loading}
+          delay={120}
         />
       </div>
 
-      <Tabs defaultValue="overview">
-        <TabsList>
+      <Tabs defaultValue="overview" className="flex flex-col gap-4">
+        <TabsList className="w-fit">
           <TabsTrigger value="overview">Resumen</TabsTrigger>
           <TabsTrigger value="alerts">
             Alertas
@@ -162,8 +178,8 @@ export default function DashboardPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="mt-4">
-          <Card>
+        <TabsContent value="overview" className="mt-0">
+          <Card className="motion-enter-up">
             <CardHeader>
               <CardTitle>Métricas detalladas</CardTitle>
               <CardDescription>
@@ -171,7 +187,7 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 {loading ? (
                   <>
                     <Skeleton className="h-5 w-full" />
@@ -227,15 +243,15 @@ export default function DashboardPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="alerts" className="mt-4">
-          <Card>
+        <TabsContent value="alerts" className="mt-0">
+          <Card className="motion-enter-up">
             <CardHeader>
               <CardTitle>Alertas del sistema</CardTitle>
               <CardDescription>Avisos y recomendaciones</CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="space-y-3">
+                <div className="flex flex-col gap-3">
                   <Skeleton className="h-5 w-full" />
                   <Skeleton className="h-5 w-3/4" />
                 </div>
@@ -244,11 +260,11 @@ export default function DashboardPage() {
                   Sin alertas activas.
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="flex flex-col gap-3">
                   {metrics.alerts.map((alert, i) => (
                     <div key={i} className="flex items-start gap-3">
-                      <AlertCircle className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1 flex items-center justify-between gap-2">
+                      <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      <div className="flex flex-1 items-center justify-between gap-2">
                         <span className="text-sm">{alert.message}</span>
                         <Badge
                           variant={alertVariant(alert.level)}

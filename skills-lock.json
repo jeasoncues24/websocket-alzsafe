@@ -19,6 +19,12 @@
       "skillPath": "skills/golang-security/SKILL.md",
       "computedHash": "9faa31d5a182b84f7ce8f04420ccd7b8597870e7dece45da6111c14b81df7540"
     },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "80a6226e78f6d1fe464214ae0ef449d49d8ffaa3e7704f011e9b418c678ad4d1"
+    },
     "sql-optimization": {
       "source": "github/awesome-copilot",
       "sourceType": "github",

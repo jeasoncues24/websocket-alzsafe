@@ -46,7 +46,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-26T18:43:24-05:00
-last_updated: 2026-05-11T00:00:00-05:00
+last_updated: 2026-05-13T00:00:00-05:00
 project: wsapi
 project_key: NOKEY
 tracking_system: file-system
@@ -89,3 +89,12 @@ development_status:
   3-7-limpieza-dead-code: backlog
   3-8-tailwind-shortcuts-font-userouter: backlog
   epic-3-retrospective: optional
+  epic-4: done
+  4-1-auditoria-ux-motion-tokens-globales: done
+  4-2-smooth-navigation-shell-admin: done
+  4-3-microinteracciones-formularios-modales: done
+  4-4-loading-empty-states-tablas-feedback-consistente: done
+  4-5-pulido-motion-login-dashboard: done
+  4-6-mejora-visual-mobile-login-enfoque-mobile-first: done
+  4-7-animaciones-apertura-cierre-modales-overlays: done
+  epic-4-retrospective: optional

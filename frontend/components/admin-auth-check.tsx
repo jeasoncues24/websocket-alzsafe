@@ -32,7 +32,7 @@ export function AdminAuthCheck({ children }: { children: React.ReactNode }) {
 
   if (checking) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="motion-fade-in flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
@@ -43,12 +43,14 @@ export function AdminAuthCheck({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-background">
       <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden">
         <MobileNav />
         <main className="flex-1 overflow-auto bg-background p-4 md:p-6">
-          {children}
+          <div key={pathname} className="motion-enter-up flex h-full flex-col">
+            {children}
+          </div>
         </main>
       </div>
     </div>
