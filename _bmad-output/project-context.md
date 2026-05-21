@@ -69,11 +69,12 @@ Este archivo contiene reglas críticas y patrones que los agentes IA deben segui
 
 ## 🚨 Regla de Rama por Epic — IMPERATIVA
 
-Cada epic de seguridad o experimental tiene una rama Git dedicada. El código fuente (`frontend/`, `backend/`) **solo puede modificarse en la rama asignada al epic**.
+Cada epic tiene una rama Git dedicada. El código fuente (`frontend/`, `backend/`) **solo puede modificarse en la rama asignada al epic**.
 
 | Epic | Rama obligatoria |
 |------|-----------------|
 | Epic 3 — Hardening de Seguridad y Calidad Frontend | `feature/security` |
+| Epic 5 — Integración Loyo (provider B2B webhooks) | `feature/integracion-loyo` |
 
 **Verificación previa obligatoria para agentes de implementación:**
 ```bash

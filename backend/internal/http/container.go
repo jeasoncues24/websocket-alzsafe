@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"wsapi/internal/config"
 	"wsapi/internal/domain"
 	handlers "wsapi/internal/http/handlers"
@@ -35,6 +37,7 @@ type Container struct {
 	V1MetricsHandler      *handlers.V1MetricsHandler
 	V1PhonesHandler       *handlers.V1PhonesHandler
 	V1SessionsHandler     *handlers.V1SessionsHandler
+	V1HealthHandler       *handlers.V1HealthHandler
 	V1WSHandler           *handlers.V1WSHandler
 	AdminMessagesHandler  *handlers.AdminMessagesHandler
 	AdminSessionsHandler  *handlers.AdminSessionsHandler
@@ -98,6 +101,14 @@ func NewContainer() *Container {
 	v1PhonesHandler := handlers.NewV1PhonesHandler(telefonoStore, sessionStore)
 	v1SessionsHandler := handlers.NewV1SessionsHandler(telefonoStore, sessionStore, manager)
 	v1WSHandler := handlers.NewV1WSHandler(manager, jwtCfg, telefonoStore, sessionStore)
+
+	healthRate := 60
+	if v := os.Getenv("HEALTH_RATE_LIMIT_PER_MIN"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			healthRate = n
+		}
+	}
+	v1HealthHandler := handlers.NewV1HealthHandler(cfg.Version, healthRate)
 	adminMessagesHandler := handlers.NewAdminMessagesHandler(msgRepo, empresaStore, telefonoStore, manager)
 	adminSessionsHandler := handlers.NewAdminSessionsHandler(empresaStore, telefonoStore, manager, sessionStore, jwtCfg)
 	adminClientsHandler := handlers.NewAdminClientsHandler(db)
@@ -141,6 +152,7 @@ func NewContainer() *Container {
 		ApiKeysHandler:           apiKeysHandler,
 		ApiKeyMetricsHandler:     apiKeyMetricsHandler,
 		AdminHandler:             adminHandler,
+		V1HealthHandler:       v1HealthHandler,
 		V1MessagesHandler:     v1MessagesHandler,
 		V1BroadcastsHandler:   v1BroadcastsHandler,
 		V1MetricsHandler:      v1MetricsHandler,

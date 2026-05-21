@@ -6,6 +6,10 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 	clientStack := k.ServiceStack
 	empresaStack := k.EmpresaAuth
 
+	if c.V1HealthHandler != nil {
+		mux.Handle("GET /api/service/v1/health", http.HandlerFunc(c.V1HealthHandler.GetHealth))
+	}
+
 	if c.CompaniesHandler != nil {
 		mux.Handle("POST /api/service/v1/auth/empresa/validate", empresaStack(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

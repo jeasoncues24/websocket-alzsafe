@@ -11,6 +11,7 @@ import (
 type Config struct {
 	AppEnv            string
 	AppPort           string
+	Version           string
 	DBHost            string
 	DBPort            string
 	DBName            string
@@ -33,6 +34,7 @@ func Load() *Config {
 	return &Config{
 		AppEnv:            getEnv("APP_ENV", "development"),
 		AppPort:           getEnv("APP_PORT", ""),
+		Version:           getEnv("APP_VERSION", "dev"),
 		DBHost:            getEnv("DB_HOST", ""),
 		DBPort:            getEnv("DB_PORT", ""),
 		DBName:            getEnv("DB_NAME", ""),

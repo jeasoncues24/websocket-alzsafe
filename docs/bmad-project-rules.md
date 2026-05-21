@@ -9,15 +9,16 @@ Este documento define las reglas de trabajo para agentes BMad y cualquier colabo
 | Epic | Rama obligatoria | Estado |
 |------|-----------------|--------|
 | Epic 3 — Hardening de Seguridad y Calidad Frontend | `feature/security` | activa |
+| Epic 5 — Integración Loyo (provider B2B webhooks) | `feature/integracion-loyo` | activa |
 
 **Reglas de aplicación:**
 
-- Antes de iniciar cualquier story del Epic 3, verificar que la rama activa es `feature/security` con `git branch --show-current`.
-- Si la rama activa no es `feature/security`, detener la implementación. No escribir código. Cambiar de rama primero.
-- Ningún agente (bmad-dev-story, bmad-quick-dev, u otro) puede modificar archivos de código fuente del Epic 3 si la rama activa no es `feature/security`.
-- Las modificaciones a artefactos BMad (`_bmad-output/`, `docs/`) pueden hacerse en cualquier rama, pero el código fuente (`frontend/`, `backend/`) del Epic 3 solo en `feature/security`.
-- Si se trabaja en otro epic o tarea no relacionada al Epic 3, **no usar** `feature/security`. Crear una rama separada para ese trabajo.
-- El merge de `feature/security` a la rama principal (`v1` o `main`) requiere que todas las stories del Epic 3 estén en estado `done` y el build pase sin errores.
+- Antes de iniciar cualquier story, verificar que la rama activa coincide con la columna "Rama obligatoria" de la tabla anterior: `git branch --show-current`.
+- Si la rama activa no coincide, detener la implementación. No escribir código. Cambiar de rama primero.
+- Ningún agente (bmad-dev-story, bmad-quick-dev, u otro) puede modificar archivos de código fuente de un epic si la rama activa no es la rama asignada a ese epic.
+- Las modificaciones a artefactos BMad (`_bmad-output/`, `docs/`) pueden hacerse en cualquier rama, pero el código fuente (`frontend/`, `backend/`) de cada epic solo en su rama asignada.
+- No cruzar ramas: si se trabaja en Epic 5, no usar `feature/security`, y viceversa.
+- El merge de cada rama a la principal (`main`) requiere que todas las stories del epic estén en estado `done` y el build pase sin errores.
 
 **Verificación previa obligatoria para cualquier agente de implementación:**
 ```bash
