@@ -1450,6 +1450,10 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 	defer func() {
 		fmt.Printf("[INFO] WS connect closed telefono=%d account=%s reason=%v\n", phone.ID, accountID, ctx.Err())
 		if h.sessionStore != nil && h.manager != nil {
+			// Evitar carrera: si el cliente ya se conectó activamente en segundo plano, no borrarlo
+			if client, ok := h.manager.Get(accountID); ok && client != nil && client.IsConnected() {
+				return
+			}
 			if state, ok := h.sessionStore.Get(phone.NumeroCompleto); ok {
 				if state.Status == "initializing" || state.Status == "qr_pending" {
 					// Sesión abandonada durante QR — cancelar runtime para evitar fuga de goroutine
@@ -1460,7 +1464,7 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 	}()
 
 	// — Enviar estado inicial del teléfono —
-	_ = writeEvent(ctx, wsConn, outboundPayload{
+	if err := writeEvent(ctx, wsConn, outboundPayload{
 		Event: "phone-info",
 		Data: map[string]any{
 			"telefono_id":    phone.ID,
@@ -1469,7 +1473,10 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 			"qr_string":      phone.QRString,
 			"lastConnected":  phone.LastConnected,
 		},
-	})
+	}); err != nil {
+		fmt.Printf("[WARN] WS initial phone-info failed account=%s: %v\n", accountID, err)
+		return
+	}
 
 	// — Iniciar o unirse a sesión existente —
 	// StartSession es idempotente: si ya existe un runtime para este accountID,
@@ -1497,12 +1504,13 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 				return
 			}
 			if err := writeEvent(ctx, wsConn, outboundPayload{Event: event.Event, Data: event.Data}); err != nil {
-				// Write falló — el cliente WS probablemente se desconectó
+				fmt.Printf("[WARN] WS write event failed account=%s: %v\n", accountID, err)
 				return
 			}
 		case <-ticker.C:
 			// Keepalive ping — mantiene el WS activo a través de proxies con idle timeout
 			if err := writeEvent(ctx, wsConn, outboundPayload{Event: "ping", Data: map[string]any{}}); err != nil {
+				fmt.Printf("[WARN] WS ping failed account=%s: %v\n", accountID, err)
 				return
 			}
 		case <-ctx.Done():

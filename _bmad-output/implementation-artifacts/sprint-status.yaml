@@ -46,7 +46,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-26T18:43:24-05:00
-last_updated: 2026-05-23T14:00:00-05:00
+last_updated: 2026-05-23T15:26:00-05:00
 project: wsapi
 project_key: NOKEY
 tracking_system: file-system
@@ -71,7 +71,7 @@ development_status:
   2-3-assets-mensajes-investigar-corregir: done
   2-4-sesiones-herramientas-logs: done
   2-5-validar-reconexion-reinicio-binario: done
-  2-6-fix-ws-timer-simplificar-ui-conexion: review
+  2-6-fix-ws-timer-simplificar-ui-conexion: done
   2-7-qr-api-token-ws-fallback-rest: review
   2-8-enlace-qr-compartible-token-provisional: review
   2-9-enriquecer-metricas-dashboard: done

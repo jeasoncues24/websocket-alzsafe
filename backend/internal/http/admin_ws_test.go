@@ -148,12 +148,17 @@ func TestConnectCompanyPhoneWS_QRSessionCleanedOnDisconnect(t *testing.T) {
 	// Cerrar WS desde el cliente — simula cierre de tab
 	conn.Close(websocket.StatusNormalClosure, "test done")
 
-	// Dar tiempo al defer del handler para ejecutarse
-	time.Sleep(150 * time.Millisecond)
-
-	// El manager NO debe tener el accountID registrado (fue limpiado por Delete)
+	// Esperar a que el manager limpie el accountID (con timeout de 1 segundo)
 	accountID := whatsapp.NormalizeAccountID("+51999888777")
-	if manager.Exists(accountID) {
+	cleaned := false
+	for i := 0; i < 20; i++ {
+		if !manager.Exists(accountID) {
+			cleaned = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !cleaned {
 		t.Errorf("expected manager to have cleaned up account %s after QR disconnect", accountID)
 	}
 }

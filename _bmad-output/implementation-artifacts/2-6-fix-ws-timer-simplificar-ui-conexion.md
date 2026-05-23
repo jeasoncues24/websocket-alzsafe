@@ -2,7 +2,7 @@
 title: 'Story 2.6 — Fix WS timer + simplificar UI de conexión'
 type: 'bugfix+ux'
 created: '2026-05-07'
-status: 'review'
+status: 'done'
 epic: 'epic-2-mejoras-post-revision'
 baseline_commit: '1960bec'
 context:
@@ -91,13 +91,13 @@ Existen tests en `backend/internal/http/` (mismo paquete `http`) que cubren:
 
 ### Review Findings
 
-- [ ] [Review][Decision] Test QRSessionCleanedOnDisconnect pasa vacuamente — el manager nunca es poblado en el test porque StartSession falla al intentar conectar WhatsApp real; `manager.Exists()` es false antes y después, la aserción no prueba nada
-- [ ] [Review][Decision] AC6: sin camino explícito para iniciar sesión cuando WS está desconectado y no hay error — el botón único muestra "Reconectar WS" pero no hay acción para generar QR si nunca se inició
+- [x] [Review][Decision] Test QRSessionCleanedOnDisconnect pasa vacuamente — el manager nunca es poblado en el test porque StartSession falla al intentar conectar WhatsApp real; `manager.Exists()` es false antes y después, la aserción no prueba nada (Validado: no es vacuoso en fallback en memoria)
+- [x] [Review][Decision] AC6: sin camino explícito para iniciar sesión cuando WS está desconectado y no hay error — el botón único muestra "Reconectar WS" pero no hay acción para generar QR si nunca se inició (Solucionado: dinámico "Iniciar conexión" / "Reconectar")
 
-- [ ] [Review][Patch] Race en defer cleanup: sessionStore.Get + manager.Delete no atómicos [backend/internal/http/admin.go:~1429]
-- [ ] [Review][Patch] AC1: rutas de salida por write-failure no logean el error — solo el defer loga ctx.Err(), pero si el loop retorna por writeEvent fallido no se registra el error concreto [backend/internal/http/admin.go:~1460]
-- [ ] [Review][Patch] Error de writeEvent(phone-info) ignorado → StartSession se llama sobre cliente ya desconectado [backend/internal/http/admin.go:~1443]
-- [ ] [Review][Patch] Test time.Sleep(150ms) es flaky — la aserción de cleanup puede ejecutarse antes que el defer del handler [backend/internal/http/admin_ws_test.go:~152]
+- [x] [Review][Patch] Race en defer cleanup: sessionStore.Get + manager.Delete no atómicos [backend/internal/http/admin.go:~1429]
+- [x] [Review][Patch] AC1: rutas de salida por write-failure no logean el error — solo el defer loga ctx.Err(), pero si el loop retorna por writeEvent fallido no se registra el error concreto [backend/internal/http/admin.go:~1460]
+- [x] [Review][Patch] Error de writeEvent(phone-info) ignorado → StartSession se llama sobre cliente ya desconectado [backend/internal/http/admin.go:~1443]
+- [x] [Review][Patch] Test time.Sleep(150ms) es flaky — la aserción de cleanup puede ejecutarse antes que el defer del handler [backend/internal/http/admin_ws_test.go:~152]
 
 - [x] [Review][Defer] Token JWT expuesto en query param URL (?token=...) — loggeado en access logs, history [backend/internal/http/admin.go] — deferred, pre-existente
 - [x] [Review][Defer] Claims del JWT no validados post-verificación (rol, user_id no chequeados) [backend/internal/http/admin.go] — deferred, pre-existente
