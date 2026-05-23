@@ -25,10 +25,11 @@ type SessionEvent struct {
 }
 
 type Service struct {
-	manager       *Manager
-	sessionStore  *storage.SessionStore
-	telefonoStore *storage.TelefonoStore
-	baseDir       string
+	manager        *Manager
+	sessionStore   *storage.SessionStore
+	telefonoStore  *storage.TelefonoStore
+	webhookEmitter *WebhookEmitter
+	baseDir        string
 
 	mu       sync.Mutex
 	runtimes map[string]*sessionRuntime
@@ -43,16 +44,17 @@ type sessionRuntime struct {
 	events  chan SessionEvent
 }
 
-func NewService(manager *Manager, sessionStore *storage.SessionStore, telefonoStore *storage.TelefonoStore, baseDir string) *Service {
+func NewService(manager *Manager, sessionStore *storage.SessionStore, telefonoStore *storage.TelefonoStore, webhookStore *storage.WebhookStore, baseDir string) *Service {
 	logger = NewModuleLogger("Service")
 
 	s := &Service{
-		manager:       manager,
-		sessionStore:  sessionStore,
-		telefonoStore: telefonoStore,
-		baseDir:       baseDir,
-		runtimes:      make(map[string]*sessionRuntime),
-		starting:      make(map[string]bool),
+		manager:        manager,
+		sessionStore:   sessionStore,
+		telefonoStore:  telefonoStore,
+		webhookEmitter: NewWebhookEmitter(webhookStore, telefonoStore, WebhookEmitterConfig{}),
+		baseDir:        baseDir,
+		runtimes:       make(map[string]*sessionRuntime),
+		starting:       make(map[string]bool),
 	}
 	if manager != nil {
 		manager.attachService(s)
@@ -228,6 +230,12 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 	}
 	disconnectCh := make(chan disconnectEvent, 1)
 	handlerID := runtime.client.AddEventHandler(func(evt interface{}) {
+		switch evt.(type) {
+		case *waEvents.Message, *waEvents.Receipt:
+			go s.handleWhatsAppEvent(accountID, evt)
+			return
+		}
+
 		disconnect := disconnectEvent{}
 		switch v := evt.(type) {
 		case *waEvents.Disconnected:
@@ -365,6 +373,11 @@ func (s *Service) markConnected(accountID string) {
 		s.sessionStore.AppendEvent(accountID, "connected", "")
 	}
 	s.syncTelefonoConnected(accountID)
+	if s.webhookEmitter != nil {
+		if err := s.webhookEmitter.EmitSessionConnectedByAccount(accountID); err != nil {
+			logger.Warnf("webhook emit session.connected failed for %s: %v", accountID, err)
+		}
+	}
 }
 
 func (s *Service) markDisconnected(accountID, reason string) {
@@ -373,6 +386,11 @@ func (s *Service) markDisconnected(accountID, reason string) {
 		s.sessionStore.AppendEvent(accountID, "disconnected", reason)
 	}
 	s.syncTelefonoDisconnected(accountID)
+	if s.webhookEmitter != nil {
+		if err := s.webhookEmitter.EmitSessionDisconnectedByAccount(accountID, reason); err != nil {
+			logger.Warnf("webhook emit session.disconnected failed for %s: %v", accountID, err)
+		}
+	}
 }
 
 func (s *Service) syncTelefonoQR(accountID, qr string) {
@@ -406,6 +424,31 @@ func (s *Service) syncTelefonoDisconnected(accountID string) {
 		return
 	}
 	_ = s.telefonoStore.SetDisconnected(phone.ID)
+}
+
+func (s *Service) handleWhatsAppEvent(accountID string, evt interface{}) {
+	if s == nil || s.webhookEmitter == nil {
+		return
+	}
+
+	switch v := evt.(type) {
+	case *waEvents.Message:
+		if err := s.webhookEmitter.EmitMessageReceivedByAccount(accountID, v); err != nil {
+			logger.Warnf("webhook emit message.received failed for %s: %v", accountID, err)
+		}
+	case *waEvents.Receipt:
+		for _, messageID := range v.MessageIDs {
+			referenceID := ""
+			if s.manager != nil {
+				if resolved, ok := s.manager.ResolveOutboundMessageReference(accountID, string(messageID)); ok {
+					referenceID = resolved
+				}
+			}
+			if err := s.webhookEmitter.EmitMessageStatusUpdateByAccount(accountID, string(messageID), referenceID, v.Type, v.Timestamp); err != nil {
+				logger.Warnf("webhook emit message.status_update failed for %s message=%s: %v", accountID, string(messageID), err)
+			}
+		}
+	}
 }
 
 func (s *Service) eventFromState(accountID string, state storage.SessionState) SessionEvent {

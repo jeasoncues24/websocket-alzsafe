@@ -67,6 +67,11 @@ func getEnvBool(key string, defaultValue bool) bool {
 	}
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
+		defaultStr := "false"
+		if defaultValue {
+			defaultStr = "true"
+		}
+		println("[WARN] env " + key + ": valor no reconocido como booleano: " + value + ", usando default: " + defaultStr)
 		return defaultValue
 	}
 	return parsed
@@ -78,7 +83,7 @@ func getEnvInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	parsed, err := strconv.Atoi(value)
-	if err != nil {
+	if err != nil || parsed <= 0 {
 		return defaultValue
 	}
 	return parsed

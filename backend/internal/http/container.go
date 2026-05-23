@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -39,6 +38,7 @@ type Container struct {
 	V1SessionsHandler     *handlers.V1SessionsHandler
 	V1HealthHandler       *handlers.V1HealthHandler
 	V1WSHandler           *handlers.V1WSHandler
+	V1WebhooksHandler     *handlers.V1WebhooksHandler
 	AdminMessagesHandler  *handlers.AdminMessagesHandler
 	AdminSessionsHandler  *handlers.AdminSessionsHandler
 	AdminClientsHandler   *handlers.AdminClientsHandler
@@ -71,21 +71,23 @@ func NewContainer() *Container {
 	var msgRepo storage.MessagesRepository
 	var empresaStore domain.EmpresaStoreInterface
 	var telefonoStore *storage.TelefonoStore
+	var webhookStore *storage.WebhookStore
 	var db *sql.DB
 	if cfg.DBHost != "" {
 		var err error
 		db, err = storage.NewDB(cfg)
 		if err != nil {
-			fmt.Printf("[WARN] DB no disponible: %v\n", err)
+			config.GetLogger().Warn().Err(err).Msg("DB no disponible")
 		} else {
 			msgRepo = storage.NewMessagesRepository(db)
 			empresaStore = storage.NewEmpresaStore(db)
 			telefonoStore = storage.NewTelefonoStore(db)
-			fmt.Printf("[INFO] DB conectada a %s:%s/%s\n", cfg.DBHost, cfg.DBPort, cfg.DBName)
+			webhookStore = storage.NewWebhookStore(db)
+			config.GetLogger().Info().Str("host", cfg.DBHost).Str("port", cfg.DBPort).Str("db", cfg.DBName).Msg("DB conectada")
 		}
 	}
 
-	whatsapp.NewService(manager, sessionStore, telefonoStore, cfg.WhatsAppSQLiteDir)
+	whatsapp.NewService(manager, sessionStore, telefonoStore, webhookStore, cfg.WhatsAppSQLiteDir)
 	legacyWSHandler := NewHandlerWithBroadcast(manager, sessionStore, msgRepo, empresaStore, broadcastWorker, broadcastStore)
 
 	userStore := storage.NewAdminUserStore(db)
@@ -101,6 +103,23 @@ func NewContainer() *Container {
 	v1PhonesHandler := handlers.NewV1PhonesHandler(telefonoStore, sessionStore)
 	v1SessionsHandler := handlers.NewV1SessionsHandler(telefonoStore, sessionStore, manager)
 	v1WSHandler := handlers.NewV1WSHandler(manager, jwtCfg, telefonoStore, sessionStore)
+
+	var v1WebhooksHandler *handlers.V1WebhooksHandler
+	var webhookStartupTask func(context.Context)
+	if webhookStore != nil {
+		maxWebhooks := 10
+		if v := os.Getenv("WEBHOOKS_MAX_PER_EMPRESA"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				maxWebhooks = n
+			}
+		}
+		v1WebhooksHandler = handlers.NewV1WebhooksHandler(webhookStore, maxWebhooks)
+
+		webhookWorker := whatsapp.NewWebhookDeliveryWorker(webhookStore, nil, whatsapp.WebhookDeliveryWorkerConfig{})
+		webhookStartupTask = func(ctx context.Context) {
+			webhookWorker.Run(ctx)
+		}
+	}
 
 	healthRate := 60
 	if v := os.Getenv("HEALTH_RATE_LIMIT_PER_MIN"); v != "" {
@@ -146,23 +165,24 @@ func NewContainer() *Container {
 		EmpresaStore:          empresaStore,
 		TelefonoStore:         telefonoStore,
 		DB:                    db,
-		StartupTasks:          buildStartupBootstrap(cfg, manager, sessionStore, telefonoStore),
-		AuthHandler:              authHandler,
-		CompaniesHandler:         companiesHandler,
-		ApiKeysHandler:           apiKeysHandler,
-		ApiKeyMetricsHandler:     apiKeyMetricsHandler,
-		AdminHandler:             adminHandler,
+		StartupTasks:          composeStartupTasks(buildStartupBootstrap(cfg, manager, sessionStore, telefonoStore), webhookStartupTask),
+		AuthHandler:           authHandler,
+		CompaniesHandler:      companiesHandler,
+		ApiKeysHandler:        apiKeysHandler,
+		ApiKeyMetricsHandler:  apiKeyMetricsHandler,
+		AdminHandler:          adminHandler,
 		V1HealthHandler:       v1HealthHandler,
 		V1MessagesHandler:     v1MessagesHandler,
 		V1BroadcastsHandler:   v1BroadcastsHandler,
 		V1MetricsHandler:      v1MetricsHandler,
 		V1PhonesHandler:       v1PhonesHandler,
 		V1SessionsHandler:     v1SessionsHandler,
-		V1WSHandler:              v1WSHandler,
-		AdminMessagesHandler:     adminMessagesHandler,
-		AdminSessionsHandler:     adminSessionsHandler,
-		AdminClientsHandler:      adminClientsHandler,
-		AuthMiddleware:           authMiddleware,
+		V1WSHandler:           v1WSHandler,
+		V1WebhooksHandler:     v1WebhooksHandler,
+		AdminMessagesHandler:  adminMessagesHandler,
+		AdminSessionsHandler:  adminSessionsHandler,
+		AdminClientsHandler:   adminClientsHandler,
+		AuthMiddleware:        authMiddleware,
 		EmpresaAuthMiddleware: empresaAuthMiddleware,
 		ApiKeyAuthMiddleware:  apiKeyAuthMiddleware,
 		DashboardHandler:      dashboardHandler,

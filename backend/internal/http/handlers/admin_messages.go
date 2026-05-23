@@ -170,7 +170,7 @@ func (h *AdminMessagesHandler) RetryMessage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	sendErr := whatsapp.SendRichMessage(r.Context(), h.manager, telefono.NumeroCompleto, msg.Destino, msg.Contenido, nil)
+	sendErr := whatsapp.SendRichMessageWithReference(r.Context(), h.manager, telefono.NumeroCompleto, msg.Destino, msg.Contenido, nil, refID)
 
 	if sendErr != nil {
 		_ = h.msgRepo.UpdateEstado(refID, domain.MessageStateFailed, sendErr.Error())

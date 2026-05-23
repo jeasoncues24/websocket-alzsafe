@@ -59,4 +59,11 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 	if c.V1WSHandler != nil {
 		mux.Handle("GET /api/service/v1/ws", http.HandlerFunc(c.V1WSHandler.HandleWS))
 	}
+
+	if c.V1WebhooksHandler != nil {
+		mux.Handle("POST /api/service/v1/webhooks", clientStack(http.HandlerFunc(c.V1WebhooksHandler.Create)))
+		mux.Handle("GET /api/service/v1/webhooks", clientStack(http.HandlerFunc(c.V1WebhooksHandler.List)))
+		mux.Handle("DELETE /api/service/v1/webhooks/{id}", clientStack(http.HandlerFunc(c.V1WebhooksHandler.Delete)))
+		mux.Handle("GET /api/service/v1/empresas/webhooks", empresaStack(http.HandlerFunc(c.V1WebhooksHandler.ListByEmpresa)))
+	}
 }

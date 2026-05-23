@@ -30,7 +30,9 @@ type Telefono struct {
 	UpdatedAt        time.Time      `json:"updated_at"`
 	RuntimeConnected bool          `json:"runtime_connected,omitempty"`
 	Mismatch         bool          `json:"mismatch,omitempty"`
-	MismatchReason  string        `json:"mismatch_reason,omitempty"`
+	MismatchReason   string        `json:"mismatch_reason,omitempty"`
+	ApiKeyCount      int           `json:"api_key_count,omitempty"`
+	WebhookCount     int           `json:"webhook_count,omitempty"`
 }
 
 // TelefonoResponse representa la respuesta HTTP para operaciones de teléfono

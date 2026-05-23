@@ -306,6 +306,8 @@ Referencia rápida: `frontend/README.md`
 ## 12. Documentación complementaria
 
 - `docs/deploy-backend.md` — detalle operativo del backend
+- `docs/integracion-b2b.md` — capacidades B2B públicas (health endpoint y guía base)
+- `docs/webhooks-integracion.md` — guía detallada de registro, firma, payloads y retries de webhooks
 - `docker/production.md` — resumen corto del flujo oficial vigente
 - `frontend/README.md` — notas del frontend
 

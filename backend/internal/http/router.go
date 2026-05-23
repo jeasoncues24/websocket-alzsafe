@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -51,6 +52,31 @@ func NewRouter() http.Handler {
 	return &startupAwareRouter{
 		handler: k.Apply(mux),
 		startFn: c.StartupTasks,
+	}
+}
+
+func composeStartupTasks(tasks ...func(context.Context)) func(context.Context) {
+	filtered := make([]func(context.Context), 0, len(tasks))
+	for _, task := range tasks {
+		if task != nil {
+			filtered = append(filtered, task)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return func(ctx context.Context) {
+		for _, task := range filtered {
+			task := task
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("[PANIC] startup task panic: %v", r)
+					}
+				}()
+				task(ctx)
+			}()
+		}
 	}
 }
 
@@ -204,7 +230,6 @@ func HandleGetCompanies(w http.ResponseWriter, r *http.Request) {
 		"companies": result,
 	})
 }
-
 
 type BroadcastInfo struct {
 	ReferenceID string    `json:"reference_id"`
@@ -529,57 +554,57 @@ func handleOtherMethods(w http.ResponseWriter, r *http.Request) {
 
 var registeredRoutes = map[string][]string{
 	// Admin panel — JWT auth
-	"/api/auth/login":                          {"POST"},
-	"/api/auth/logout":                         {"POST"},
-	"/api/auth/refresh":                        {"POST"},
-	"/api/auth/me":                             {"GET"},
-	"/api/admin/users":                         {"GET", "POST"},
-	"/api/admin/usuarios_admin":                {"GET", "POST"},
-	"/api/admin/roles":                         {"GET", "POST"},
-	"/api/admin/modules":                       {"GET"},
-	"/api/admin/empresas":                      {"GET", "POST"},
-	"/api/admin/empresas/{id}":                 {"GET", "PUT", "DELETE"},
-	"/api/admin/empresas/{id}/restore":         {"POST"},
-	"/api/admin/empresas/{id}/token":           {"POST"},
-	"/api/admin/empresas/{id}/token/revoke":    {"POST"},
-	"/api/admin/telefonos":                     {"GET", "POST"},
-	"/api/admin/telefonos/{id}/connect":        {"POST"},
-	"/api/admin/telefonos/{id}/connect/ws":     {"GET"},
-	"/api/admin/telefonos/{id}/api-keys":       {"GET", "POST"},
-	"/api/admin/api-keys/{id}":                 {"GET"},
-	"/api/admin/api-keys/{id}/rotate":          {"POST"},
-	"/api/admin/api-keys/{id}/revoke":          {"POST"},
-	"/api/admin/api-keys/{id}/usage":           {"GET"},
+	"/api/auth/login":                           {"POST"},
+	"/api/auth/logout":                          {"POST"},
+	"/api/auth/refresh":                         {"POST"},
+	"/api/auth/me":                              {"GET"},
+	"/api/admin/users":                          {"GET", "POST"},
+	"/api/admin/usuarios_admin":                 {"GET", "POST"},
+	"/api/admin/roles":                          {"GET", "POST"},
+	"/api/admin/modules":                        {"GET"},
+	"/api/admin/empresas":                       {"GET", "POST"},
+	"/api/admin/empresas/{id}":                  {"GET", "PUT", "DELETE"},
+	"/api/admin/empresas/{id}/restore":          {"POST"},
+	"/api/admin/empresas/{id}/token":            {"POST"},
+	"/api/admin/empresas/{id}/token/revoke":     {"POST"},
+	"/api/admin/telefonos":                      {"GET", "POST"},
+	"/api/admin/telefonos/{id}/connect":         {"POST"},
+	"/api/admin/telefonos/{id}/connect/ws":      {"GET"},
+	"/api/admin/telefonos/{id}/api-keys":        {"GET", "POST"},
+	"/api/admin/api-keys/{id}":                  {"GET"},
+	"/api/admin/api-keys/{id}/rotate":           {"POST"},
+	"/api/admin/api-keys/{id}/revoke":           {"POST"},
+	"/api/admin/api-keys/{id}/usage":            {"GET"},
 	"/api/admin/api-keys/{id}/usage/stats":      {"GET"},
 	"/api/admin/api-keys/{id}/usage/timeseries": {"GET"},
-	"/api/admin/api-keys/{id}/audit":           {"GET"},
-	"/api/admin/api-keys/{id}/audit/stats":     {"GET"},
-	"/api/admin/sesiones":                      {"GET", "POST"},
-	"/api/admin/sesiones/diagnostico":          {"GET"},
-	"/api/admin/mensajes":                      {"GET", "POST"},
-	"/api/admin/metricas":                      {"GET"},
-	"/api/admin/clientes/buscar":               {"GET"},
-	"/api/admin/difusiones":                    {"GET"},
+	"/api/admin/api-keys/{id}/audit":            {"GET"},
+	"/api/admin/api-keys/{id}/audit/stats":      {"GET"},
+	"/api/admin/sesiones":                       {"GET", "POST"},
+	"/api/admin/sesiones/diagnostico":           {"GET"},
+	"/api/admin/mensajes":                       {"GET", "POST"},
+	"/api/admin/metricas":                       {"GET"},
+	"/api/admin/clientes/buscar":                {"GET"},
+	"/api/admin/difusiones":                     {"GET"},
 	// Service API — API token por teléfono
-	"/api/service/v1/auth/empresa/validate":    {"POST"},
-	"/api/service/v1/empresas":                 {"GET", "PUT"},
-	"/api/service/v1/metricas":                 {"GET"},
-	"/api/service/v1/telefonos":                {"GET"},
-	"/api/service/v1/telefonos/{id}/qr":        {"POST"},
-	"/api/service/v1/telefonos/{id}/estado":    {"GET"},
-	"/api/service/v1/sesiones":                 {"GET", "POST"},
-	"/api/service/v1/sesiones/{id}":            {"GET", "DELETE"},
-	"/api/service/v1/sesiones/{id}/connect":    {"POST"},
-	"/api/service/v1/me":                       {"GET"},
-	"/api/service/v1/sesion":                   {"GET"},
-	"/api/service/v1/mensajes":                 {"GET", "POST"},
-	"/api/service/v1/mensajes/{id}":            {"GET", "PATCH", "POST"},
-	"/api/service/v1/difusiones":               {"GET", "POST"},
-	"/api/service/v1/difusiones/{id}":          {"GET"},
-	"/api/service/v1/ws":                       {"GET"},
+	"/api/service/v1/auth/empresa/validate": {"POST"},
+	"/api/service/v1/empresas":              {"GET", "PUT"},
+	"/api/service/v1/metricas":              {"GET"},
+	"/api/service/v1/telefonos":             {"GET"},
+	"/api/service/v1/telefonos/{id}/qr":     {"POST"},
+	"/api/service/v1/telefonos/{id}/estado": {"GET"},
+	"/api/service/v1/sesiones":              {"GET", "POST"},
+	"/api/service/v1/sesiones/{id}":         {"GET", "DELETE"},
+	"/api/service/v1/sesiones/{id}/connect": {"POST"},
+	"/api/service/v1/me":                    {"GET"},
+	"/api/service/v1/sesion":                {"GET"},
+	"/api/service/v1/mensajes":              {"GET", "POST"},
+	"/api/service/v1/mensajes/{id}":         {"GET", "PATCH", "POST"},
+	"/api/service/v1/difusiones":            {"GET", "POST"},
+	"/api/service/v1/difusiones/{id}":       {"GET"},
+	"/api/service/v1/ws":                    {"GET"},
 	// Infraestructura
-	"/metrics":                                 {"GET"},
-	"/health":                                  {"GET"},
+	"/metrics": {"GET"},
+	"/health":  {"GET"},
 }
 
 func routeExists(path, method string) bool {

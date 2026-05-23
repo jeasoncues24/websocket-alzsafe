@@ -53,6 +53,10 @@ func TestEmbeddedMigrationsMatchNormalizedLayout(t *testing.T) {
 		"015_create_audit_log_table.down.sql",
 		"016_seeds.up.sql",
 		"016_seeds.down.sql",
+		"017_create_webhooks_outbound.up.sql",
+		"017_create_webhooks_outbound.down.sql",
+		"018_create_webhooks_outbound_queue.up.sql",
+		"018_create_webhooks_outbound_queue.down.sql",
 	}
 
 	if len(got) != len(expected) {
@@ -150,6 +154,18 @@ func TestNormalizedCreateTableMigrationsHaveFinalSchema(t *testing.T) {
 		{
 			name:             "015_create_audit_log_table.up.sql",
 			requiredContains: []string{"CREATE TABLE IF NOT EXISTS audit_log"},
+			forbidden:        []string{"ALTER TABLE", "INSERT INTO"},
+			createCount:      1,
+		},
+		{
+			name:             "017_create_webhooks_outbound.up.sql",
+			requiredContains: []string{"webhooks_outbound", "empresa_id", "telefono_id", "api_key_id", "url", "secret", "eventos", "idx_webhooks_empresa", "idx_webhooks_empresa_created", "idx_webhooks_telefono", "idx_webhooks_api_key"},
+			forbidden:        []string{"ALTER TABLE", "INSERT INTO"},
+			createCount:      1,
+		},
+		{
+			name:             "018_create_webhooks_outbound_queue.up.sql",
+			requiredContains: []string{"webhooks_outbound_queue", "webhook_id", "payload", "estado", "idx_queue_due"},
 			forbidden:        []string{"ALTER TABLE", "INSERT INTO"},
 			createCount:      1,
 		},

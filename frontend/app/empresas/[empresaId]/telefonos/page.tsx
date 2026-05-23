@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Building2, KeyRound, Loader2, Phone, Pencil, Plus, QrCode, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Building2, KeyRound, Link, Loader2, Pencil, Phone, Plus, QrCode, RefreshCw, Trash2, Webhook } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { DataEmptyState } from "@/components/feedback/data-empty-state";
 import {
   createAdminTelefono,
   deleteAdminTelefono,
@@ -16,7 +19,15 @@ import {
   type Empresa,
 } from "@/lib/api";
 import { TelefonoFormModal, type TelefonoFormData } from "@/components/companies/telefono-form-modal";
-import { SessionStatusBadge } from "@/components/session/session-status-badge";
+
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+
+function estadoTelefono(t: AdminTelefono): { label: string; variant: BadgeVariant; className?: string } {
+  if (t.mismatch) return { label: "Desajuste", variant: "outline", className: "text-amber-600 border-amber-400" };
+  if (t.status === "active" && t.runtime_connected) return { label: "Conectado", variant: "default" };
+  if (t.status === "disconnected" || !t.runtime_connected) return { label: "Desconectado", variant: "destructive" };
+  return { label: "En espera", variant: "secondary" };
+}
 
 export default function CompanyPhonesPage() {
   const router = useRouter();
@@ -156,74 +167,114 @@ export default function CompanyPhonesPage() {
       {error && <p className="text-sm text-destructive">{error}</p>}
       {mutationError && <p className="text-sm text-destructive">{mutationError}</p>}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de teléfonos</CardTitle>
-          <CardDescription>
-            Cada número puede tener una o varias API keys asociadas.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {loading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-            </div>
-          ) : telefonos.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              No hay teléfonos registrados para esta empresa.
-            </div>
-          ) : (
-            telefonos.map((telefono) => (
-              <div
-                key={telefono.id}
-                className="flex flex-col gap-4 rounded-xl border bg-card p-4 md:flex-row md:items-center md:justify-between"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{telefono.numero_completo}</span>
-                    <SessionStatusBadge
-                      statusDb={telefono.status}
-                      runtimeConnected={telefono.runtime_connected}
-                      mismatch={telefono.mismatch}
-                      mismatchReason={telefono.mismatch_reason}
-                    />
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {telefono.codigo_pais} {telefono.numero}
-                  </p>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array(3).fill(0).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-3">
+                <Skeleton className="h-5 w-40" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-4">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-24" />
                 </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-8 w-20" />
+                  <Skeleton className="h-8 w-20" />
+                  <Skeleton className="h-8 w-24" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : telefonos.length === 0 ? (
+        <DataEmptyState
+          icon={Phone}
+          title="Sin teléfonos"
+          description="No hay teléfonos registrados para esta empresa."
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {telefonos.map((telefono) => {
+            const estado = estadoTelefono(telefono);
+            const isLarge = telefono.status === "active" && telefono.runtime_connected && (telefono.webhook_count ?? 0) > 0;
 
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => openEdit(telefono)}>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Editar
-                  </Button>
-                  <Button variant="destructive" onClick={() => handleDelete(telefono)}>
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Eliminar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push(`/empresas/${empresaId}/telefonos/${telefono.id}/api-keys`)}
-                  >
-                    <KeyRound className="mr-2 h-4 w-4" />
-                    Gestionar API Keys
-                  </Button>
-                  {telefono.status !== "active" && (
-                    <Button variant="outline" onClick={() => router.push(`/empresas/${empresaId}/telefonos/${telefono.id}/connect`)}>
-                      <QrCode className="mr-2 h-4 w-4" />
-                      {telefono.status === "disconnected" ? "Conectar" : "Ver QR"}
+            return (
+              <Card
+                key={telefono.id}
+                className={cn(
+                  "transition-shadow hover:shadow-md",
+                  isLarge && "md:col-span-2"
+                )}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <CardTitle className="truncate text-base font-semibold">
+                        {telefono.numero_completo}
+                      </CardTitle>
+                    </div>
+                    <Badge variant={estado.variant} className={estado.className}>
+                      {estado.label}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <KeyRound className="h-3.5 w-3.5" />
+                      {telefono.api_key_count ?? 0} claves activas
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Webhook className="h-3.5 w-3.5" />
+                      {telefono.webhook_count ?? 0} webhooks
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => openEdit(telefono)}>
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                      Editar
                     </Button>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => router.push(`/empresas/${empresaId}/telefonos/${telefono.id}/api-keys`)}
+                    >
+                      <KeyRound className="mr-1.5 h-3.5 w-3.5" />
+                      API Keys
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => router.push(`/empresas/${empresaId}/telefonos/${telefono.id}/webhooks`)}
+                    >
+                      <Link className="mr-1.5 h-3.5 w-3.5" />
+                      Webhooks
+                    </Button>
+                    {telefono.status !== "active" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => router.push(`/empresas/${empresaId}/telefonos/${telefono.id}/connect`)}
+                      >
+                        <QrCode className="mr-1.5 h-3.5 w-3.5" />
+                        {telefono.status === "disconnected" ? "Conectar" : "Ver QR"}
+                      </Button>
+                    )}
+                    <Button size="sm" variant="destructive" onClick={() => handleDelete(telefono)}>
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      Eliminar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <TelefonoFormModal
         open={formOpen}

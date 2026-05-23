@@ -2,7 +2,7 @@
 story_id: "5.1"
 epic: "epic-5"
 title: "Endpoint público /api/service/v1/health"
-status: review
+status: done
 estimated_days: 1
 priority: high
 branch: "feature/integracion-loyo"

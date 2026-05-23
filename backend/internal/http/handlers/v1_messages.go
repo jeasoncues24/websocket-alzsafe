@@ -141,7 +141,7 @@ func (h *V1MessagesHandler) PostMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	sendErr := whatsapp.SendRichMessage(r.Context(), h.manager, phone.NumeroCompleto, req.Destino, req.Contenido, req.Adjuntos)
+	sendErr := whatsapp.SendRichMessageWithReference(r.Context(), h.manager, phone.NumeroCompleto, req.Destino, req.Contenido, req.Adjuntos, msg.ReferenceID)
 
 	if sendErr != nil {
 		_ = h.msgRepo.UpdateEstado(msg.ReferenceID, domain.MessageStateFailed, sendErr.Error())
@@ -343,7 +343,7 @@ func (h *V1MessagesHandler) RetryMessage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	sendErr := whatsapp.SendRichMessage(r.Context(), h.manager, phone.NumeroCompleto, msg.Destino, msg.Contenido, nil)
+	sendErr := whatsapp.SendRichMessageWithReference(r.Context(), h.manager, phone.NumeroCompleto, msg.Destino, msg.Contenido, nil, referenceID)
 
 	if sendErr != nil {
 		_ = h.msgRepo.UpdateEstado(referenceID, domain.MessageStateFailed, sendErr.Error())

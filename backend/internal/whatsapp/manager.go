@@ -8,14 +8,16 @@ import (
 )
 
 type Manager struct {
-	mu      sync.RWMutex
-	clients map[string]*whatsmeow.Client
-	service *Service
+	mu           sync.RWMutex
+	clients      map[string]*whatsmeow.Client
+	service      *Service
+	outboundRefs map[string]string
 }
 
 func NewManager() *Manager {
 	return &Manager{
-		clients: make(map[string]*whatsmeow.Client),
+		clients:      make(map[string]*whatsmeow.Client),
+		outboundRefs: make(map[string]string),
 	}
 }
 
@@ -114,6 +116,36 @@ func (m *Manager) getService() *Service {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.service
+}
+
+func (m *Manager) RegisterOutboundMessageReference(accountID, providerMessageID, referenceID string) {
+	accountID = NormalizeAccountID(accountID)
+	providerMessageID = strings.TrimSpace(providerMessageID)
+	referenceID = strings.TrimSpace(referenceID)
+	if accountID == "" || providerMessageID == "" || referenceID == "" {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.outboundRefs[outboundReferenceKey(accountID, providerMessageID)] = referenceID
+}
+
+func (m *Manager) ResolveOutboundMessageReference(accountID, providerMessageID string) (string, bool) {
+	accountID = NormalizeAccountID(accountID)
+	providerMessageID = strings.TrimSpace(providerMessageID)
+	if accountID == "" || providerMessageID == "" {
+		return "", false
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	referenceID, ok := m.outboundRefs[outboundReferenceKey(accountID, providerMessageID)]
+	return referenceID, ok
+}
+
+func outboundReferenceKey(accountID, providerMessageID string) string {
+	return accountID + "|" + providerMessageID
 }
 
 // NormalizeAccountID normalizes account ID by trimming whitespace

@@ -17,7 +17,7 @@
       "source": "samber/cc-skills-golang",
       "sourceType": "github",
       "skillPath": "skills/golang-security/SKILL.md",
-      "computedHash": "9faa31d5a182b84f7ce8f04420ccd7b8597870e7dece45da6111c14b81df7540"
+      "computedHash": "15ea1dedeac2ec08627a47652b420480daf39211b244880956aa7a7e2d8f4f54"
     },
     "shadcn": {
       "source": "shadcn/ui",

@@ -109,6 +109,8 @@ export interface AdminTelefono {
   runtime_connected?: boolean;
   mismatch?: boolean;
   mismatch_reason?: string;
+  api_key_count?: number;
+  webhook_count?: number;
 }
 
 export interface TelefonosResponse {
@@ -747,6 +749,32 @@ export interface RolesResponse {
 
 export interface ModulesResponse {
   modules: Module[];
+}
+
+export interface AdminWebhook {
+  id: number;
+  empresa_id: number;
+  telefono_id: number;
+  api_key_id: number;
+  url: string;
+  eventos: string[];
+  activo: boolean;
+  failure_count: number;
+  last_error?: string | null;
+  last_success_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminWebhooksResponse {
+  ok: boolean;
+  webhooks: AdminWebhook[];
+  total: number;
+  error?: string;
+}
+
+export async function getAdminTelefonoWebhooks(telefonoId: number): Promise<AdminWebhooksResponse> {
+  return fetchWithAuth(`${API_BASE}/api/admin/telefonos/${telefonoId}/webhooks`);
 }
 
 async function fetchWithAuth<T = ApiEnvelope>(url: string, options?: RequestInit): Promise<T> {

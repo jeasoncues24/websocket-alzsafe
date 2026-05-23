@@ -34,6 +34,11 @@ func SendTextMessage(ctx context.Context, manager *Manager, accountID string, de
 
 // SendRichMessage sends either plain text or a single media attachment with optional text.
 func SendRichMessage(ctx context.Context, manager *Manager, accountID string, destino string, contenido string, attachments []domain.AttachmentPayload) error {
+	return SendRichMessageWithReference(ctx, manager, accountID, destino, contenido, attachments, "")
+}
+
+// SendRichMessageWithReference sends a message and, if provided, correlates the provider message_id with the wsapi reference_id.
+func SendRichMessageWithReference(ctx context.Context, manager *Manager, accountID string, destino string, contenido string, attachments []domain.AttachmentPayload, referenceID string) error {
 	sendLogger := NewModuleLogger("WA-SEND")
 	if manager == nil {
 		sendLogger.Warnf("send.fail account=%s reason=manager_nil", accountID)
@@ -57,7 +62,7 @@ func SendRichMessage(ctx context.Context, manager *Manager, accountID string, de
 		return err
 	}
 
-	return sendPreparedMessage(ctx, sendLogger, client, accountID, destino, contenido, prepared)
+	return sendPreparedMessage(ctx, sendLogger, manager, client, accountID, destino, contenido, prepared, referenceID)
 }
 
 func prepareAttachments(ctx context.Context, client *wa.Client, attachments []domain.AttachmentPayload) ([]preparedAttachment, error) {
@@ -90,7 +95,7 @@ func prepareAttachments(ctx context.Context, client *wa.Client, attachments []do
 	}}, nil
 }
 
-func sendPreparedMessage(ctx context.Context, sendLogger waLog.Logger, client *wa.Client, accountID string, destino string, contenido string, prepared []preparedAttachment) error {
+func sendPreparedMessage(ctx context.Context, sendLogger waLog.Logger, manager *Manager, client *wa.Client, accountID string, destino string, contenido string, prepared []preparedAttachment, referenceID string) error {
 	// Normalize destination: strip leading '+' and whitespace
 	destino = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(destino), "+"))
 	if destino == "" {
@@ -108,6 +113,10 @@ func sendPreparedMessage(ctx context.Context, sendLogger waLog.Logger, client *w
 	if err != nil {
 		sendLogger.Errorf("send.fail account=%s to=%s error=%v", accountID, destino, err)
 		return err
+	}
+
+	if manager != nil && strings.TrimSpace(referenceID) != "" {
+		manager.RegisterOutboundMessageReference(accountID, string(resp.ID), referenceID)
 	}
 
 	mediaLabel := "text"

@@ -77,3 +77,19 @@ RUN go build -ldflags "-X 'wsapi/internal/config.versionLDFlag=${VERSION}'" -o w
 ```
 
 > **Nota**: Este endpoint es un *liveness probe* de identidad — confirma que el proceso responde y se identifica como wsapi. No verifica el estado de la base de datos, sesiones de WhatsApp ni otros subsistemas.
+
+---
+
+## Webhooks salientes
+
+Si necesitas recibir eventos operativos sin mantener WebSocket persistente, revisa la guía detallada:
+
+- [`docs/webhooks-integracion.md`](./webhooks-integracion.md)
+
+Ahí encontrarás:
+
+- registro y eliminación de webhooks
+- eventos disponibles
+- payloads reales de ejemplo
+- verificación de `X-Wsapi-Signature`
+- política de retries, idempotencia y troubleshooting

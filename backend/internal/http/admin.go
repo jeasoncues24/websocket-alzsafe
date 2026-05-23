@@ -27,6 +27,7 @@ type AdminHandler struct {
 	moduleStore   *storage.ModuleStore
 	telefonoStore *storage.TelefonoStore
 	apiKeyStore   *storage.ApiKeyStore
+	webhookStore  *storage.WebhookStore
 	sessionStore  *storage.SessionStore
 	manager       *whatsapp.Manager
 	jwtCfg        *config.JWTConfig
@@ -51,6 +52,7 @@ func NewAdminHandler(db *sql.DB, sessionStore *storage.SessionStore, manager *wh
 		moduleStore:   storage.NewModuleStore(db),
 		telefonoStore: storage.NewTelefonoStore(db),
 		apiKeyStore:   storage.NewApiKeyStore(db),
+		webhookStore:  storage.NewWebhookStore(db),
 		sessionStore:  sessionStore,
 		manager:       manager,
 		jwtCfg:        jwtCfg,
@@ -955,6 +957,28 @@ func (h *AdminHandler) ListCompanyPhones(w http.ResponseWriter, r *http.Request)
 				enriched[i].MismatchReason = "db_not_active_runtime_connected"
 			}
 		}
+
+		if h.apiKeyStore != nil {
+			keys, _ := h.apiKeyStore.GetByTelefonoID(phone.ID)
+			activeKeys := 0
+			for _, k := range keys {
+				if k.Activo {
+					activeKeys++
+				}
+			}
+			enriched[i].ApiKeyCount = activeKeys
+		}
+
+		if h.webhookStore != nil {
+			hooks, _ := h.webhookStore.ListByTelefono(phone.ID)
+			activeHooks := 0
+			for _, wh := range hooks {
+				if wh.Activo {
+					activeHooks++
+				}
+			}
+			enriched[i].WebhookCount = activeHooks
+		}
 	}
 
 	writeAdminJSON(w, http.StatusOK, domain.TelefonosListResponse{
@@ -1486,6 +1510,55 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
+}
+
+type adminWebhooksListResponse struct {
+	OK       bool             `json:"ok"`
+	Webhooks []domain.Webhook `json:"webhooks"`
+	Total    int              `json:"total"`
+}
+
+func (h *AdminHandler) ListTelefonoWebhooks(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	idStr := r.PathValue("id")
+	telefonoID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || telefonoID <= 0 {
+		writeAdminError(w, http.StatusBadRequest, "invalid telefono ID")
+		return
+	}
+
+	phone, err := h.telefonoStore.GetByID(telefonoID)
+	if err != nil || phone == nil {
+		writeAdminError(w, http.StatusNotFound, "teléfono no encontrado")
+		return
+	}
+
+	access, ok := getPanelAdminAccess(r)
+	if !ok {
+		writeAdminError(w, http.StatusUnauthorized, "token requerido")
+		return
+	}
+	if !access.CanAccessEmpresa(phone.EmpresaID) {
+		writeAdminError(w, http.StatusForbidden, "acceso denegado")
+		return
+	}
+
+	if h.webhookStore == nil {
+		writeAdminJSON(w, http.StatusOK, adminWebhooksListResponse{OK: true, Webhooks: []domain.Webhook{}, Total: 0})
+		return
+	}
+
+	hooks, err := h.webhookStore.ListByTelefono(telefonoID)
+	if err != nil {
+		writeAdminError(w, http.StatusInternalServerError, "error al obtener webhooks")
+		return
+	}
+	if hooks == nil {
+		hooks = []domain.Webhook{}
+	}
+
+	writeAdminJSON(w, http.StatusOK, adminWebhooksListResponse{OK: true, Webhooks: hooks, Total: len(hooks)})
 }
 
 func extractTelefonoIDFromAdminPath(path string) (int64, error) {

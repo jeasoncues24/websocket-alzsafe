@@ -217,7 +217,7 @@ func (w *BroadcastWorker) processItemWithRetry(item domain.BroadcastItem, client
 func (w *BroadcastWorker) processItem(item domain.BroadcastItem, client *wa.Client, accountID string, prepared []preparedAttachment) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	return sendPreparedMessage(ctx, NewModuleLogger("WA-BROADCAST"), client, accountID, item.Destino, item.Mensaje, prepared)
+	return sendPreparedMessage(ctx, NewModuleLogger("WA-BROADCAST"), nil, client, accountID, item.Destino, item.Mensaje, prepared, "")
 }
 
 func isTransientError(err error) bool {

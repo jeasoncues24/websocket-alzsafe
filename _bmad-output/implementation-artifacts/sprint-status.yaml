@@ -46,7 +46,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-26T18:43:24-05:00
-last_updated: 2026-05-17T00:00:00-05:00
+last_updated: 2026-05-23T14:00:00-05:00
 project: wsapi
 project_key: NOKEY
 tracking_system: file-system
@@ -98,11 +98,17 @@ development_status:
   4-6-mejora-visual-mobile-login-enfoque-mobile-first: done
   4-7-animaciones-apertura-cierre-modales-overlays: done
   epic-4-retrospective: optional
-  epic-5: in-progress
-  5-1-health-endpoint-publico: review
-  5-2-tabla-modelo-webhooks-salientes: backlog
-  5-3-endpoints-rest-gestion-webhooks: backlog
-  5-4-worker-envio-retry-exponencial: backlog
-  5-5-emision-eventos-whatsmeow: backlog
-  5-6-documentacion-integracion-webhooks: backlog
+  epic-5: done
+  5-1-health-endpoint-publico: done
+  5-2-tabla-modelo-webhooks-salientes: done
+  5-3-endpoints-rest-gestion-webhooks: done
+  5-4-worker-envio-retry-exponencial: done
+  5-5-emision-eventos-whatsmeow: done
+  5-6-documentacion-integracion-webhooks: done
   epic-5-retrospective: optional
+  epic-6: done
+  6-1-backend-conteos-telefonos-admin: done
+  6-2-frontend-bento-grid-telefonos: done
+  6-3-backend-endpoint-webhooks-admin: done
+  6-4-frontend-vista-webhooks-telefono: done
+  epic-6-retrospective: optional

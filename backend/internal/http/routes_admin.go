@@ -45,6 +45,7 @@ func RegisterAdminRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 		mux.Handle("POST /api/admin/telefonos/{id}/connect", adminStack(http.HandlerFunc(c.AdminHandler.StartCompanyPhoneConnection)))
 		mux.Handle("GET /api/admin/telefonos/{id}/connect/ws", http.HandlerFunc(c.AdminHandler.ConnectCompanyPhoneWS))
 		mux.Handle("GET /api/admin/sesiones/diagnostico", adminStack(http.HandlerFunc(c.AdminHandler.GetSessionsDiagnostics)))
+		mux.Handle("GET /api/admin/telefonos/{id}/webhooks", adminStack(http.HandlerFunc(c.AdminHandler.ListTelefonoWebhooks)))
 	}
 
 	if c.CompaniesHandler != nil {
