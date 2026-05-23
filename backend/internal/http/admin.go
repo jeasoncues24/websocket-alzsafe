@@ -1450,6 +1450,13 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 	defer func() {
 		fmt.Printf("[INFO] WS connect closed telefono=%d account=%s reason=%v\n", phone.ID, accountID, ctx.Err())
 		if h.sessionStore != nil && h.manager != nil {
+			// Auditar el cierre del WebSocket en el historial de eventos en memoria
+			reasonStr := "normal"
+			if ctx.Err() != nil {
+				reasonStr = ctx.Err().Error()
+			}
+			h.sessionStore.AppendEvent(phone.NumeroCompleto, "ws_closed", "WS admin cerrado: "+reasonStr)
+
 			// Evitar carrera: si el cliente ya se conectó activamente en segundo plano, no borrarlo
 			if client, ok := h.manager.Get(accountID); ok && client != nil && client.IsConnected() {
 				return

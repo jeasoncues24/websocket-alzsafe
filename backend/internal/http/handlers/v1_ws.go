@@ -123,6 +123,17 @@ func (h *V1WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("[INFO] V1 WS closed empresa=%d account=%s reason=%v\n", claims.EmpresaID, accountID, ctx.Err())
 		}
 		if h.sessionStore != nil && h.manager != nil {
+			// Auditar el cierre del WebSocket en el historial de eventos en memoria
+			reasonStr := "normal"
+			if ctx.Err() != nil {
+				reasonStr = ctx.Err().Error()
+			}
+			h.sessionStore.AppendEvent(phone.NumeroCompleto, "ws_closed", "WS cliente V1 cerrado: "+reasonStr)
+
+			// Evitar carrera: si el cliente ya se conectó activamente en segundo plano, no borrarlo
+			if client, ok := h.manager.Get(accountID); ok && client != nil && client.IsConnected() {
+				return
+			}
 			if state, ok := h.sessionStore.Get(phone.NumeroCompleto); ok {
 				if state.Status == "initializing" || state.Status == "qr_pending" {
 					h.manager.Delete(accountID)
@@ -146,11 +157,13 @@ func (h *V1WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			if err := writeWSEvent(c, mapV1EventType(event.Event), event.Data); err != nil {
+			if err := writeWSEvent(c, mapV1EventType(event.Event, event.Data), event.Data); err != nil {
+				fmt.Printf("[WARN] V1 WS write event failed account=%s: %v\n", accountID, err)
 				return
 			}
 		case <-ticker.C:
 			if err := writeWSEvent(c, "ping", nil); err != nil {
+				fmt.Printf("[WARN] V1 WS ping failed account=%s: %v\n", accountID, err)
 				return
 			}
 		case <-ctx.Done():
@@ -159,12 +172,17 @@ func (h *V1WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func mapV1EventType(event string) string {
+func mapV1EventType(event string, data map[string]any) string {
 	switch {
 	case strings.HasPrefix(event, "qr-"):
 		return "qr"
 	case strings.HasPrefix(event, "active-"):
-		return "connected"
+		if data != nil {
+			if isActive, ok := data["isActive"].(bool); ok && isActive {
+				return "connected"
+			}
+		}
+		return "disconnected"
 	default:
 		return event
 	}

@@ -2,7 +2,7 @@
 title: 'Story 2.7 — QR vía API token: WS primario + fallback REST'
 type: 'bugfix+feature'
 created: '2026-05-07'
-status: 'review'
+status: 'done'
 epic: 'epic-2-mejoras-post-revision'
 baseline_commit: '3fe8a86'
 context:
@@ -85,6 +85,13 @@ El handler imprime `[INFO] V1 WS opened empresa=%d` al inicio y `[INFO] V1 WS cl
   - [x] `cd backend && go build ./...`
   - [x] `cd backend && go test ./...`
   - [x] `cd frontend && npm run lint`
+
+### Review Findings
+
+- [x] [Review][Decision] Mapeo de Eventos de Desconexión Roto (AC2) (Solucionado: mapV1EventType corregido para evaluar isActive y retornar disconnected)
+- [x] [Review][Patch] Carrera en defer cleanup de V1 WS [backend/internal/http/handlers/v1_ws.go:~125] (Solucionado: guard IsConnected integrado en defer)
+- [x] [Review][Patch] Silencio en fallos de escritura de WebSocket V1 [backend/internal/http/handlers/v1_ws.go:~149] (Solucionado: agregados logs de error explicitos para writes/pings)
+- [x] [Review][Patch] Registrar ws_closed con razones de desconexión en el historial [backend/internal/http/handlers/v1_ws.go:~125] (Solucionado: AppendEvent en sessionStore agregado a los defers de admin y v1_ws para visibilidad del frontend)
 
 ## Dev Notes
 
