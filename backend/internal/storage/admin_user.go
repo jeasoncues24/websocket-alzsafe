@@ -233,6 +233,32 @@ func (s *AdminUserStore) Update(user *domain.AdminUser) error {
 	return nil
 }
 
+// UpdateProfile actualiza el perfil (username y email) de un usuario
+func (s *AdminUserStore) UpdateProfile(id int64, username, email string) error {
+	query := `UPDATE admin_users SET username = ?, email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+	_, err := s.db.Exec(query, username, email, id)
+	if err != nil {
+		return fmt.Errorf("error al actualizar perfil: %w", err)
+	}
+	return nil
+}
+
+// IsUsernameTaken verifica si el username ya está en uso por otro usuario
+func (s *AdminUserStore) IsUsernameTaken(username string, excludeID int64) (bool, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM admin_users WHERE username = ? AND id != ?`
+	err := s.db.QueryRow(query, username, excludeID).Scan(&count)
+	return count > 0, err
+}
+
+// IsEmailTaken verifica si el email ya está en uso por otro usuario
+func (s *AdminUserStore) IsEmailTaken(email string, excludeID int64) (bool, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM admin_users WHERE email = ? AND id != ?`
+	err := s.db.QueryRow(query, email, excludeID).Scan(&count)
+	return count > 0, err
+}
+
 // UpdatePassword actualiza la contraseña de un usuario
 func (s *AdminUserStore) UpdatePassword(id int64, newHash string) error {
 	query := `UPDATE admin_users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`

@@ -12,7 +12,7 @@ import { getActiveNavItem, navItems } from "@/components/layout/nav-items";
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { sidebarOpen, setSidebarOpen, setActiveNav } = useAppStore();
+  const { sidebarOpen, setSidebarOpen, setActiveNav, allowedModules, user } = useAppStore();
   const activeItem = getActiveNavItem(pathname);
 
   useEffect(() => {
@@ -26,6 +26,12 @@ export function Sidebar() {
     setActiveNav(item.id);
     router.push(item.href);
   };
+
+  const filteredNavItems = navItems.filter((item) => {
+    if (user?.is_root) return true;
+    if (item.id === "dashboard" || item.id === "settings") return true;
+    return allowedModules.includes(item.id);
+  });
 
   return (
     <div
@@ -57,7 +63,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 p-2">
-        {navItems.map((item) => {
+        {filteredNavItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
           return (
             <Button

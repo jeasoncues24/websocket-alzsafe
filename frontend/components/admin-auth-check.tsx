@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { getAuthMe } from "@/lib/api";
+import { useAppStore } from "@/stores/useAppStore";
+import { getActiveNavItem } from "@/components/layout/nav-items";
 
 export function AdminAuthCheck({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -11,23 +14,66 @@ export function AdminAuthCheck({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
     if (pathname === "/login" || pathname.startsWith("/qr")) {
-      timeoutId = setTimeout(() => setChecking(false), 0);
+      setChecking(false);
       return;
     }
 
     const token = localStorage.getItem("admin_token");
     if (!token) {
       router.push("/login");
-    } else {
-      timeoutId = setTimeout(() => setChecking(false), 0);
+      return;
     }
 
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
+    const currentUser = useAppStore.getState().user;
+    if (currentUser) {
+      const activeItem = getActiveNavItem(pathname);
+      if (
+        activeItem &&
+        activeItem.id !== "dashboard" &&
+        activeItem.id !== "settings" &&
+        !currentUser.is_root
+      ) {
+        const allowed = useAppStore.getState().allowedModules;
+        if (!allowed.includes(activeItem.id)) {
+          router.push("/dashboard");
+          return;
+        }
+      }
+      setChecking(false);
+      return;
+    }
+
+    setChecking(true);
+    getAuthMe()
+      .then((res) => {
+        if (res.ok && res.user) {
+          useAppStore.getState().setAllowedModules(res.user.allowed_modules || []);
+          useAppStore.getState().setUser(res.user);
+
+          const activeItem = getActiveNavItem(pathname);
+          if (
+            activeItem &&
+            activeItem.id !== "dashboard" &&
+            activeItem.id !== "settings" &&
+            !res.user.is_root
+          ) {
+            const allowed = res.user.allowed_modules || [];
+            if (!allowed.includes(activeItem.id)) {
+              router.push("/dashboard");
+              return;
+            }
+          }
+          setChecking(false);
+        } else {
+          localStorage.removeItem("admin_token");
+          router.push("/login");
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem("admin_token");
+        router.push("/login");
+      });
   }, [router, pathname]);
 
   if (checking) {

@@ -935,3 +935,38 @@ export async function deleteRole(id: number): Promise<{ status: string }> {
     method: "DELETE",
   });
 }
+
+// ---- Auth Me & Personal Profile Self-Management ----
+
+export interface CurrentUser {
+  id: number;
+  username: string;
+  email: string;
+  role_id: number | null;
+  is_root: boolean;
+  activo: boolean;
+  allowed_modules: string[];
+}
+
+export interface AuthMeResponse {
+  ok: boolean;
+  user: CurrentUser;
+}
+
+export async function getAuthMe(): Promise<AuthMeResponse> {
+  return fetchWithAuth<AuthMeResponse>(`${API_BASE}/api/auth/me`);
+}
+
+export async function updateMeProfile(username: string, email: string): Promise<{ ok: boolean }> {
+  return fetchWithAuth<{ ok: boolean }>(`${API_BASE}/api/auth/me`, {
+    method: "PUT",
+    body: JSON.stringify({ username, email }),
+  });
+}
+
+export async function updateMePassword(current_password: string, new_password: string): Promise<{ ok: boolean }> {
+  return fetchWithAuth<{ ok: boolean }>(`${API_BASE}/api/auth/me/password`, {
+    method: "PUT",
+    body: JSON.stringify({ current_password, new_password }),
+  });
+}

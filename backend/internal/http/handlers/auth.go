@@ -314,3 +314,114 @@ func (h *AuthHandler) generateToken(user *domain.AdminUser) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(h.jwtConfig.Secret))
 }
+
+func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
+		return
+	}
+
+	claims, ok := domain.GetAdminJWTClaims(r.Context())
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "No autenticado")
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Email    string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "Formato de petición inválido")
+		return
+	}
+
+	req.Username = strings.TrimSpace(req.Username)
+	req.Email = strings.TrimSpace(req.Email)
+
+	if req.Username == "" || req.Email == "" {
+		writeAPIError(w, http.StatusBadRequest, "Nombre de usuario y correo electrónico son obligatorios")
+		return
+	}
+
+	taken, err := h.userStore.IsUsernameTaken(req.Username, claims.UserID)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "Error al validar nombre de usuario")
+		return
+	}
+	if taken {
+		writeAPIError(w, http.StatusConflict, "El nombre de usuario ya está en uso")
+		return
+	}
+
+	takenEmail, err := h.userStore.IsEmailTaken(req.Email, claims.UserID)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "Error al validar correo electrónico")
+		return
+	}
+	if takenEmail {
+		writeAPIError(w, http.StatusConflict, "El correo electrónico ya está en uso")
+		return
+	}
+
+	if err := h.userStore.UpdateProfile(claims.UserID, req.Username, req.Email); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "Error al actualizar perfil")
+		return
+	}
+
+	writeHandlerJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+}
+
+func (h *AuthHandler) UpdateMePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
+		return
+	}
+
+	claims, ok := domain.GetAdminJWTClaims(r.Context())
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "No autenticado")
+		return
+	}
+
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "Formato de petición inválido")
+		return
+	}
+
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		writeAPIError(w, http.StatusBadRequest, "Las contraseñas actual y nueva son obligatorias")
+		return
+	}
+
+	user, err := h.userStore.GetByID(claims.UserID)
+	if err != nil || user == nil {
+		// Mitigación de Timing Attack
+		_ = bcrypt.CompareHashAndPassword([]byte("$2a$10$fG6T6T6T6T6T6T6T6T6T6eDummyDummyDummyDummyDummy"), []byte(req.CurrentPassword))
+		writeAPIError(w, http.StatusNotFound, "Usuario no encontrado")
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword))
+	if err != nil {
+		writeAPIError(w, http.StatusUnauthorized, "Contraseña actual incorrecta")
+		return
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "Error al cifrar nueva contraseña")
+		return
+	}
+
+	if err := h.userStore.UpdatePassword(claims.UserID, string(newHash)); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "Error al actualizar contraseña")
+		return
+	}
+
+	writeHandlerJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+}

@@ -14,17 +14,25 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { getActiveNavItem, navItems } from "@/components/layout/nav-items";
+import { useAppStore } from "@/stores/useAppStore";
 
 export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const activeItem = getActiveNavItem(pathname);
+  const { allowedModules, user } = useAppStore();
 
   const handleNavigate = (href: string) => {
     setOpen(false);
     router.push(href);
   };
+
+  const filteredNavItems = navItems.filter((item) => {
+    if (user?.is_root) return true;
+    if (item.id === "dashboard" || item.id === "settings") return true;
+    return allowedModules.includes(item.id);
+  });
 
   return (
     <div className="motion-fade-in flex h-14 flex-shrink-0 items-center justify-between border-b bg-background px-4 md:hidden">
@@ -48,7 +56,7 @@ export function MobileNav() {
             </SheetDescription>
           </SheetHeader>
           <nav className="flex flex-col gap-1 p-2">
-            {navItems.map((item) => {
+            {filteredNavItems.map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
                 <Button
