@@ -25,7 +25,7 @@ function QRPageContent() {
       return;
     }
 
-    const ws = new WebSocket(buildAdminWsUrl("/api/service/v1/ws", token));
+    const ws = new WebSocket(buildAdminWsUrl("/api/service/v1/ws"), [token]);
     wsRef.current = ws;
 
     ws.onmessage = (event) => {

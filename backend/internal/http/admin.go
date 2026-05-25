@@ -1380,8 +1380,34 @@ func (h *AdminHandler) StartCompanyPhoneConnection(w http.ResponseWriter, r *htt
 }
 
 func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Request) {
+	// — Autenticar token admin (query param, header Authorization o Sec-WebSocket-Protocol) —
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+			token = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
+	if token == "" {
+		secProtocols := r.Header.Get("Sec-WebSocket-Protocol")
+		if secProtocols != "" {
+			parts := strings.Split(secProtocols, ",")
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					token = p
+					break
+				}
+			}
+		}
+	}
+
+	acceptOpts := &websocket.AcceptOptions{InsecureSkipVerify: true}
+	if r.Header.Get("Sec-WebSocket-Protocol") != "" && token != "" {
+		acceptOpts.Subprotocols = []string{token}
+	}
+
 	// — Upgrade a WebSocket —
-	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	wsConn, err := websocket.Accept(w, r, acceptOpts)
 	if err != nil {
 		return
 	}
@@ -1393,13 +1419,6 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// — Autenticar token admin (query param o header Authorization) —
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-	}
 	if token == "" {
 		_ = handlers.WriteWSJSON(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "Token requerido"}})
 		return

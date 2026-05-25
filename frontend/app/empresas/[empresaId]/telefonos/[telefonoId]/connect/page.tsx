@@ -93,7 +93,8 @@ export default function AdminPhoneConnectPage() {
 
     try {
       const ws = new WebSocket(
-        buildAdminWsUrl(`/api/admin/telefonos/${telefonoId}/connect/ws`, token),
+        buildAdminWsUrl(`/api/admin/telefonos/${telefonoId}/connect/ws`),
+        [token],
       );
       wsRef.current = ws;
 
