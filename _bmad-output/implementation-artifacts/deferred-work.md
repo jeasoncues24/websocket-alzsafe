@@ -9,6 +9,10 @@
 - **Variable shadowing de `err`** — `backend/internal/http/router.go` — en la rama else de empresa-scoped, `empresa, err :=` introduce un scope local que oculta el `err` externo. Pre-existente, no introducido por esta story.
 - **`json.NewEncoder.Encode` error ignorado** — `backend/internal/http/router.go` — patrón pervasivo en el handler: errores de escritura al cliente son descartados silenciosamente. Pre-existente.
 
+## Deferred from: code review of spec-auth-cleanup-b2b — Grupo 2 (2026-05-25)
+
+- **`registeredRoutes` con gaps pre-existentes** — `backend/internal/http/router.go` — el mapa `registeredRoutes` omite varias rutas activas (telefonos CRUD, admin users, webhooks B2B, etc.), causando 404 en preflight OPTIONS/CORS para esas rutas. No introducido por este diff.
+
 ## Deferred from: code review of spec-auth-cleanup-b2b — Grupo 1 (2026-05-25)
 
 - **float64→int64 truncación silenciosa para IDs > 2^53** — `backend/internal/auth/qr_link_jwt.go` ~L50 — JSON decode de MapClaims usa float64; IDs > 9×10^15 pierden precisión. Pre-existente en el patrón JWT del proyecto.

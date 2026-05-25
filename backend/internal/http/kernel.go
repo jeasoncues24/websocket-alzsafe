@@ -4,7 +4,6 @@ import "net/http"
 
 type Kernel struct {
 	AdminAuth    func(http.Handler) http.Handler
-	EmpresaAuth  func(http.Handler) http.Handler
 	ClientAuth   func(http.Handler) http.Handler
 	ServiceStack func(http.Handler) http.Handler
 	Global       []func(http.Handler) http.Handler
@@ -15,11 +14,10 @@ func identityMiddleware(next http.Handler) http.Handler {
 }
 
 // NewKernel inicializa el stack de middlewares globales y de auth.
-func NewKernel(auth AdminAuthProvider, empresaAuth EmpresaAuthProvider, apiKeyAuth ClientAuthProvider, telemetryMW func(http.Handler) http.Handler) *Kernel {
+func NewKernel(auth AdminAuthProvider, apiKeyAuth ClientAuthProvider, telemetryMW func(http.Handler) http.Handler) *Kernel {
 	k := &Kernel{
-		AdminAuth:   identityMiddleware,
-		EmpresaAuth: identityMiddleware,
-		ClientAuth:  identityMiddleware,
+		AdminAuth:  identityMiddleware,
+		ClientAuth: identityMiddleware,
 		Global: []func(http.Handler) http.Handler{
 			CORSMiddleware,
 			CorrelationIDMiddleware,
@@ -28,9 +26,6 @@ func NewKernel(auth AdminAuthProvider, empresaAuth EmpresaAuthProvider, apiKeyAu
 	}
 	if auth != nil {
 		k.AdminAuth = auth.RequireAuth()
-	}
-	if empresaAuth != nil {
-		k.EmpresaAuth = empresaAuth.RequireEmpresaAuth()
 	}
 	if apiKeyAuth != nil {
 		k.ClientAuth = apiKeyAuth.RequireApiKeyAuth()
@@ -55,10 +50,6 @@ func (k *Kernel) Apply(h http.Handler) http.Handler {
 
 type AdminAuthProvider interface {
 	RequireAuth() func(http.Handler) http.Handler
-}
-
-type EmpresaAuthProvider interface {
-	RequireEmpresaAuth() func(http.Handler) http.Handler
 }
 
 type ClientAuthProvider interface {

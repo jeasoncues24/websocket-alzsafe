@@ -43,7 +43,7 @@ func NewRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	c := NewContainer()
-	k := NewKernel(c.AuthMiddleware, c.EmpresaAuthMiddleware, c.ApiKeyAuthMiddleware, c.TelemetryMW)
+	k := NewKernel(c.AuthMiddleware, c.ApiKeyAuthMiddleware, c.TelemetryMW)
 
 	RegisterAdminRoutes(mux, c, k)
 	RegisterAPIRoutes(mux, c, k)
@@ -565,8 +565,6 @@ var registeredRoutes = map[string][]string{
 	"/api/admin/empresas":                       {"GET", "POST"},
 	"/api/admin/empresas/{id}":                  {"GET", "PUT", "DELETE"},
 	"/api/admin/empresas/{id}/restore":          {"POST"},
-	"/api/admin/empresas/{id}/token":            {"POST"},
-	"/api/admin/empresas/{id}/token/revoke":     {"POST"},
 	"/api/admin/telefonos":                      {"GET", "POST"},
 	"/api/admin/telefonos/{id}/connect":         {"POST"},
 	"/api/admin/telefonos/{id}/connect/ws":      {"GET"},
@@ -586,15 +584,6 @@ var registeredRoutes = map[string][]string{
 	"/api/admin/clientes/buscar":                {"GET"},
 	"/api/admin/difusiones":                     {"GET"},
 	// Service API — API token por teléfono
-	"/api/service/v1/auth/empresa/validate": {"POST"},
-	"/api/service/v1/empresas":              {"GET", "PUT"},
-	"/api/service/v1/metricas":              {"GET"},
-	"/api/service/v1/telefonos":             {"GET"},
-	"/api/service/v1/telefonos/{id}/qr":     {"POST"},
-	"/api/service/v1/telefonos/{id}/estado": {"GET"},
-	"/api/service/v1/sesiones":              {"GET", "POST"},
-	"/api/service/v1/sesiones/{id}":         {"GET", "DELETE"},
-	"/api/service/v1/sesiones/{id}/connect": {"POST"},
 	"/api/service/v1/me":                    {"GET"},
 	"/api/service/v1/sesion":                {"GET"},
 	"/api/service/v1/mensajes":              {"GET", "POST"},

@@ -1,5 +1,5 @@
 ---
-status: ready-for-dev
+status: done
 slug: auth-cleanup-b2b
 ---
 
@@ -590,6 +590,10 @@ grep -n "empresas.*token\|token/revoke" backend/internal/http/routes_admin.go
 **No tocar.** `WithEmpresaID` y `GetEmpresaID` están en `empresa_filter.go`, no en `empresa_token.go`. Son usados por `router.go` para filtros de empresa en el panel admin. Solo eliminar la llamada a `domain.WithEmpresaID` en `api_key_auth.go`.
 
 ---
+
+### Review Findings — Grupo 2: Core (kernel, router, container, api_key_auth, panel_access) (2026-05-25)
+
+- [x] [Review][Defer] `registeredRoutes` tiene gaps pre-existentes causando 404 en OPTIONS/CORS para rutas no listadas [`backend/internal/http/router.go`] — deferred, pre-existing
 
 ### Review Findings — Grupo 1: Archivos QR-link nuevos (2026-05-25)
 

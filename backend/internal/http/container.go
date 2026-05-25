@@ -17,7 +17,6 @@ import (
 
 type Container struct {
 	Manager               *whatsapp.Manager
-	LegacyWSHandler       *Handler
 	SessionStore          *storage.SessionStore
 	BroadcastWorker       *whatsapp.BroadcastWorker
 	BroadcastStore        *storage.BroadcastStore
@@ -33,9 +32,6 @@ type Container struct {
 	AdminHandler          *AdminHandler
 	V1MessagesHandler     *handlers.V1MessagesHandler
 	V1BroadcastsHandler   *handlers.V1BroadcastsHandler
-	V1MetricsHandler      *handlers.V1MetricsHandler
-	V1PhonesHandler       *handlers.V1PhonesHandler
-	V1SessionsHandler     *handlers.V1SessionsHandler
 	V1HealthHandler       *handlers.V1HealthHandler
 	V1WSHandler           *handlers.V1WSHandler
 	V1WebhooksHandler     *handlers.V1WebhooksHandler
@@ -43,7 +39,6 @@ type Container struct {
 	AdminSessionsHandler  *handlers.AdminSessionsHandler
 	AdminClientsHandler   *handlers.AdminClientsHandler
 	AuthMiddleware        *middleware.AuthMiddleware
-	EmpresaAuthMiddleware *middleware.EmpresaAuthMiddleware
 	ApiKeyAuthMiddleware  *middleware.ApiKeyAuthMiddleware
 	DashboardHandler      *DashboardHandler
 	Config                *config.Config
@@ -88,7 +83,6 @@ func NewContainer() *Container {
 	}
 
 	whatsapp.NewService(manager, sessionStore, telefonoStore, webhookStore, cfg.WhatsAppSQLiteDir)
-	legacyWSHandler := NewHandlerWithBroadcast(manager, sessionStore, msgRepo, empresaStore, broadcastWorker, broadcastStore)
 
 	userStore := storage.NewAdminUserStore(db)
 	blacklistStore := storage.NewTokenBlacklistStore(db)
@@ -99,9 +93,6 @@ func NewContainer() *Container {
 	apiKeysHandler := handlers.NewApiKeysHandler(apiKeyStore, telefonoStore, empresaStore, manager)
 	v1MessagesHandler := handlers.NewV1MessagesHandler(msgRepo, telefonoStore, manager)
 	v1BroadcastsHandler := handlers.NewV1BroadcastsHandler(broadcastStore, telefonoStore, broadcastWorker)
-	v1MetricsHandler := handlers.NewV1MetricsHandler(msgRepo, telefonoStore)
-	v1PhonesHandler := handlers.NewV1PhonesHandler(telefonoStore, sessionStore)
-	v1SessionsHandler := handlers.NewV1SessionsHandler(telefonoStore, sessionStore, manager)
 	v1WSHandler := handlers.NewV1WSHandler(manager, jwtCfg, telefonoStore, sessionStore)
 
 	var v1WebhooksHandler *handlers.V1WebhooksHandler
@@ -134,7 +125,6 @@ func NewContainer() *Container {
 	dashboardHandler := NewDashboardHandler(msgRepo, sessionStore, empresaStore, telefonoStore, db)
 
 	authMiddleware := middleware.NewAuthMiddleware(jwtCfg, blacklistStore)
-	empresaAuthMiddleware := middleware.NewEmpresaAuthMiddleware(jwtCfg, empresaStore, telefonoStore)
 	apiKeyAuthMiddleware := middleware.NewApiKeyAuthMiddleware(apiKeyStore, empresaStore, telefonoStore)
 
 	var telemetryMW func(http.Handler) http.Handler
@@ -157,7 +147,6 @@ func NewContainer() *Container {
 
 	return &Container{
 		Manager:               manager,
-		LegacyWSHandler:       legacyWSHandler,
 		SessionStore:          sessionStore,
 		BroadcastWorker:       broadcastWorker,
 		BroadcastStore:        broadcastStore,
@@ -174,16 +163,12 @@ func NewContainer() *Container {
 		V1HealthHandler:       v1HealthHandler,
 		V1MessagesHandler:     v1MessagesHandler,
 		V1BroadcastsHandler:   v1BroadcastsHandler,
-		V1MetricsHandler:      v1MetricsHandler,
-		V1PhonesHandler:       v1PhonesHandler,
-		V1SessionsHandler:     v1SessionsHandler,
 		V1WSHandler:           v1WSHandler,
 		V1WebhooksHandler:     v1WebhooksHandler,
 		AdminMessagesHandler:  adminMessagesHandler,
 		AdminSessionsHandler:  adminSessionsHandler,
 		AdminClientsHandler:   adminClientsHandler,
 		AuthMiddleware:        authMiddleware,
-		EmpresaAuthMiddleware: empresaAuthMiddleware,
 		ApiKeyAuthMiddleware:  apiKeyAuthMiddleware,
 		DashboardHandler:      dashboardHandler,
 		Config:                cfg,

@@ -61,14 +61,6 @@ func (m *ApiKeyAuthMiddleware) RequireApiKeyAuth() func(http.Handler) http.Handl
 				KeyPrefix:  key.KeyPrefix,
 				Scopes:     key.Scopes,
 			})
-			ctx = domain.WithEmpresaID(ctx, key.EmpresaID)
-			ctx = domain.WithEmpresaJWTClaims(ctx, &domain.EmpresaJWTClaims{
-				EmpresaID:     key.EmpresaID,
-				TokenVersion:  0,
-				EmpresaRUC:    empresa.RUC,
-				EmpresaNombre: empresa.Nombre,
-				Permissions:   key.Scopes,
-			})
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
