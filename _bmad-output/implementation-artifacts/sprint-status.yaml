@@ -46,69 +46,31 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-04-26T18:43:24-05:00
-last_updated: 2026-05-25T01:20:00-05:00
+last_updated: 2026-05-25T12:00:00-05:00
 project: wsapi
 project_key: NOKEY
 tracking_system: file-system
 story_location: /home/fulanito/development/wsapi/_bmad-output/implementation-artifacts
 
 development_status:
-  epic-1: done
-  1-1-dockerfile-optimizado: done
-  1-2-docker-compose-build-only: done
-  1-3-dockerignore-backend: done
-  1-4-makefile-backend: done
-  1-5-runtime-appport-failfast: done
-  1-6-migraciones-embebidas: done
-  1-7-normalizar-migraciones: done
-  1-8-cors-backend: done
-  1-9-frontend-env-example: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
   epic-2: in-progress
-  2-1-eliminar-select-empresa-usuario-admin: done
-  2-2-restaurar-empresas-desactivadas: done
-  2-2-5-limpiar-empresa-del-jwt-admin: done
-  2-3-assets-mensajes-investigar-corregir: done
-  2-4-sesiones-herramientas-logs: done
-  2-5-validar-reconexion-reinicio-binario: done
-  2-6-fix-ws-timer-simplificar-ui-conexion: done
-  2-7-qr-api-token-ws-fallback-rest: done
   2-8-enlace-qr-compartible-token-provisional: review
-  2-9-enriquecer-metricas-dashboard: done
-  2-10-responsive-mode-panel: done
-  2-11-documentar-arquitectura-ws: done
   2-12-refactorizar-metricas-api-key: review
-  epic-2-retrospective: optional
-  epic-3: backlog
-  3-1-jwt-cookie-httponly: backlog
-  3-2-websocket-auth-segura: backlog
-  3-3-security-headers-nextconfig: backlog
-  3-4-fix-correctness-metriccard-hydration-keys: backlog
-  3-5-refactor-estado-usereducer-cascading: backlog
-  3-6-fix-accesibilidad-labels-events-headings: backlog
-  3-7-limpieza-dead-code: backlog
-  3-8-tailwind-shortcuts-font-userouter: backlog
-  epic-3-retrospective: optional
-  epic-4: done
-  4-1-auditoria-ux-motion-tokens-globales: done
-  4-2-smooth-navigation-shell-admin: done
-  4-3-microinteracciones-formularios-modales: done
-  4-4-loading-empty-states-tablas-feedback-consistente: done
-  4-5-pulido-motion-login-dashboard: done
-  4-6-mejora-visual-mobile-login-enfoque-mobile-first: done
-  4-7-animaciones-apertura-cierre-modales-overlays: done
-  epic-4-retrospective: optional
-  epic-5: done
-  5-1-health-endpoint-publico: done
-  5-2-tabla-modelo-webhooks-salientes: done
-  5-3-endpoints-rest-gestion-webhooks: done
-  5-4-worker-envio-retry-exponencial: done
-  5-5-emision-eventos-whatsmeow: done
-  5-6-documentacion-integracion-webhooks: done
-  epic-5-retrospective: optional
-  epic-6: done
-  6-1-backend-conteos-telefonos-admin: done
-  6-2-frontend-bento-grid-telefonos: done
-  6-3-backend-endpoint-webhooks-admin: done
-  6-4-frontend-vista-webhooks-telefono: done
-  epic-6-retrospective: optional
+  epic-2-retrospective: done
+  epic-3: in-progress
+  3-1-backend-modulos-efectivos-auth-me: review
+  3-2-frontend-contexto-modulos-permitidos: backlog
+  3-3-frontend-sidebar-mobile-nav-dinamico: backlog
+  3-4-backend-endpoints-autogestion-cuenta: backlog
+  3-5-frontend-mi-cuenta-settings: backlog
+  epic-4-retrospective: done
+  epic-5-retrospective: done
+  epic-6-retrospective: done
+  epic-7: backlog
+  7-1-backend-auditoria-sesiones: backlog
+  7-2-backend-verificacion-email-smtp: backlog
+  7-3-backend-notificacion-nuevo-login: backlog
+  7-4-backend-totp-2fa-setup-login: backlog
+  7-5-backend-opciones-seguridad-usuario: backlog
+  7-6-frontend-seccion-seguridad-mi-cuenta: backlog

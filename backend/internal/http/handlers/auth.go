@@ -17,18 +17,32 @@ import (
 )
 
 type AuthHandler struct {
-	userStore      *storage.AdminUserStore
-	empresaStore   domain.EmpresaStoreInterface
-	blacklistStore *storage.TokenBlacklistStore
-	jwtConfig      *config.JWTConfig
+	userStore       *storage.AdminUserStore
+	empresaStore    domain.EmpresaStoreInterface
+	blacklistStore  *storage.TokenBlacklistStore
+	jwtConfig       *config.JWTConfig
+	userModuleStore *storage.UserModuleStore
+	roleStore       *storage.RoleStore
+	moduleStore     *storage.ModuleStore
 }
 
-func NewAuthHandler(userStore *storage.AdminUserStore, empresaStore domain.EmpresaStoreInterface, blacklistStore *storage.TokenBlacklistStore, jwtConfig *config.JWTConfig) *AuthHandler {
+func NewAuthHandler(
+	userStore *storage.AdminUserStore,
+	empresaStore domain.EmpresaStoreInterface,
+	blacklistStore *storage.TokenBlacklistStore,
+	jwtConfig *config.JWTConfig,
+	userModuleStore *storage.UserModuleStore,
+	roleStore *storage.RoleStore,
+	moduleStore *storage.ModuleStore,
+) *AuthHandler {
 	return &AuthHandler{
-		userStore:      userStore,
-		empresaStore:   empresaStore,
-		blacklistStore: blacklistStore,
-		jwtConfig:      jwtConfig,
+		userStore:       userStore,
+		empresaStore:    empresaStore,
+		blacklistStore:  blacklistStore,
+		jwtConfig:       jwtConfig,
+		userModuleStore: userModuleStore,
+		roleStore:       roleStore,
+		moduleStore:     moduleStore,
 	}
 }
 
@@ -205,19 +219,72 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	allowedModules := h.resolveAllowedModules(user)
+
 	response := map[string]interface{}{
 		"ok": true,
 		"user": map[string]interface{}{
-			"id":       user.ID,
-			"username": user.Username,
-			"email":    user.Email,
-			"role_id":  user.RoleID,
-			"is_root":  user.IsRoot,
-			"activo":   user.Activo,
+			"id":              user.ID,
+			"username":        user.Username,
+			"email":           user.Email,
+			"role_id":         user.RoleID,
+			"is_root":         user.IsRoot,
+			"activo":          user.Activo,
+			"allowed_modules": allowedModules,
 		},
 	}
 
 	writeHandlerJSON(w, http.StatusOK, response)
+}
+
+// resolveAllowedModules determina los slugs de módulos efectivos para el usuario.
+// Precedencia: is_root → user_modules override → role.permissions["all"] → role.permissions específicos → fallback dashboard.
+func (h *AuthHandler) resolveAllowedModules(user *domain.AdminUser) []string {
+	if user.IsRoot {
+		return h.getAllModuleSlugs()
+	}
+
+	if h.userModuleStore != nil {
+		modules, err := h.userModuleStore.GetByUserID(user.ID)
+		if err == nil && len(modules) > 0 {
+			slugs := make([]string, 0, len(modules))
+			for _, m := range modules {
+				slugs = append(slugs, m.Slug)
+			}
+			return slugs
+		}
+	}
+
+	if user.RoleID != nil && h.roleStore != nil {
+		role, err := h.roleStore.GetByID(*user.RoleID)
+		if err == nil && role != nil {
+			for _, p := range role.Permissions {
+				if p == "all" {
+					return h.getAllModuleSlugs()
+				}
+			}
+			if len(role.Permissions) > 0 {
+				return role.Permissions
+			}
+		}
+	}
+
+	return []string{"dashboard"}
+}
+
+func (h *AuthHandler) getAllModuleSlugs() []string {
+	if h.moduleStore == nil {
+		return []string{"dashboard"}
+	}
+	modules, err := h.moduleStore.GetAll()
+	if err != nil || len(modules) == 0 {
+		return []string{"dashboard"}
+	}
+	slugs := make([]string, 0, len(modules))
+	for _, m := range modules {
+		slugs = append(slugs, m.Slug)
+	}
+	return slugs
 }
 
 func (h *AuthHandler) generateToken(user *domain.AdminUser) (string, error) {
