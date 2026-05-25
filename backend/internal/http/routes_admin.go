@@ -88,7 +88,8 @@ func RegisterAdminRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 	if c.AdminClientsHandler != nil {
 		mux.Handle("GET /api/admin/clientes/buscar", adminStack(http.HandlerFunc(c.AdminClientsHandler.BuscarCliente)))
 	}
-	mux.Handle("GET /api/admin/difusiones", adminStack(http.HandlerFunc(HandleGetAdminBroadcasts)))
+	mux.Handle("GET /api/admin/difusiones", adminStack(http.HandlerFunc(c.HandleGetAdminBroadcasts)))
+	mux.Handle("GET /api/admin/difusiones/{id}", adminStack(http.HandlerFunc(c.HandleGetAdminBroadcastDetail)))
 
 	mux.Handle("GET /metrics", http.HandlerFunc(HandleGetMetrics))
 	mux.Handle("GET /health", http.HandlerFunc(HandleHealth))

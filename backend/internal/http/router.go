@@ -241,57 +241,80 @@ type BroadcastInfo struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-func HandleGetAdminBroadcasts(w http.ResponseWriter, r *http.Request) {
-	broadcastStore := storage.NewBroadcastStore()
+// HandleGetAdminBroadcasts lista las difusiones usando el JobQueueRepository del container.
+func (c *Container) HandleGetAdminBroadcasts(w http.ResponseWriter, r *http.Request) {
+	if c.JobQueueRepo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "broadcasts": []interface{}{}})
+		return
+	}
 
 	query := r.URL.Query()
-	ruc := query.Get("account_id")
+	rucFilter := query.Get("account_id")
 
-	var jobs []*domain.BroadcastJob
-	if ruc != "" {
-		cfg := config.Load()
-		if cfg.DBHost != "" {
-			if db, err := storage.NewDB(cfg); err == nil {
-				empresaStore := storage.NewEmpresaStore(db)
-				if empresa, err := empresaStore.GetByRUC(ruc); err == nil && empresa != nil {
-					jobs = broadcastStore.ListByEmpresa(empresa.ID)
-				}
-			}
+	var allJobs []domain.Job
+
+	if rucFilter != "" && c.EmpresaStore != nil {
+		empresa, err := c.EmpresaStore.GetByRUC(rucFilter)
+		if err == nil && empresa != nil {
+			jobs, _ := c.JobQueueRepo.ListByEmpresa(r.Context(), empresa.ID)
+			allJobs = append(allJobs, jobs...)
 		}
-	} else {
-		cfg := config.Load()
-		if cfg.DBHost != "" {
-			if db, err := storage.NewDB(cfg); err == nil {
-				empresaStore := storage.NewEmpresaStore(db)
-				empresas, _, err := empresaStore.GetAll(1, 1000, "", nil)
-				if err == nil {
-					for i := range empresas {
-						jobs = append(jobs, broadcastStore.ListByEmpresa(empresas[i].ID)...)
-					}
-				}
+	} else if c.EmpresaStore != nil {
+		empresas, _, err := c.EmpresaStore.GetAll(1, 1000, "", nil)
+		if err == nil {
+			for _, emp := range empresas {
+				jobs, _ := c.JobQueueRepo.ListByEmpresa(r.Context(), emp.ID)
+				allJobs = append(allJobs, jobs...)
 			}
 		}
 	}
 
-	result := make([]BroadcastInfo, 0, len(jobs))
-	for _, job := range jobs {
-		success := 0
-		failed := 0
-		for _, r := range job.Results {
-			if r.Error == "" {
-				success++
-			} else {
-				failed++
+	// Recolectar todos los job IDs
+	jobIDs := make([]int64, 0, len(allJobs))
+	for _, job := range allJobs {
+		if job.Type == domain.JobTypeBroadcast {
+			jobIDs = append(jobIDs, job.ID)
+		}
+	}
+
+	// Cargar estadísticas agrupadas en una sola consulta
+	var statsMap map[int64]struct{ Success, Failed, Total int }
+	if c.JobQueueRepo != nil && len(jobIDs) > 0 {
+		statsMap, _ = c.JobQueueRepo.GetItemStatsByJobs(r.Context(), jobIDs)
+	}
+
+	result := make([]map[string]interface{}, 0, len(allJobs))
+	for _, job := range allJobs {
+		if job.Type != domain.JobTypeBroadcast {
+			continue
+		}
+
+		success, failed, total := 0, 0, 0
+		if statsMap != nil {
+			if stats, found := statsMap[job.ID]; found {
+				success = stats.Success
+				failed = stats.Failed
+				total = stats.Total
 			}
 		}
-		result = append(result, BroadcastInfo{
-			ReferenceID: job.ReferenceID,
-			RUCEmpresa:  fmt.Sprintf("%d", job.EmpresaID),
-			Total:       job.Total,
-			Status:      string(job.Status),
-			Success:     success,
-			Failed:      failed,
-			CreatedAt:   job.CreatedAt,
+
+		// Obtener el RUC o ID de empresa real
+		rucEmpresa := fmt.Sprintf("%d", job.EmpresaID)
+		if c.EmpresaStore != nil {
+			emp, _ := c.EmpresaStore.GetByID(job.EmpresaID)
+			if emp != nil {
+				rucEmpresa = emp.RUC
+			}
+		}
+
+		result = append(result, map[string]interface{}{
+			"reference_id": job.EntityID,
+			"ruc_empresa":  rucEmpresa,
+			"total":        total,
+			"status":       string(job.Status),
+			"success":      success,
+			"failed":       failed,
+			"created_at":   job.CreatedAt,
 		})
 	}
 
@@ -299,6 +322,177 @@ func HandleGetAdminBroadcasts(w http.ResponseWriter, r *http.Request) {
 		"ok":         true,
 		"broadcasts": result,
 	})
+}
+
+// HandleGetAdminBroadcastDetail obtiene los detalles y resultados de una difusión para la administración.
+func (c *Container) HandleGetAdminBroadcastDetail(w http.ResponseWriter, r *http.Request) {
+	if c.JobQueueRepo == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{"ok": false, "error": "Job queue no disponible"})
+		return
+	}
+
+	refID := r.PathValue("id")
+	if refID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": "ID de difusión requerido"})
+		return
+	}
+
+	job, err := c.JobQueueRepo.GetByEntityID(r.Context(), refID)
+	if err != nil || job == nil {
+		writeJSON(w, http.StatusNotFound, map[string]interface{}{"ok": false, "error": "Difusión no encontrada"})
+		return
+	}
+
+	items, err := c.JobQueueRepo.GetAllItems(r.Context(), job.ID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"ok": false, "error": "Error al obtener destinatarios"})
+		return
+	}
+
+	var estimatedSeconds *int
+	if job.Status == domain.JobStatusRunning || job.Status == domain.JobStatusPending {
+		timingCfg := domain.BroadcastTimingConfig{
+			BatchSizeMin:       3,
+			BatchSizeMax:       4,
+			IntraBatchDelayMin: 1500 * time.Millisecond,
+			IntraBatchDelayMax: 4000 * time.Millisecond,
+			InterBatchDelayMin: 3000 * time.Millisecond,
+			InterBatchDelayMax: 8000 * time.Millisecond,
+			MacroPauseEvery:    10,
+			MacroPauseMin:      15 * time.Second,
+			MacroPauseMax:      30 * time.Second,
+		}
+		if c.BroadcastWorker != nil {
+			timingCfg = c.BroadcastWorker.Config().TimingConfig()
+		}
+		estSecs := domain.EstimateBroadcastSeconds(len(items), timingCfg)
+		estimatedSeconds = &estSecs
+	}
+
+	resultItems := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		destino, _, _ := storage.DecodeBroadcastPayload(item.Payload)
+		errTextVal := interface{}(nil)
+		if item.ErrorText != "" {
+			errTextVal = item.ErrorText
+		}
+
+		var processedAtStr *string
+		if item.ProcessedAt != nil {
+			s := item.ProcessedAt.Format(time.RFC3339)
+			processedAtStr = &s
+		}
+
+		resultItems = append(resultItems, map[string]interface{}{
+			"id":             item.ID,
+			"sequence_order": item.SequenceOrder,
+			"destino":        destino,
+			"status":         string(item.Status),
+			"error_text":     errTextVal,
+			"processed_at":   processedAtStr,
+		})
+	}
+
+	// Obtener el RUC o ID de empresa real
+	rucEmpresa := fmt.Sprintf("%d", job.EmpresaID)
+	if c.EmpresaStore != nil {
+		emp, _ := c.EmpresaStore.GetByID(job.EmpresaID)
+		if emp != nil {
+			rucEmpresa = emp.RUC
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok": true,
+		"data": map[string]interface{}{
+			"reference_id":      job.EntityID,
+			"ruc_empresa":       rucEmpresa,
+			"total":             len(items),
+			"status":            string(job.Status),
+			"created_at":        job.CreatedAt.Format(time.RFC3339),
+			"estimated_seconds": estimatedSeconds,
+			"items":             resultItems,
+		},
+	})
+}
+
+
+// buildJobQueueRecovery crea una startup task que resetea jobs stuck y re-encola los trabajos pendientes.
+func buildJobQueueRecovery(repo storage.JobQueueRepository, worker *whatsapp.BroadcastWorker, phoneStore *storage.TelefonoStore) func(context.Context) {
+	if repo == nil || worker == nil || phoneStore == nil {
+		return nil
+	}
+	return func(ctx context.Context) {
+		n, err := repo.RecoverStuckJobs(ctx, 5*time.Minute)
+		if err != nil {
+			log.Printf("[job_queue] error recovering stuck jobs: %v", err)
+			return
+		}
+		if n > 0 {
+			log.Printf("[job_queue] %d stuck job(s) reset to pending on startup", n)
+		}
+
+		pendingJobs, err := repo.GetPendingJobs(ctx)
+		if err != nil {
+			log.Printf("[job_queue] error listing pending jobs for recovery: %v", err)
+			return
+		}
+
+		if len(pendingJobs) > 0 {
+			log.Printf("[job_queue] found %d pending job(s) to resume on startup", len(pendingJobs))
+			for _, job := range pendingJobs {
+				if job.Type != domain.JobTypeBroadcast {
+					continue
+				}
+
+				dbItems, err := repo.GetPendingItems(ctx, job.ID)
+				if err != nil || len(dbItems) == 0 {
+					continue
+				}
+
+				telefonos, err := phoneStore.ListAll()
+				if err != nil || len(telefonos) == 0 {
+					continue
+				}
+
+				var activePhone *domain.Telefono
+				for i := range telefonos {
+					if telefonos[i].EmpresaID == job.EmpresaID && telefonos[i].Status == domain.TelefonoStatusActive {
+						activePhone = &telefonos[i]
+						break
+					}
+				}
+
+				if activePhone == nil {
+					log.Printf("[job_queue] no active phone found for company %d to resume job %s", job.EmpresaID, job.EntityID)
+					continue
+				}
+
+				items := make([]domain.BroadcastItem, len(dbItems))
+				itemIDs := make([]int64, len(dbItems))
+				for i, it := range dbItems {
+					destino, mensaje, _ := storage.DecodeBroadcastPayload(it.Payload)
+					items[i] = domain.BroadcastItem{
+						Destino: destino,
+						Mensaje: mensaje,
+					}
+					itemIDs[i] = it.ID
+				}
+
+				workerJob := whatsapp.BroadcastJob{
+					ReferenceID: job.EntityID,
+					RUCEmpresa:  activePhone.NumeroCompleto,
+					AccountID:   activePhone.NumeroCompleto,
+					JobID:       job.ID,
+					Items:       items,
+					ItemIDs:     itemIDs,
+				}
+
+				worker.SubmitAsync(workerJob)
+				log.Printf("[job_queue] job %s resumed with %d pending items", job.EntityID, len(items))
+			}
+		}
+	}
 }
 
 type DashboardMetricsResponse struct {
@@ -595,6 +789,7 @@ var registeredRoutes = map[string][]string{
 	"/api/admin/metricas":                       {"GET"},
 	"/api/admin/clientes/buscar":                {"GET"},
 	"/api/admin/difusiones":                     {"GET"},
+	"/api/admin/difusiones/{id}":                {"GET"},
 	// Service API — API token por teléfono
 	"/api/service/v1/health":                {"GET"},
 	"/api/service/v1/me":                    {"GET"},

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -13,14 +14,14 @@ import (
 )
 
 type V1BroadcastsHandler struct {
-	broadcastStore  *storage.BroadcastStore
+	jobRepo         storage.JobQueueRepository
 	telefonoStore   *storage.TelefonoStore
 	broadcastWorker *whatsapp.BroadcastWorker
 }
 
-func NewV1BroadcastsHandler(broadcastStore *storage.BroadcastStore, telefonoStore *storage.TelefonoStore, broadcastWorker *whatsapp.BroadcastWorker) *V1BroadcastsHandler {
+func NewV1BroadcastsHandler(jobRepo storage.JobQueueRepository, telefonoStore *storage.TelefonoStore, broadcastWorker *whatsapp.BroadcastWorker) *V1BroadcastsHandler {
 	return &V1BroadcastsHandler{
-		broadcastStore:  broadcastStore,
+		jobRepo:         jobRepo,
 		telefonoStore:   telefonoStore,
 		broadcastWorker: broadcastWorker,
 	}
@@ -38,19 +39,26 @@ func (h *V1BroadcastsHandler) GetBroadcasts(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	jobs := h.broadcastStore.ListByEmpresa(apiClaims.EmpresaID)
+	if h.jobRepo == nil {
+		writeV1Success(w, map[string]interface{}{"broadcasts": []interface{}{}, "total": 0}, apiClaims.EmpresaID)
+		return
+	}
+
+	jobs, err := h.jobRepo.ListByEmpresa(r.Context(), apiClaims.EmpresaID)
+	if err != nil {
+		writeV1Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Error al obtener difusiones")
+		return
+	}
 
 	result := make([]map[string]interface{}, 0, len(jobs))
 	for _, job := range jobs {
-		if job.TelefonoID != apiClaims.TelefonoID {
+		if job.Type != domain.JobTypeBroadcast {
 			continue
 		}
 		result = append(result, map[string]interface{}{
-			"reference_id": job.ReferenceID,
-			"telefono_id":  job.TelefonoID,
-			"total":        job.Total,
-			"adjuntos":     job.Adjuntos,
-			"status":       job.Status,
+			"reference_id": job.EntityID,
+			"total":        0, // se actualiza al consultar items si se necesita
+			"status":       string(job.Status),
 			"created_at":   job.CreatedAt,
 		})
 	}
@@ -79,25 +87,65 @@ func (h *V1BroadcastsHandler) GetBroadcast(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	job, ok := h.broadcastStore.Get(refID)
-	if !ok || job == nil {
+	if h.jobRepo == nil {
 		writeV1Error(w, http.StatusNotFound, "BROADCAST_NOT_FOUND", "Difusión no encontrada")
 		return
 	}
 
-	if job.TelefonoID != apiClaims.TelefonoID {
+	job, err := h.jobRepo.GetByEntityID(r.Context(), refID)
+	if err != nil || job == nil {
+		writeV1Error(w, http.StatusNotFound, "BROADCAST_NOT_FOUND", "Difusión no encontrada")
+		return
+	}
+
+	// Verificar que pertenece al teléfono de esta API key (via empresa)
+	if job.EmpresaID != apiClaims.EmpresaID {
 		writeV1Error(w, http.StatusForbidden, "FORBIDDEN", "La difusión no pertenece a esta API key")
 		return
 	}
 
+	items, err := h.jobRepo.GetAllItems(r.Context(), job.ID)
+	if err != nil {
+		writeV1Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Error al obtener resultados")
+		return
+	}
+
+	results := make([]map[string]interface{}, 0, len(items))
+	resultItems := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		destino, _, _ := storage.DecodeBroadcastPayload(item.Payload)
+		errVal := interface{}(nil)
+		if item.ErrorText != "" {
+			errVal = item.ErrorText
+		}
+		results = append(results, map[string]interface{}{
+			"destino": destino,
+			"ok":      item.Status == domain.JobItemSent,
+			"error":   errVal,
+		})
+
+		var processedAtStr *string
+		if item.ProcessedAt != nil {
+			s := item.ProcessedAt.Format(time.RFC3339)
+			processedAtStr = &s
+		}
+		resultItems = append(resultItems, map[string]interface{}{
+			"id":             item.ID,
+			"sequence_order": item.SequenceOrder,
+			"destino":        destino,
+			"status":         string(item.Status),
+			"error_text":     errVal,
+			"processed_at":   processedAtStr,
+		})
+	}
+
 	writeV1Success(w, map[string]interface{}{
-		"reference_id": job.ReferenceID,
+		"reference_id": job.EntityID,
 		"empresa_id":   job.EmpresaID,
-		"telefono_id":  job.TelefonoID,
-		"total":        job.Total,
-		"adjuntos":     job.Adjuntos,
-		"status":       job.Status,
-		"results":      job.Results,
+		"total":        len(items),
+		"status":       string(job.Status),
+		"results":      results,
+		"items":        resultItems,
 		"created_at":   job.CreatedAt,
 	}, apiClaims.EmpresaID)
 }
@@ -128,6 +176,11 @@ func (h *V1BroadcastsHandler) PostBroadcast(w http.ResponseWriter, r *http.Reque
 		writeV1Error(w, http.StatusBadRequest, "MISSING_FIELDS", "destinos son requeridos")
 		return
 	}
+	if len(req.Destinos) > domain.MaxBroadcastItems {
+		writeV1Error(w, http.StatusBadRequest, "MAX_BROADCAST_EXCEEDED",
+			"destinos supera el límite de 30")
+		return
+	}
 
 	items := make([]domain.BroadcastItem, len(req.Destinos))
 	for i, d := range req.Destinos {
@@ -149,7 +202,6 @@ func (h *V1BroadcastsHandler) PostBroadcast(w http.ResponseWriter, r *http.Reque
 		writeV1Error(w, http.StatusNotFound, "TELEFONO_NOT_FOUND", "Teléfono no encontrado")
 		return
 	}
-
 	if phone.Status != domain.TelefonoStatusActive {
 		writeV1Error(w, http.StatusBadRequest, "SESSION_NOT_ACTIVE", "El teléfono no está activo")
 		return
@@ -157,42 +209,74 @@ func (h *V1BroadcastsHandler) PostBroadcast(w http.ResponseWriter, r *http.Reque
 
 	refID := uuid.New().String()
 
-	job := &domain.BroadcastJob{
-		ReferenceID: refID,
-		EmpresaID:   apiClaims.EmpresaID,
-		TelefonoID:  apiClaims.TelefonoID,
-		Adjuntos:    nil,
-		Total:       len(items),
-		Status:      domain.BroadcastStatusPending,
-		CreatedAt:   time.Now(),
+	// Calcular tiempo estimado antes de encolar
+	estimatedSeconds := domain.EstimateBroadcastSeconds(len(items), h.broadcastWorker.Config().TimingConfig())
+	_ = estimatedSeconds
+
+	// Persistir en DB si hay repositorio
+	var jobID int64
+	var itemIDs []int64
+
+	if h.jobRepo != nil {
+		jobDomain := &domain.Job{
+			Type:        domain.JobTypeBroadcast,
+			EntityID:    refID,
+			Priority:    5,
+			EmpresaID:   apiClaims.EmpresaID,
+			MaxAttempts: 1,
+		}
+		jobItems := make([]domain.JobItem, len(items))
+		for i, item := range items {
+			payload, _ := storage.EncodeBroadcastPayload(item.Destino, item.Mensaje)
+			jobItems[i] = domain.JobItem{
+				SequenceOrder: i,
+				Payload:       payload,
+			}
+		}
+		if err := h.jobRepo.CreateJobWithItems(context.Background(), jobDomain, jobItems); err != nil {
+			writeV1Error(w, http.StatusInternalServerError, "DATABASE_ERROR", "Error al registrar la difusión en la cola de tareas")
+			return
+		}
+		jobID = jobDomain.ID
+		// Recuperar IDs de items para que el worker pueda actualizar su estado
+		dbItems, fetchErr := h.jobRepo.GetAllItems(context.Background(), jobID)
+		if fetchErr != nil {
+			writeV1Error(w, http.StatusInternalServerError, "DATABASE_ERROR", "Error al recuperar detalles de la difusión")
+			return
+		}
+		itemIDs = make([]int64, len(dbItems))
+		for i, it := range dbItems {
+			itemIDs[i] = it.ID
+		}
 	}
+
 	infos, infoErr := buildAttachmentInfos(req.Adjuntos)
 	if infoErr != nil {
 		writeV1Error(w, http.StatusBadRequest, "INVALID_ATTACHMENT", "Adjunto inválido")
 		return
 	}
-	job.Adjuntos = infos
-	h.broadcastStore.Create(job)
+	_ = infos // usados en la respuesta GET si se amplía
 
-	// Build items and submit to worker for async real sending
 	workerJob := whatsapp.BroadcastJob{
 		ReferenceID: refID,
 		RUCEmpresa:  phone.NumeroCompleto,
 		AccountID:   phone.NumeroCompleto,
+		JobID:       jobID,
 		Attachments: req.Adjuntos,
 		Items:       items,
-		ResultChan:  make(chan whatsapp.BroadcastResult, len(items)+1),
+		ItemIDs:     itemIDs,
 	}
 	h.broadcastWorker.SubmitAsync(workerJob)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"ok": true,
 		"data": map[string]interface{}{
-			"reference_id": refID,
-			"total":        len(req.Destinos),
-			"estado":       string(domain.BroadcastStatusPending),
+			"reference_id":      refID,
+			"total":             len(req.Destinos),
+			"estado":            string(domain.JobStatusPending),
+			"estimated_seconds": estimatedSeconds,
 		},
 		"meta": map[string]interface{}{
 			"empresa_id": apiClaims.EmpresaID,
@@ -253,3 +337,4 @@ func splitSimple(s, sep string) []string {
 	}
 	return result
 }
+

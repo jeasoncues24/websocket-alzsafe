@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS job_items;
+DROP TABLE IF EXISTS job_queue;

@@ -688,12 +688,26 @@ export interface BroadcastInfo {
   failed: number;
   adjuntos?: AttachmentInfo[];
   created_at: string;
+  estimated_seconds?: number;
 }
 
 export interface AttachmentInfo {
   nombre: string;
   sha256_hash: string;
   tamano_bytes: number;
+}
+
+export interface BroadcastItemResult {
+  id: number;
+  sequence_order: number;
+  destino: string;
+  status: "pending" | "sent" | "failed" | "skipped";
+  error_text?: string;
+  processed_at?: string;
+}
+
+export interface BroadcastDetail extends BroadcastInfo {
+  items: BroadcastItemResult[];
 }
 
 export interface BroadcastsResponse {
@@ -705,6 +719,12 @@ export async function getAdminBroadcasts(
 ): Promise<BroadcastsResponse> {
   const params = accountId ? `?account_id=${accountId}` : "";
   return fetchWithAuth(`${API_BASE}/api/admin/difusiones${params}`);
+}
+
+export async function getAdminBroadcastDetail(
+  referenceId: string,
+): Promise<{ ok: boolean; data: BroadcastDetail }> {
+  return fetchWithAuth(`${API_BASE}/api/admin/difusiones/${referenceId}`);
 }
 
 // ---- Users Management ----

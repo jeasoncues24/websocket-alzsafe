@@ -19,7 +19,7 @@ type Container struct {
 	Manager               *whatsapp.Manager
 	SessionStore          *storage.SessionStore
 	BroadcastWorker       *whatsapp.BroadcastWorker
-	BroadcastStore        *storage.BroadcastStore
+	JobQueueRepo          storage.JobQueueRepository
 	MsgRepo               storage.MessagesRepository
 	EmpresaStore          domain.EmpresaStoreInterface
 	TelefonoStore         *storage.TelefonoStore
@@ -61,12 +61,12 @@ func NewContainer() *Container {
 	sessionStore := storage.NewSessionStore()
 	broadcastWorker := whatsapp.NewBroadcastWorker(whatsapp.DefaultWorkerConfig, manager)
 	broadcastWorker.Start(whatsapp.DefaultWorkerConfig.MaxWorkersGlobal)
-	broadcastStore := storage.NewBroadcastStore()
 
 	var msgRepo storage.MessagesRepository
 	var empresaStore domain.EmpresaStoreInterface
 	var telefonoStore *storage.TelefonoStore
 	var webhookStore *storage.WebhookStore
+	var jobQueueRepo storage.JobQueueRepository
 	var db *sql.DB
 	if cfg.DBHost != "" {
 		var err error
@@ -78,6 +78,8 @@ func NewContainer() *Container {
 			empresaStore = storage.NewEmpresaStore(db)
 			telefonoStore = storage.NewTelefonoStore(db)
 			webhookStore = storage.NewWebhookStore(db)
+			jobQueueRepo = storage.NewJobQueueRepository(db)
+			broadcastWorker.SetRepo(jobQueueRepo)
 			config.GetLogger().Info().Str("host", cfg.DBHost).Str("port", cfg.DBPort).Str("db", cfg.DBName).Msg("DB conectada")
 		}
 	}
@@ -87,12 +89,15 @@ func NewContainer() *Container {
 	userStore := storage.NewAdminUserStore(db)
 	blacklistStore := storage.NewTokenBlacklistStore(db)
 	apiKeyStore := storage.NewApiKeyStore(db)
+	userModuleStore := storage.NewUserModuleStore(db)
+	roleStore := storage.NewRoleStore(db)
+	moduleStore := storage.NewModuleStore(db)
 
-	authHandler := handlers.NewAuthHandler(userStore, empresaStore, blacklistStore, jwtCfg)
+	authHandler := handlers.NewAuthHandler(userStore, empresaStore, blacklistStore, jwtCfg, userModuleStore, roleStore, moduleStore)
 	companiesHandler := handlers.NewCompaniesHandler(empresaStore, sessionStore, jwtCfg)
 	apiKeysHandler := handlers.NewApiKeysHandler(apiKeyStore, telefonoStore, empresaStore, manager)
 	v1MessagesHandler := handlers.NewV1MessagesHandler(msgRepo, telefonoStore, manager)
-	v1BroadcastsHandler := handlers.NewV1BroadcastsHandler(broadcastStore, telefonoStore, broadcastWorker)
+	v1BroadcastsHandler := handlers.NewV1BroadcastsHandler(jobQueueRepo, telefonoStore, broadcastWorker)
 	v1WSHandler := handlers.NewV1WSHandler(manager, jwtCfg, telefonoStore, sessionStore)
 
 	var v1WebhooksHandler *handlers.V1WebhooksHandler
@@ -149,12 +154,12 @@ func NewContainer() *Container {
 		Manager:               manager,
 		SessionStore:          sessionStore,
 		BroadcastWorker:       broadcastWorker,
-		BroadcastStore:        broadcastStore,
+		JobQueueRepo:          jobQueueRepo,
 		MsgRepo:               msgRepo,
 		EmpresaStore:          empresaStore,
 		TelefonoStore:         telefonoStore,
 		DB:                    db,
-		StartupTasks:          composeStartupTasks(buildStartupBootstrap(cfg, manager, sessionStore, telefonoStore), webhookStartupTask),
+		StartupTasks:          composeStartupTasks(buildStartupBootstrap(cfg, manager, sessionStore, telefonoStore), webhookStartupTask, buildJobQueueRecovery(jobQueueRepo, broadcastWorker, telefonoStore)),
 		AuthHandler:           authHandler,
 		CompaniesHandler:      companiesHandler,
 		ApiKeysHandler:        apiKeysHandler,

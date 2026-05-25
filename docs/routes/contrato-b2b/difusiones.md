@@ -103,7 +103,7 @@ Crea y encola una nueva difusión de mensajes. El procesamiento es asíncrono; l
 
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
-| `destinos` | array de strings | Sí | Lista de números destino con código de país. Al menos 1. |
+| `destinos` | array de strings | Sí | Lista de números destino con código de país. Mínimo 1, **máximo 30**. |
 | `mensaje` | string | Sí | Texto del mensaje a enviar a todos. |
 | `adjuntos` | array | No | Lista de adjuntos (misma estructura que en mensajes individuales). |
 
@@ -124,11 +124,17 @@ curl -X POST https://tu-dominio.com/api/service/v1/difusiones \
   "ok": true,
   "data": {
     "reference_id": "bc550e8400-...",
-    "total": 2,
-    "estado": "pending"
+    "total": 25,
+    "estado": "pending",
+    "estimated_seconds": 480
   },
   "meta": { "empresa_id": 1 }
 }
+```
+
+> `estimated_seconds` es el tiempo estimado en segundos que tomará completar la difusión. Se calcula en base al número de destinatarios y los delays anti-spam configurados. Para 30 contactos el rango típico es entre 5 y 15 minutos. Este valor es aproximado.
+
+```json
 ```
 
 **Errores posibles:**
@@ -137,8 +143,28 @@ curl -X POST https://tu-dominio.com/api/service/v1/difusiones \
 |--------|-------|
 | `400 Bad Request` — `INVALID_JSON` | JSON inválido. |
 | `400 Bad Request` — `MISSING_FIELDS` | `destinos` vacío o ausente. |
+| `400 Bad Request` — `MAX_BROADCAST_EXCEEDED` | `destinos` supera el límite de 30. |
 | `400 Bad Request` — `SESSION_NOT_ACTIVE` | El teléfono no está activo. |
 | `400 Bad Request` — `INVALID_ATTACHMENT` | Adjunto con formato inválido. |
 | `400 Bad Request` | Validación de dominio (destinos inválidos, límites excedidos, etc). |
 | `401 Unauthorized` — `API_KEY_REQUIRED` | API Key ausente o inválida. |
 | `404 Not Found` — `TELEFONO_NOT_FOUND` | El teléfono de la API Key no existe. |
+
+---
+
+## Notas de comportamiento
+
+### Delays anti-spam
+
+El envío de difusiones implementa un algoritmo de delays aleatorios para proteger la cuenta de WhatsApp:
+
+- Los mensajes se agrupan en lotes de 3-4 contactos.
+- Entre cada mensaje del mismo lote: delay aleatorio de **1.5 a 4 segundos**.
+- Entre lotes: delay aleatorio de **3 a 8 segundos**.
+- Cada 10 mensajes enviados: pausa adicional de **15 a 30 segundos**.
+
+Por este motivo, una difusión de 30 contactos puede tardar entre **5 y 15 minutos** en completarse. El campo `estimated_seconds` en la respuesta 202 indica el tiempo estimado para ese envío específico.
+
+### Estado asíncrono
+
+La difusión se procesa en segundo plano. Use `GET /api/service/v1/difusiones/{id}` para consultar el progreso y los resultados individuales por destinatario.

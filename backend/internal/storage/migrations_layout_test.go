@@ -57,6 +57,8 @@ func TestEmbeddedMigrationsMatchNormalizedLayout(t *testing.T) {
 		"017_create_webhooks_outbound.down.sql",
 		"018_create_webhooks_outbound_queue.up.sql",
 		"018_create_webhooks_outbound_queue.down.sql",
+		"019_create_job_queue.up.sql",
+		"019_create_job_queue.down.sql",
 	}
 
 	if len(got) != len(expected) {
@@ -168,6 +170,12 @@ func TestNormalizedCreateTableMigrationsHaveFinalSchema(t *testing.T) {
 			requiredContains: []string{"webhooks_outbound_queue", "webhook_id", "payload", "estado", "idx_queue_due"},
 			forbidden:        []string{"ALTER TABLE", "INSERT INTO"},
 			createCount:      1,
+		},
+		{
+			name:             "019_create_job_queue.up.sql",
+			requiredContains: []string{"job_queue", "job_items", "entity_id", "empresa_id", "idx_empresa_status", "idx_job_status_seq"},
+			forbidden:        []string{"ALTER TABLE", "INSERT INTO"},
+			createCount:      2,
 		},
 		{
 			name:             "012_create_telefono_request_logs.up.sql",

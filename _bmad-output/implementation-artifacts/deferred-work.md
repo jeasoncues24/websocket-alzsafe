@@ -1,6 +1,9 @@
 # Deferred Work
 
-## Deferred from: code review of 2-1-eliminar-select-empresa-usuario-admin (2026-05-05)
+## Deferred from: code review of spec-difusiones-anti-ban-job-queue (2026-05-25)
+
+- **Omisión del WebSocket administrativo `/admin/ws/difusiones/{reference_id}` para progreso en tiempo real** — Se difiere debido a que el mecanismo de *polling* (sondeo de 3 segundos) ya está implementado y es plenamente funcional como *fallback* en el panel administrativo del frontend, de acuerdo con las notas de integración del *spec*.
+
 
 - `restoreEmpresa` añadida en `frontend/lib/api.ts:292` sin endpoint backend registrado — pertenece a story 2-2 (restaurar empresas desactivadas), revisar en su code review correspondiente.
 

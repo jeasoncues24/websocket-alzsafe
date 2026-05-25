@@ -15,8 +15,8 @@ type BroadcastRequest struct {
 	ListaDifusion []BroadcastItem     `json:"lista_difusion"`
 }
 
-// MaxBroadcastItems limits broadcast fan-out to a safe batch size.
-const MaxBroadcastItems = 500
+// MaxBroadcastItems limits broadcast fan-out. Anti-ban: 30 max.
+const MaxBroadcastItems = 30
 
 // BroadcastResponse represents the HTTP response for a broadcast request.
 type BroadcastResponse struct {
