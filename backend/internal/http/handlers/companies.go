@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"wsapi/internal/auth"
 	"wsapi/internal/config"
 	"wsapi/internal/domain"
 	"wsapi/internal/storage"
@@ -29,7 +28,7 @@ func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	access, ok := domain.GetPanelAccess(r.Context())
+	_, ok := domain.GetPanelAccess(r.Context())
 	if !ok {
 		writeAPIError(w, http.StatusUnauthorized, "Token requerido")
 		return
@@ -52,23 +51,6 @@ func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
 		activo = &[]bool{true}[0]
 	} else if estado == "inactivo" {
 		activo = &[]bool{false}[0]
-	}
-
-	if companyID, hasCompany := access.CompanyID(); hasCompany && !access.IsAdminJWT {
-		empresa, err := h.empresaStore.GetByID(companyID)
-		if err != nil || empresa == nil {
-			writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(domain.EmpresasListResponse{
-			OK:       true,
-			Empresas: []domain.Empresa{*empresa},
-			Total:    1,
-			Page:     1,
-			Limit:    1,
-		})
-		return
 	}
 
 	empresas, total, err := h.empresaStore.GetAll(page, limit, search, activo)
@@ -331,177 +313,7 @@ func (h *CompaniesHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "empresa": empresa})
 }
 
-// GetCurrent returns the authenticated company's own profile.
-// GET /api/empresas
-func (h *CompaniesHandler) GetCurrent(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
-		return
-	}
 
-	claims, ok := domain.GetEmpresaJWTClaims(r.Context())
-	if !ok {
-		writeAPIError(w, http.StatusUnauthorized, "Autenticación de empresa requerida")
-		return
-	}
-
-	empresa, err := h.empresaStore.GetByID(claims.EmpresaID)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "Error al obtener empresa")
-		return
-	}
-	if empresa == nil {
-		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(domain.EmpresaResponse{
-		OK:      true,
-		Empresa: empresa,
-	})
-}
-
-// UpdateCurrent updates the authenticated company's own profile.
-// RUC remains read-only for the company contract.
-// PUT /api/empresas
-func (h *CompaniesHandler) UpdateCurrent(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
-		return
-	}
-
-	claims, ok := domain.GetEmpresaJWTClaims(r.Context())
-	if !ok {
-		writeAPIError(w, http.StatusUnauthorized, "Autenticación de empresa requerida")
-		return
-	}
-
-	empresa, err := h.empresaStore.GetByID(claims.EmpresaID)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "Error al obtener empresa")
-		return
-	}
-	if empresa == nil {
-		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
-		return
-	}
-
-	var req domain.EmpresaRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeAPIError(w, http.StatusBadRequest, "JSON inválido")
-		return
-	}
-
-	if req.RUC != "" && req.RUC != empresa.RUC {
-		writeAPIError(w, http.StatusBadRequest, "El RUC es de solo lectura")
-		return
-	}
-
-	if req.Nombre != "" {
-		empresa.Nombre = req.Nombre
-	}
-	if req.NombreComercial != "" {
-		empresa.NombreComercial = req.NombreComercial
-	}
-	if req.Telefono != "" {
-		empresa.Telefono = req.Telefono
-	}
-	if req.Direccion != "" {
-		empresa.Direccion = &req.Direccion
-	}
-
-	if err := h.empresaStore.Update(empresa); err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "Error al actualizar empresa")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(domain.EmpresaResponse{
-		OK:      true,
-		Empresa: empresa,
-	})
-}
-
-// generateToken emite un JWT de larga duración (5 años) para una empresa.
-// Solo accesible por super_admin.
-// POST /api/admin/empresas/{id}/token
-func (h *CompaniesHandler) GenerateToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
-		return
-	}
-
-	claims, ok := domain.GetAdminJWTClaims(r.Context())
-	if !ok || claims.Rol != domain.RoleSuperAdmin {
-		writeAPIError(w, http.StatusForbidden, "Solo super_admin puede generar JWT de empresa")
-		return
-	}
-
-	id := h.extractIDFromPath(r.URL.Path)
-	if id <= 0 {
-		writeAPIError(w, http.StatusBadRequest, "ID inválido")
-		return
-	}
-
-	empresa, err := h.empresaStore.GetByID(id)
-	if err != nil || empresa == nil {
-		writeAPIError(w, http.StatusNotFound, "Empresa no encontrada")
-		return
-	}
-	if !empresa.Activo {
-		writeAPIError(w, http.StatusConflict, "La empresa está inactiva")
-		return
-	}
-
-	token, err := auth.GenerateEmpresaJWT(empresa, h.jwtConfig.Secret, h.jwtConfig.Issuer)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "Error al generar JWT de empresa")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(domain.EmpresaJWTResponse{
-		OK:      true,
-		Token:   token,
-		Message: "JWT de empresa generado exitosamente. Guárdalo en un lugar seguro.",
-	})
-}
-
-// RevokeToken incrementa el token_version de la empresa e invalida todos los JWT activos.
-// Solo accesible por super_admin.
-// POST /api/admin/empresas/{id}/token/revoke
-func (h *CompaniesHandler) RevokeToken(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeAPIError(w, http.StatusMethodNotAllowed, "Método no permitido")
-		return
-	}
-
-	claims, ok := domain.GetAdminJWTClaims(r.Context())
-	if !ok || claims.Rol != domain.RoleSuperAdmin {
-		writeAPIError(w, http.StatusForbidden, "Solo super_admin puede revocar JWT de empresa")
-		return
-	}
-
-	id := h.extractIDFromPath(r.URL.Path)
-	if id <= 0 {
-		writeAPIError(w, http.StatusBadRequest, "ID inválido")
-		return
-	}
-
-	newVersion, err := h.empresaStore.IncrementTokenVersion(id)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, "Error al revocar JWT de empresa")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":            true,
-		"token_version": newVersion,
-		"message":       "Todos los JWT de empresa han sido revocados",
-	})
-}
 
 // extractIDFromPath extrae el ID del path desde rutas de admin como /api/admin/empresas/{id}/token.
 func (h *CompaniesHandler) extractIDFromPath(path string) int64 {
@@ -511,8 +323,6 @@ func (h *CompaniesHandler) extractIDFromPath(path string) int64 {
 	for _, p := range paths {
 		idStr := strings.TrimPrefix(path, p)
 		if idStr != path {
-			idStr = strings.TrimSuffix(idStr, "/token")
-			idStr = strings.TrimSuffix(idStr, "/token/revoke")
 			idStr = strings.TrimSuffix(idStr, "/restore")
 			id, err := strconv.ParseInt(idStr, 10, 64)
 			if err == nil && id > 0 {

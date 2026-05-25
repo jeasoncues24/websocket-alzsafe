@@ -591,6 +591,10 @@ grep -n "empresas.*token\|token/revoke" backend/internal/http/routes_admin.go
 
 ---
 
+### Review Findings — Grupo 3: Handlers (v1_ws, v1_helpers, v1_webhooks, companies, routes) (2026-05-25)
+
+- [x] [Review][Defer] WS `phone == nil` tras accept no envía close frame explícito antes de error event — `defer c.CloseNow()` cierra, pero sin código de cierre WS [`backend/internal/http/handlers/v1_ws.go` L62-72] — deferred, pre-existing
+
 ### Review Findings — Grupo 2: Core (kernel, router, container, api_key_auth, panel_access) (2026-05-25)
 
 - [x] [Review][Defer] `registeredRoutes` tiene gaps pre-existentes causando 404 en OPTIONS/CORS para rutas no listadas [`backend/internal/http/router.go`] — deferred, pre-existing

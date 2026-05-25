@@ -180,46 +180,6 @@ func (h *V1WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 	}, claims.EmpresaID)
 }
 
-func (h *V1WebhooksHandler) ListByEmpresa(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeV1Error(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Método no permitido")
-		return
-	}
-
-	claims, ok := domain.GetEmpresaJWTClaims(r.Context())
-	if !ok {
-		writeV1Error(w, http.StatusUnauthorized, "TOKEN_REQUIRED", "JWT de empresa requerido")
-		return
-	}
-
-	webhooks, err := h.webhookStore.ListByEmpresa(claims.EmpresaID)
-	if err != nil {
-		writeV1Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Error al obtener webhooks")
-		return
-	}
-
-	result := make([]map[string]interface{}, 0, len(webhooks))
-	for _, wh := range webhooks {
-		result = append(result, map[string]interface{}{
-			"id":              wh.ID,
-			"telefono_id":     wh.TelefonoID,
-			"api_key_id":      wh.ApiKeyID,
-			"url":             wh.URL,
-			"eventos":         wh.Eventos,
-			"activo":          wh.Activo,
-			"failure_count":   wh.FailureCount,
-			"last_error":      wh.LastError,
-			"last_success_at": wh.LastSuccessAt,
-			"created_at":      wh.CreatedAt,
-			"updated_at":      wh.UpdatedAt,
-		})
-	}
-
-	writeV1Success(w, map[string]interface{}{
-		"webhooks": result,
-		"total":    len(result),
-	}, claims.EmpresaID)
-}
 
 func (h *V1WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {

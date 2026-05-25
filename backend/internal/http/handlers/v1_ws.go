@@ -49,9 +49,9 @@ func (h *V1WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 		writeV1Error(w, http.StatusUnauthorized, "TOKEN_REQUIRED", "Token requerido")
 		return
 	}
-	claims, err := auth.ParseEmpresaJWT(token, h.jwtCfg.Secret)
+	claims, err := auth.ParseQRLinkToken(token, h.jwtCfg.Secret)
 	if err != nil {
-		writeV1Error(w, http.StatusUnauthorized, "INVALID_TOKEN", "Token inválido o expirado")
+		writeV1Error(w, http.StatusUnauthorized, "INVALID_TOKEN", "Token QR inválido o expirado")
 		return
 	}
 
@@ -63,44 +63,8 @@ func (h *V1WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// — Resolver phone según tipo de token —
-	var phoneID int64
-
-	if claims.Scope == "qr_link" {
-		// Token provisional: auto-suscribir al teléfono del token
-		if claims.PhoneID <= 0 {
-			_ = writeWSEvent(c, "error", map[string]string{"message": "token QR inválido: phone_id ausente"})
-			return
-		}
-		phoneID = claims.PhoneID
-	} else {
-		// Empresa JWT regular: esperar mensaje subscribe con phone_id
-		_, data, err := c.Read(ctx)
-		if err != nil {
-			return
-		}
-		var payload struct {
-			Type string          `json:"type"`
-			Data json.RawMessage `json:"data"`
-		}
-		if err := json.Unmarshal(data, &payload); err != nil || payload.Type != "subscribe" {
-			_ = writeWSEvent(c, "error", map[string]string{"message": "primer mensaje debe ser subscribe"})
-			return
-		}
-		var sub struct {
-			PhoneID int64 `json:"phone_id"`
-		}
-		if err := json.Unmarshal(payload.Data, &sub); err != nil || sub.PhoneID <= 0 {
-			_ = writeWSEvent(c, "error", map[string]string{"message": "phone_id requerido"})
-			return
-		}
-		belongs, _ := h.telefonoStore.BelongsToEmpresa(sub.PhoneID, claims.EmpresaID)
-		if !belongs {
-			_ = writeWSEvent(c, "error", map[string]string{"message": "forbidden"})
-			return
-		}
-		phoneID = sub.PhoneID
-	}
+	// — Resolver phone según token —
+	phoneID := claims.PhoneID
 
 	// — Cargar teléfono (path común) —
 	phone, err := h.telefonoStore.GetByID(phoneID)
@@ -110,18 +74,10 @@ func (h *V1WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	accountID := whatsapp.NormalizeAccountID(phone.NumeroCompleto)
 
-	if claims.Scope == "qr_link" {
-		fmt.Printf("[INFO] V1 WS QR-link opened phone=%d account=%s\n", phone.ID, accountID)
-	} else {
-		fmt.Printf("[INFO] V1 WS opened empresa=%d phone=%d account=%s\n", claims.EmpresaID, phone.ID, accountID)
-	}
+	fmt.Printf("[INFO] V1 WS QR-link opened phone=%d account=%s\n", phone.ID, accountID)
 
 	defer func() {
-		if claims.Scope == "qr_link" {
-			fmt.Printf("[INFO] V1 WS QR-link closed phone=%d account=%s reason=%v\n", phone.ID, accountID, ctx.Err())
-		} else {
-			fmt.Printf("[INFO] V1 WS closed empresa=%d account=%s reason=%v\n", claims.EmpresaID, accountID, ctx.Err())
-		}
+		fmt.Printf("[INFO] V1 WS QR-link closed phone=%d account=%s reason=%v\n", phone.ID, accountID, ctx.Err())
 		if h.sessionStore != nil && h.manager != nil {
 			// Auditar el cierre del WebSocket en el historial de eventos en memoria
 			reasonStr := "normal"

@@ -34,31 +34,6 @@ func writeV1Success(w http.ResponseWriter, data map[string]interface{}, empresaI
 	json.NewEncoder(w).Encode(response)
 }
 
-func getEmpresaIDFromContext(r *http.Request) (int64, bool) {
-	if claims, ok := domain.GetEmpresaJWTClaims(r.Context()); ok {
-		return claims.EmpresaID, true
-	}
-	if claims, ok := domain.GetApiKeyClaims(r.Context()); ok {
-		return claims.EmpresaID, true
-	}
-	return 0, false
-}
-
-func getAccessClaims(r *http.Request) (*domain.EmpresaJWTClaims, *domain.ApiKeyClaims, bool) {
-	if claims, ok := domain.GetEmpresaJWTClaims(r.Context()); ok {
-		return claims, nil, true
-	}
-	if apiClaims, ok := domain.GetApiKeyClaims(r.Context()); ok {
-		return &domain.EmpresaJWTClaims{
-			EmpresaID:     apiClaims.EmpresaID,
-			TokenVersion:  0,
-			EmpresaRUC:    "",
-			EmpresaNombre: "",
-			Permissions:   apiClaims.Scopes,
-		}, apiClaims, true
-	}
-	return nil, nil, false
-}
 
 func extractTelefonoID(r *http.Request) (int64, error) {
 	if v := r.URL.Query().Get("telefono_id"); v != "" {

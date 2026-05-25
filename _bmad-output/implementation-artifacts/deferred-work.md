@@ -9,6 +9,10 @@
 - **Variable shadowing de `err`** — `backend/internal/http/router.go` — en la rama else de empresa-scoped, `empresa, err :=` introduce un scope local que oculta el `err` externo. Pre-existente, no introducido por esta story.
 - **`json.NewEncoder.Encode` error ignorado** — `backend/internal/http/router.go` — patrón pervasivo en el handler: errores de escritura al cliente son descartados silenciosamente. Pre-existente.
 
+## Deferred from: code review of spec-auth-cleanup-b2b — Grupo 3 (2026-05-25)
+
+- **WS handler: `phone == nil` sin close frame WebSocket explícito** — `backend/internal/http/handlers/v1_ws.go` L62-72 — cuando el teléfono no se encuentra tras aceptar la conexión, se envía un evento `error` pero el cierre usa `defer c.CloseNow()` sin código de cierre WS. Cliente no puede distinguir cierre graceful de caída de red. Pre-existente.
+
 ## Deferred from: code review of spec-auth-cleanup-b2b — Grupo 2 (2026-05-25)
 
 - **`registeredRoutes` con gaps pre-existentes** — `backend/internal/http/router.go` — el mapa `registeredRoutes` omite varias rutas activas (telefonos CRUD, admin users, webhooks B2B, etc.), causando 404 en preflight OPTIONS/CORS para esas rutas. No introducido por este diff.

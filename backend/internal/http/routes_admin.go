@@ -55,8 +55,6 @@ func RegisterAdminRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 		mux.Handle("PUT /api/admin/empresas/{id}", adminStack(http.HandlerFunc(c.CompaniesHandler.Update)))
 		mux.Handle("DELETE /api/admin/empresas/{id}", adminStack(http.HandlerFunc(c.CompaniesHandler.Delete)))
 		mux.Handle("POST /api/admin/empresas/{id}/restore", adminStack(http.HandlerFunc(c.CompaniesHandler.Restore)))
-		mux.Handle("POST /api/admin/empresas/{id}/token", adminStack(http.HandlerFunc(c.CompaniesHandler.GenerateToken)))
-		mux.Handle("POST /api/admin/empresas/{id}/token/revoke", adminStack(http.HandlerFunc(c.CompaniesHandler.RevokeToken)))
 	}
 
 	if c.ApiKeysHandler != nil {
