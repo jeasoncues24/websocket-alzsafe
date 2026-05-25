@@ -591,6 +591,14 @@ grep -n "empresas.*token\|token/revoke" backend/internal/http/routes_admin.go
 
 ---
 
+### Review Findings — Grupo 4: Eliminaciones + Tests (2026-05-25)
+
+- [x] [Review][Patch] Test de delete con sesión activa (→ 409) eliminado como daño colateral — restaurado [`backend/internal/http/handlers/companies_test.go`]
+- [x] [Review][Defer] `ConnectCompanyPhoneWS` no llama `CanAccessEmpresa` — pre-existente [`backend/internal/http/admin.go` L1382-1425] — deferred, pre-existing
+- [x] [Review][Defer] Sin test de acceso cross-empresa para WS admin — pre-existente [`backend/internal/http/admin_test.go`] — deferred, pre-existing
+- [x] [Review][Defer] `writeEvent`/`writeWSEvent` duplicados entre admin.go y v1_ws.go — deferred, pre-existing technical debt
+- [x] [Review][Defer] Tests ahora son solo root-only, sin cobertura de admin no-root — deferred, coverage gap
+
 ### Review Findings — Grupo 3: Handlers (v1_ws, v1_helpers, v1_webhooks, companies, routes) (2026-05-25)
 
 - [x] [Review][Defer] WS `phone == nil` tras accept no envía close frame explícito antes de error event — `defer c.CloseNow()` cierra, pero sin código de cierre WS [`backend/internal/http/handlers/v1_ws.go` L62-72] — deferred, pre-existing

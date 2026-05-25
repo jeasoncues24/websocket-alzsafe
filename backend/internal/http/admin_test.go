@@ -81,22 +81,7 @@ func TestAdminStartCompanyPhoneConnection(t *testing.T) {
 	}
 }
 
-func TestCompanyJWTPhoneAccessDeniedForOtherCompany(t *testing.T) {
-	db := newAdminPhoneTestDB(t)
-	store := storage.NewTelefonoStore(db)
-	insertAdminPhone(t, db, 1, "+51", "999888777", "+51999888777")
 
-	h := &AdminHandler{telefonoStore: store}
-	req := httptest.NewRequest(stdhttp.MethodGet, "/api/admin/telefonos/1", nil)
-	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 2, TokenVersion: 1}))
-	rr := httptest.NewRecorder()
-
-	h.GetCompanyPhone(rr, req)
-
-	if rr.Code != stdhttp.StatusForbidden {
-		t.Fatalf("expected 403, got %d", rr.Code)
-	}
-}
 
 func TestBuildAdminSessionDiagnosticMismatch(t *testing.T) {
 	phone := &domain.Telefono{
@@ -227,7 +212,7 @@ func TestCreateAndUpdateUsuarioAdmin(t *testing.T) {
 	h := &AdminHandler{userStore: store}
 
 	createReq := httptest.NewRequest(stdhttp.MethodPost, "/api/admin/usuario_admin", strings.NewReader(`{"username":"newadmin","password":"Secret123!","email":"new@a.com","role_id":1}`))
-	createReq = createReq.WithContext(domain.WithEmpresaJWTClaims(createReq.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	createReq = createReq.WithContext(domain.WithAdminJWTClaims(createReq.Context(), &domain.AdminJWTClaims{UserID: 1, Rol: domain.RoleSuperAdmin, IsRoot: true}))
 	createRR := httptest.NewRecorder()
 
 	h.CreateUsuarioAdmin(createRR, createReq)
@@ -257,7 +242,7 @@ func TestCreateAndUpdateUsuarioAdmin(t *testing.T) {
 	}
 
 	updateReq := httptest.NewRequest(stdhttp.MethodPut, "/api/admin/usuario_admin/"+strconv.FormatInt(userID, 10), strings.NewReader(`{"email":"updated@a.com","role_id":2,"is_active":false}`))
-	updateReq = updateReq.WithContext(domain.WithEmpresaJWTClaims(updateReq.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	updateReq = updateReq.WithContext(domain.WithAdminJWTClaims(updateReq.Context(), &domain.AdminJWTClaims{UserID: 1, Rol: domain.RoleSuperAdmin, IsRoot: true}))
 	updateRR := httptest.NewRecorder()
 
 	h.UpdateUsuarioAdmin(updateRR, updateReq)
@@ -281,7 +266,7 @@ func TestCreateRoleValidatesPermissionsAndRejectsDuplicates(t *testing.T) {
 	h := &AdminHandler{roleStore: store, moduleStore: storage.NewModuleStore(db)}
 
 	createReq := httptest.NewRequest(stdhttp.MethodPost, "/api/admin/roles", strings.NewReader(`{"name":"auditor","description":"Auditor","permissions":["messages","broadcasts:read"]}`))
-	createReq = createReq.WithContext(domain.WithEmpresaJWTClaims(createReq.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	createReq = createReq.WithContext(domain.WithAdminJWTClaims(createReq.Context(), &domain.AdminJWTClaims{UserID: 1, Rol: domain.RoleSuperAdmin, IsRoot: true}))
 	createRR := httptest.NewRecorder()
 
 	h.CreateRole(createRR, createReq)
@@ -308,7 +293,7 @@ func TestCreateRoleValidatesPermissionsAndRejectsDuplicates(t *testing.T) {
 	}
 
 	dupReq := httptest.NewRequest(stdhttp.MethodPost, "/api/admin/roles", strings.NewReader(`{"name":"auditor","description":"Duplicado","permissions":["messages"]}`))
-	dupReq = dupReq.WithContext(domain.WithEmpresaJWTClaims(dupReq.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	dupReq = dupReq.WithContext(domain.WithAdminJWTClaims(dupReq.Context(), &domain.AdminJWTClaims{UserID: 1, Rol: domain.RoleSuperAdmin, IsRoot: true}))
 	dupRR := httptest.NewRecorder()
 
 	h.CreateRole(dupRR, dupReq)
@@ -335,7 +320,7 @@ func TestUpdateRoleRejectsDroppingRootFlag(t *testing.T) {
 
 	h := &AdminHandler{roleStore: store, moduleStore: storage.NewModuleStore(db)}
 	req := httptest.NewRequest(stdhttp.MethodPut, "/api/admin/roles/1", strings.NewReader(`{"name":"super_admin","description":"Root","is_root":false,"permissions":["all"]}`))
-	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	req = req.WithContext(domain.WithAdminJWTClaims(req.Context(), &domain.AdminJWTClaims{UserID: 1, Rol: domain.RoleSuperAdmin, IsRoot: true}))
 	rr := httptest.NewRecorder()
 
 	h.UpdateRole(rr, req)
@@ -359,7 +344,7 @@ func TestDeleteRoleRejectsInUseRoles(t *testing.T) {
 
 	h := &AdminHandler{roleStore: store, moduleStore: storage.NewModuleStore(db)}
 	req := httptest.NewRequest(stdhttp.MethodDelete, "/api/admin/roles/1", nil)
-	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	req = req.WithContext(domain.WithAdminJWTClaims(req.Context(), &domain.AdminJWTClaims{UserID: 1, Rol: domain.RoleSuperAdmin, IsRoot: true}))
 	rr := httptest.NewRecorder()
 
 	h.DeleteRole(rr, req)
@@ -386,7 +371,7 @@ func TestGetUsuarioAdminModulesReturnsAssignedModules(t *testing.T) {
 
 	h := &AdminHandler{db: db, userStore: userStore}
 	req := httptest.NewRequest(stdhttp.MethodGet, "/api/admin/usuario_admin/"+itoa(userID)+"/modulos", nil)
-	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	req = req.WithContext(domain.WithAdminJWTClaims(req.Context(), &domain.AdminJWTClaims{UserID: 1, Rol: domain.RoleSuperAdmin, IsRoot: true}))
 	rr := httptest.NewRecorder()
 
 	h.GetUsuarioAdminModules(rr, req)
@@ -420,7 +405,7 @@ func TestAssignUsuarioAdminModulesReplacesFullSet(t *testing.T) {
 
 	h := &AdminHandler{db: db, userStore: userStore, moduleStore: storage.NewModuleStore(db)}
 	req := httptest.NewRequest(stdhttp.MethodPut, "/api/admin/usuario_admin/"+itoa(userID)+"/modulos", strings.NewReader(`{"module_ids":[2,3]}`))
-	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	req = req.WithContext(domain.WithAdminJWTClaims(req.Context(), &domain.AdminJWTClaims{UserID: 1, Rol: domain.RoleSuperAdmin, IsRoot: true}))
 	rr := httptest.NewRecorder()
 
 	h.AssignUsuarioAdminModules(rr, req)
@@ -449,7 +434,7 @@ func TestAssignUsuarioAdminModulesRejectsInvalidModuleID(t *testing.T) {
 
 	h := &AdminHandler{db: db, userStore: userStore, moduleStore: storage.NewModuleStore(db)}
 	req := httptest.NewRequest(stdhttp.MethodPut, "/api/admin/usuario_admin/"+itoa(userID)+"/modulos", strings.NewReader(`{"module_ids":[1,99]}`))
-	req = req.WithContext(domain.WithEmpresaJWTClaims(req.Context(), &domain.EmpresaJWTClaims{EmpresaID: 1, TokenVersion: 1}))
+	req = req.WithContext(domain.WithAdminJWTClaims(req.Context(), &domain.AdminJWTClaims{UserID: 1, Rol: domain.RoleSuperAdmin, IsRoot: true}))
 	rr := httptest.NewRecorder()
 
 	h.AssignUsuarioAdminModules(rr, req)

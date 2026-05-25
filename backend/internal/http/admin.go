@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -155,9 +156,7 @@ func (h *AdminHandler) ListUsuarioAdmins(w http.ResponseWriter, r *http.Request)
 		total int
 		err   error
 	)
-	if companyID, ok := access.CompanyID(); ok && !access.IsAdminJWT {
-		users, total, err = h.userStore.GetAllByEmpresa(companyID, page, limit)
-	} else if access.IsAdminJWT || access.IsRoot {
+	if access.IsAdminJWT || access.IsRoot {
 		users, total, err = h.userStore.GetAll(page, limit)
 	} else {
 		writeAdminError(w, http.StatusForbidden, "acceso denegado")
@@ -1221,19 +1220,6 @@ func (h *AdminHandler) GetSessionsDiagnostics(w http.ResponseWriter, r *http.Req
 		} else {
 			telefonos, err = h.telefonoStore.ListAll()
 		}
-	} else if companyID, ok := access.CompanyID(); ok {
-		if empresaIDRaw != "" {
-			empresaID, parseErr := strconv.ParseInt(empresaIDRaw, 10, 64)
-			if parseErr != nil || empresaID <= 0 {
-				writeAdminError(w, http.StatusBadRequest, "empresa_id invalido")
-				return
-			}
-			if empresaID != companyID {
-				writeAdminError(w, http.StatusForbidden, "acceso denegado")
-				return
-			}
-		}
-		telefonos, err = h.telefonoStore.GetByEmpresa(companyID)
 	} else {
 		writeAdminError(w, http.StatusForbidden, "acceso denegado")
 		return
@@ -1609,3 +1595,17 @@ func getAdminHandler() *AdminHandler {
 	}
 	return NewAdminHandler(db, nil, nil, jwtCfg)
 }
+
+type outboundPayload struct {
+	Event string         `json:"event"`
+	Data  map[string]any `json:"data"`
+}
+
+func writeEvent(ctx context.Context, c *websocket.Conn, payload outboundPayload) error {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return c.Write(ctx, websocket.MessageText, b)
+}
+

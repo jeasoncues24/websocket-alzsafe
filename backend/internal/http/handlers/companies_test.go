@@ -166,8 +166,8 @@ func TestCompaniesCreateUpdateDeleteAndTokens(t *testing.T) {
 	if activeRR.Code != stdhttp.StatusConflict {
 		t.Fatalf("expected 409 when sessions active, got %d", activeRR.Code)
 	}
-
 	sessionStore.SetDisconnected("20100000001", "closed")
+
 	deleteReq := httptest.NewRequest(stdhttp.MethodDelete, "/api/admin/empresas/1", nil)
 	deleteReq = deleteReq.WithContext(domain.WithAdminJWTClaims(deleteReq.Context(), claims))
 	deleteRR := httptest.NewRecorder()
@@ -179,29 +179,6 @@ func TestCompaniesCreateUpdateDeleteAndTokens(t *testing.T) {
 	inactive, _ := store.GetByID(1)
 	if inactive.Activo {
 		t.Fatalf("expected company to be inactive after delete")
-	}
-
-	tokenReq := httptest.NewRequest(stdhttp.MethodPost, "/api/admin/empresas/2/token", nil)
-	tokenReq = tokenReq.WithContext(domain.WithAdminJWTClaims(tokenReq.Context(), claims))
-	tokenRR := httptest.NewRecorder()
-	h.GenerateToken(tokenRR, tokenReq)
-	if tokenRR.Code != stdhttp.StatusOK {
-		t.Fatalf("expected 200 generating token, got %d", tokenRR.Code)
-	}
-	var tokenResp map[string]any
-	if err := json.Unmarshal(tokenRR.Body.Bytes(), &tokenResp); err != nil {
-		t.Fatalf("invalid token response: %v", err)
-	}
-	if tokenResp["token"] == "" {
-		t.Fatal("expected non-empty token")
-	}
-
-	revokeReq := httptest.NewRequest(stdhttp.MethodPost, "/api/admin/empresas/2/token/revoke", nil)
-	revokeReq = revokeReq.WithContext(domain.WithAdminJWTClaims(revokeReq.Context(), claims))
-	revokeRR := httptest.NewRecorder()
-	h.RevokeToken(revokeRR, revokeReq)
-	if revokeRR.Code != stdhttp.StatusOK {
-		t.Fatalf("expected 200 revoking token, got %d", revokeRR.Code)
 	}
 }
 
@@ -230,52 +207,3 @@ func TestCompaniesListForAdminJWTIsGlobal(t *testing.T) {
 	}
 }
 
-func TestCompaniesCurrentEndpoints(t *testing.T) {
-	store := newMockEmpresaStore()
-	store.empresas[2] = &domain.Empresa{ID: 2, RUC: "20100000002", Nombre: "Empresa Dos", Activo: true}
-	h := &CompaniesHandler{empresaStore: store, jwtConfig: &config.JWTConfig{}}
-	claims := &domain.EmpresaJWTClaims{EmpresaID: 2, TokenVersion: 1, EmpresaRUC: "20100000002", EmpresaNombre: "Empresa Dos"}
-
-	getReq := httptest.NewRequest(stdhttp.MethodGet, "/api/empresas", nil)
-	getReq = getReq.WithContext(domain.WithEmpresaJWTClaims(getReq.Context(), claims))
-	getRR := httptest.NewRecorder()
-
-	h.GetCurrent(getRR, getReq)
-
-	if getRR.Code != stdhttp.StatusOK {
-		t.Fatalf("expected 200 for current company, got %d", getRR.Code)
-	}
-
-	var getResp domain.EmpresaResponse
-	if err := json.Unmarshal(getRR.Body.Bytes(), &getResp); err != nil {
-		t.Fatalf("invalid response: %v", err)
-	}
-	if getResp.Empresa == nil || getResp.Empresa.ID != 2 {
-		t.Fatalf("expected company 2, got %+v", getResp.Empresa)
-	}
-
-	putReq := httptest.NewRequest(stdhttp.MethodPut, "/api/empresas", bytes.NewBufferString(`{"ruc":"20100000002","nombre":"Empresa Dos Actualizada","telefono_contacto":"111","direccion":"Nueva Calle"}`))
-	putReq = putReq.WithContext(domain.WithEmpresaJWTClaims(putReq.Context(), claims))
-	putRR := httptest.NewRecorder()
-
-	h.UpdateCurrent(putRR, putReq)
-
-	if putRR.Code != stdhttp.StatusOK {
-		t.Fatalf("expected 200 updating current company, got %d", putRR.Code)
-	}
-
-	updated, _ := store.GetByID(2)
-	if updated.Nombre != "Empresa Dos Actualizada" || updated.Telefono != "111" || updated.RUC != "20100000002" {
-		t.Fatalf("update was not applied correctly: %+v", updated)
-	}
-
-	blockedReq := httptest.NewRequest(stdhttp.MethodPut, "/api/empresas", bytes.NewBufferString(`{"ruc":"99999999999","nombre":"Hack"}`))
-	blockedReq = blockedReq.WithContext(domain.WithEmpresaJWTClaims(blockedReq.Context(), claims))
-	blockedRR := httptest.NewRecorder()
-
-	h.UpdateCurrent(blockedRR, blockedReq)
-
-	if blockedRR.Code != stdhttp.StatusBadRequest {
-		t.Fatalf("expected 400 for readonly ruc, got %d", blockedRR.Code)
-	}
-}
