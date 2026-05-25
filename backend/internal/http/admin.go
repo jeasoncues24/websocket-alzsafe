@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 
 	"wsapi/internal/config"
 	"wsapi/internal/domain"
+	handlers "wsapi/internal/http/handlers"
 	"wsapi/internal/http/middleware"
 	"wsapi/internal/storage"
 	"wsapi/internal/whatsapp"
@@ -1389,7 +1389,7 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 
 	// — Validar configuración JWT —
 	if h.jwtCfg == nil {
-		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "configuracion JWT no disponible"}})
+		_ = handlers.WriteWSJSON(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "configuracion JWT no disponible"}})
 		return
 	}
 
@@ -1401,12 +1401,12 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	if token == "" {
-		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "Token requerido"}})
+		_ = handlers.WriteWSJSON(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "Token requerido"}})
 		return
 	}
 	claims, err := middleware.NewAuthMiddleware(h.jwtCfg, nil).ValidateToken(token)
 	if err != nil {
-		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "Token inválido"}})
+		_ = handlers.WriteWSJSON(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "Token inválido"}})
 		return
 	}
 	_ = claims
@@ -1414,12 +1414,18 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 	// — Resolver teléfono desde la ruta —
 	telefonoID, err := extractTelefonoIDFromAdminPath(r.URL.Path)
 	if err != nil || telefonoID <= 0 {
-		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "ID de teléfono inválido"}})
+		_ = handlers.WriteWSJSON(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "ID de teléfono inválido"}})
 		return
 	}
 	phone, err := h.telefonoStore.GetByID(telefonoID)
 	if err != nil || phone == nil {
-		_ = writeEvent(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "teléfono no encontrado"}})
+		_ = handlers.WriteWSJSON(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "teléfono no encontrado"}})
+		return
+	}
+
+	access := domain.PanelAccess{IsRoot: claims.IsRoot, IsAdminJWT: true}
+	if !access.CanAccessEmpresa(phone.EmpresaID) {
+		_ = handlers.WriteWSJSON(r.Context(), wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "acceso denegado a esta empresa"}})
 		return
 	}
 	accountID := whatsapp.NormalizeAccountID(phone.NumeroCompleto)
@@ -1457,7 +1463,7 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 	}()
 
 	// — Enviar estado inicial del teléfono —
-	if err := writeEvent(ctx, wsConn, outboundPayload{
+	if err := handlers.WriteWSJSON(ctx, wsConn, outboundPayload{
 		Event: "phone-info",
 		Data: map[string]any{
 			"telefono_id":    phone.ID,
@@ -1477,7 +1483,7 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 	// Esto evita duplicar sesiones cuando el WS reconecta sobre una sesión viva.
 	events, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
 	if err != nil {
-		_ = writeEvent(ctx, wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "error al iniciar conexión: " + err.Error()}})
+		_ = handlers.WriteWSJSON(ctx, wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "error al iniciar conexión: " + err.Error()}})
 		return
 	}
 
@@ -1496,13 +1502,13 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 				// Canal cerrado — la sesión terminó (conectó, desconectó, o timeout QR)
 				return
 			}
-			if err := writeEvent(ctx, wsConn, outboundPayload{Event: event.Event, Data: event.Data}); err != nil {
+			if err := handlers.WriteWSJSON(ctx, wsConn, outboundPayload{Event: event.Event, Data: event.Data}); err != nil {
 				fmt.Printf("[WARN] WS write event failed account=%s: %v\n", accountID, err)
 				return
 			}
 		case <-ticker.C:
 			// Keepalive ping — mantiene el WS activo a través de proxies con idle timeout
-			if err := writeEvent(ctx, wsConn, outboundPayload{Event: "ping", Data: map[string]any{}}); err != nil {
+			if err := handlers.WriteWSJSON(ctx, wsConn, outboundPayload{Event: "ping", Data: map[string]any{}}); err != nil {
 				fmt.Printf("[WARN] WS ping failed account=%s: %v\n", accountID, err)
 				return
 			}
@@ -1601,11 +1607,4 @@ type outboundPayload struct {
 	Data  map[string]any `json:"data"`
 }
 
-func writeEvent(ctx context.Context, c *websocket.Conn, payload outboundPayload) error {
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	return c.Write(ctx, websocket.MessageText, b)
-}
 

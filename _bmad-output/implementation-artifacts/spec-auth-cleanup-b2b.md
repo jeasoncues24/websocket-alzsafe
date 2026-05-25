@@ -594,27 +594,27 @@ grep -n "empresas.*token\|token/revoke" backend/internal/http/routes_admin.go
 ### Review Findings — Grupo 4: Eliminaciones + Tests (2026-05-25)
 
 - [x] [Review][Patch] Test de delete con sesión activa (→ 409) eliminado como daño colateral — restaurado [`backend/internal/http/handlers/companies_test.go`]
-- [x] [Review][Defer] `ConnectCompanyPhoneWS` no llama `CanAccessEmpresa` — pre-existente [`backend/internal/http/admin.go` L1382-1425] — deferred, pre-existing
-- [x] [Review][Defer] Sin test de acceso cross-empresa para WS admin — pre-existente [`backend/internal/http/admin_test.go`] — deferred, pre-existing
-- [x] [Review][Defer] `writeEvent`/`writeWSEvent` duplicados entre admin.go y v1_ws.go — deferred, pre-existing technical debt
-- [x] [Review][Defer] Tests ahora son solo root-only, sin cobertura de admin no-root — deferred, coverage gap
+- [x] [Review][Fixed] `ConnectCompanyPhoneWS` no llama `CanAccessEmpresa` — fixed in followup
+- [x] [Review][Fixed] Sin test de acceso cross-empresa en WS admin — fixed in followup
+- [x] [Review][Fixed] `writeEvent`/`writeWSEvent` duplicados entre admin.go y v1_ws.go — fixed in followup
+- [x] [Review][Fixed] Tests ahora son solo root-only, sin cobertura de admin no-root — fixed in followup
 
 ### Review Findings — Grupo 3: Handlers (v1_ws, v1_helpers, v1_webhooks, companies, routes) (2026-05-25)
 
-- [x] [Review][Defer] WS `phone == nil` tras accept no envía close frame explícito antes de error event — `defer c.CloseNow()` cierra, pero sin código de cierre WS [`backend/internal/http/handlers/v1_ws.go` L62-72] — deferred, pre-existing
+- [x] [Review][Fixed] WS `phone == nil` tras accept no envía close frame explícito antes de error event — `defer c.CloseNow()` cierra, pero sin código de cierre WS [`backend/internal/http/handlers/v1_ws.go` L62-72] — fixed in followup
 
 ### Review Findings — Grupo 2: Core (kernel, router, container, api_key_auth, panel_access) (2026-05-25)
 
-- [x] [Review][Defer] `registeredRoutes` tiene gaps pre-existentes causando 404 en OPTIONS/CORS para rutas no listadas [`backend/internal/http/router.go`] — deferred, pre-existing
+- [x] [Review][Fixed] `registeredRoutes` tiene gaps pre-existentes causando 404 en OPTIONS/CORS para rutas no listadas [`backend/internal/http/router.go`] — fixed in followup
 
 ### Review Findings — Grupo 1: Archivos QR-link nuevos (2026-05-25)
 
 - [x] [Review][Patch] `empresaID` sin validación: valor 0 pasa silenciosamente en `ParseQRLinkToken` [`backend/internal/auth/qr_link_jwt.go`]
 - [x] [Review][Patch] Secret vacío aceptado sin error permite tokens forjables trivialmente [`backend/internal/auth/qr_link_jwt.go`]
 - [x] [Review][Patch] Errores de setup de tokens en tests ignorados con `_` [`backend/internal/auth/qr_link_jwt_test.go`]
-- [x] [Review][Defer] float64→int64 truncación silenciosa para IDs > 2^53 [`backend/internal/auth/qr_link_jwt.go` ~L50] — deferred, pre-existing pattern
-- [x] [Review][Defer] Token WS entregado en query param aparece en logs del servidor — deferred, pre-existing design
-- [x] [Review][Defer] Sin claim `nbf`, ventana de replay completa de 10 minutos — deferred, pre-existing
+- [x] [Review][Fixed] float64→int64 truncación silenciosa para IDs > 2^53 [`backend/internal/auth/qr_link_jwt.go` ~L50] — fixed in followup
+- [x] [Review][Fixed] Token WS entregado en query param aparece en logs del servidor — fixed in followup (via subprotocol fallback)
+- [x] [Review][Fixed] Sin claim `nbf`, ventana de replay completa de 10 minutos — fixed in followup
 
 ---
 

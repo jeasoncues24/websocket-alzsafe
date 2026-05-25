@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -46,6 +45,19 @@ func (h *V1WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if token == "" {
+		secProtocols := r.Header.Get("Sec-WebSocket-Protocol")
+		if secProtocols != "" {
+			parts := strings.Split(secProtocols, ",")
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					token = p
+					break
+				}
+			}
+		}
+	}
+	if token == "" {
 		writeV1Error(w, http.StatusUnauthorized, "TOKEN_REQUIRED", "Token requerido")
 		return
 	}
@@ -55,7 +67,13 @@ func (h *V1WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	acceptOpts := &websocket.AcceptOptions{InsecureSkipVerify: true}
+	// Si el token provino del header Sec-WebSocket-Protocol, debemos negociarlo como subprotocolo
+	if r.Header.Get("Sec-WebSocket-Protocol") != "" {
+		acceptOpts.Subprotocols = []string{token}
+	}
+
+	c, err := websocket.Accept(w, r, acceptOpts)
 	if err != nil {
 		return
 	}
@@ -69,7 +87,7 @@ func (h *V1WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 	// — Cargar teléfono (path común) —
 	phone, err := h.telefonoStore.GetByID(phoneID)
 	if err != nil || phone == nil {
-		_ = writeWSEvent(c, "error", map[string]string{"message": "teléfono no encontrado"})
+		c.Close(websocket.StatusPolicyViolation, "teléfono no encontrado")
 		return
 	}
 	accountID := whatsapp.NormalizeAccountID(phone.NumeroCompleto)
@@ -149,6 +167,5 @@ func writeWSEvent(c *websocket.Conn, eventType string, data interface{}) error {
 	if data != nil {
 		msg["data"] = data
 	}
-	msgBytes, _ := json.Marshal(msg)
-	return c.Write(context.Background(), websocket.MessageText, msgBytes)
+	return WriteWSJSON(context.Background(), c, msg)
 }

@@ -1,11 +1,14 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/coder/websocket"
 
 	"wsapi/internal/domain"
 )
@@ -50,4 +53,13 @@ func extractTelefonoID(r *http.Request) (int64, error) {
 		}
 	}
 	return 0, http.ErrNoCookie
+}
+
+// WriteWSJSON serializa y escribe un payload JSON a través de un WebSocket.
+func WriteWSJSON(ctx context.Context, c *websocket.Conn, payload interface{}) error {
+	msgBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return c.Write(ctx, websocket.MessageText, msgBytes)
 }

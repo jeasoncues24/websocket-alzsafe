@@ -162,3 +162,51 @@ func TestConnectCompanyPhoneWS_QRSessionCleanedOnDisconnect(t *testing.T) {
 		t.Errorf("expected manager to have cleaned up account %s after QR disconnect", accountID)
 	}
 }
+
+// TestConnectCompanyPhoneWS_NonRootAccess verifica que un admin no-root con token válido
+// puede conectarse exitosamente al WS si la verificación de acceso a la empresa (CanAccessEmpresa) lo permite.
+func TestConnectCompanyPhoneWS_NonRootAccess(t *testing.T) {
+	db := newAdminPhoneTestDB(t)
+	insertAdminPhone(t, db, 1, "+51", "999888777", "+51999888777")
+
+	secret := "test-secret"
+	h := &AdminHandler{
+		telefonoStore: storage.NewTelefonoStore(db),
+		sessionStore:  storage.NewSessionStore(),
+		manager:       whatsapp.NewManager(),
+		jwtCfg:        &config.JWTConfig{Secret: secret, Issuer: "wsapi"},
+	}
+
+	srv := httptest.NewServer(stdhttp.HandlerFunc(h.ConnectCompanyPhoneWS))
+	defer srv.Close()
+
+	// Crear token no-root
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id":  float64(2),
+		"username": "admin_normal",
+		"rol":      "admin",
+		"is_root":  false,
+		"exp":      time.Now().Add(time.Hour).Unix(),
+	}).SignedString([]byte(secret))
+	if err != nil {
+		t.Fatalf("failed to sign non-root token: %v", err)
+	}
+
+	wsURL := "ws" + srv.URL[4:] + "/api/admin/telefonos/1/connect/ws?token=" + token
+
+	ctx := context.Background()
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial failed for non-root admin: %v", err)
+	}
+	defer conn.CloseNow()
+
+	// Leer el evento inicial y confirmar que fue exitoso (no un error por falta de permisos)
+	evt := readWSEvent(t, ctx, conn)
+	if evt["event"] == "error" {
+		t.Errorf("expected successful connection, got error event: %v", evt["data"])
+	}
+	if evt["event"] != "phone-info" {
+		t.Errorf("expected phone-info event, got %v", evt["event"])
+	}
+}

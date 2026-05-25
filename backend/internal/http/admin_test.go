@@ -47,6 +47,37 @@ func TestAdminGetCompanyPhone(t *testing.T) {
 	}
 }
 
+func TestAdminGetCompanyPhone_NonRoot(t *testing.T) {
+	db := newAdminPhoneTestDB(t)
+	store := storage.NewTelefonoStore(db)
+	phoneID := insertAdminPhone(t, db, 1, "+51", "999888777", "+51999888777")
+
+	h := &AdminHandler{telefonoStore: store}
+	req := httptest.NewRequest(stdhttp.MethodGet, "/api/admin/telefonos/1", nil)
+	// Non-root admin token claims
+	req = req.WithContext(domain.WithAdminJWTClaims(req.Context(), &domain.AdminJWTClaims{
+		UserID:   2,
+		Username: "admin_regular",
+		Rol:      domain.RoleAdmin,
+		IsRoot:   false,
+	}))
+	rr := httptest.NewRecorder()
+
+	h.GetCompanyPhone(rr, req)
+
+	if rr.Code != stdhttp.StatusOK {
+		t.Fatalf("expected 200 for non-root admin, got %d", rr.Code)
+	}
+
+	var resp domain.TelefonoResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid response: %v", err)
+	}
+	if !resp.OK || resp.Telefono == nil || resp.Telefono.ID != phoneID {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+}
+
 func TestAdminStartCompanyPhoneConnection(t *testing.T) {
 	db := newAdminPhoneTestDB(t)
 	store := storage.NewTelefonoStore(db)
