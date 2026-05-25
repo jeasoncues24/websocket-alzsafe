@@ -23,7 +23,7 @@ func NewDB(cfg *config.Config) (*sql.DB, error) {
 	// [POR QUÉ] parseTime=true convierte columnas DATETIME/TIMESTAMP directamente a time.Time en Go.
 	// charset=utf8mb4 soporta emojis y caracteres especiales (importante para mensajes WhatsApp).
 	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&collation=utf8mb4_unicode_ci",
+		"%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=America%%2FLima&charset=utf8mb4&collation=utf8mb4_unicode_ci",
 		cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName,
 	)
 

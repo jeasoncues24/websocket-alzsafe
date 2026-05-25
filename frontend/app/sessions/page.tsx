@@ -19,6 +19,17 @@ function relativeTime(ts: string): string {
   return `hace ${Math.floor(h / 24)}d`
 }
 
+function formatLocalTime(ts: string): string {
+  return new Date(ts).toLocaleString("es-PE", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+}
+
 function EventIcon({ type }: { type: string }) {
   switch (type) {
     case "connected": return <Wifi className="h-3 w-3 text-green-500" />
@@ -193,9 +204,13 @@ export default function SessionsPage() {
                   </CardDescription>
                   <CardDescription>
                     Última conexión:{" "}
-                    {session.last_connected
-                      ? relativeTime(session.last_connected)
-                      : "Nunca"}
+                    {session.last_connected ? (
+                      <span title={formatLocalTime(session.last_connected)}>
+                        {relativeTime(session.last_connected)}
+                        {" · "}
+                        <span className="font-mono">{formatLocalTime(session.last_connected)}</span>
+                      </span>
+                    ) : "Nunca"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -240,7 +255,9 @@ export default function SessionsPage() {
                         <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
                           <EventIcon type={evt.type} />
                           <span className="capitalize">{evt.type}</span>
-                          <span className="ml-auto">{relativeTime(evt.timestamp)}</span>
+                          <span className="ml-auto font-mono" title={formatLocalTime(evt.timestamp)}>
+                            {formatLocalTime(evt.timestamp)}
+                          </span>
                           {evt.details && (
                             <span className="text-xs opacity-60">{evt.details}</span>
                           )}

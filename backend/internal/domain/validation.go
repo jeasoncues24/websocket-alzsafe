@@ -140,6 +140,7 @@ func ValidateBroadcastRequest(req *BroadcastRequest) *ValidationError {
 
 func validatePhoneNumber(phone string) *ValidationError {
 	phone = strings.TrimSpace(phone)
+	phone = strings.TrimPrefix(phone, "+")
 	if len(phone) < 11 {
 		return &ValidationError{Code: ErrorCodeInvalidPhoneFormat, Message: "phone number must be at least 11 digits"}
 	}

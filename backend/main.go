@@ -62,7 +62,7 @@ func runMigrateCommand(migrateCmd *flag.FlagSet, verbose *bool) {
 		os.Exit(1)
 	}
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&multiStatements=true",
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=America%%2FLima&multiStatements=true",
 		cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName))
 	if err != nil {
 		fmt.Printf("Error: Cannot connect to database: %v\n", err)

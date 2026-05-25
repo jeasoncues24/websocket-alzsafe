@@ -9,16 +9,18 @@ import { Label } from "@/components/ui/label"
 import { useTheme } from "next-themes"
 import { useAppStore } from "@/stores/useAppStore"
 import { updateMeProfile, updateMePassword } from "@/lib/api"
-import { 
-  Moon, 
-  Sun, 
-  Monitor, 
-  Info, 
-  UserRound, 
-  KeyRound, 
-  Loader2, 
-  CheckCircle2, 
-  AlertCircle 
+import {
+  Moon,
+  Sun,
+  Monitor,
+  Info,
+  UserRound,
+  KeyRound,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  EyeOff
 } from "lucide-react"
 
 export default function SettingsPage() {
@@ -39,6 +41,11 @@ export default function SettingsPage() {
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [passwordSuccess, setPasswordSuccess] = useState("")
   const [passwordError, setPasswordError] = useState("")
+
+  // Password Visibility
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   // Load User Data
   useEffect(() => {
@@ -121,6 +128,24 @@ export default function SettingsPage() {
       setPasswordLoading(false)
     }
   }
+
+  function getPasswordStrength(password: string): { level: number; label: string; barColor: string; textColor: string } {
+    if (!password) return { level: 0, label: "", barColor: "", textColor: "" }
+    let score = 0
+    if (password.length >= 8) score++
+    if (password.length >= 12) score++
+    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++
+    if (/[0-9]/.test(password)) score++
+    if (/[^A-Za-z0-9]/.test(password)) score++
+    if (score <= 1) return { level: 1, label: "Débil",   barColor: "bg-red-500",     textColor: "text-red-500" }
+    if (score === 2) return { level: 2, label: "Regular", barColor: "bg-amber-500",   textColor: "text-amber-500" }
+    if (score === 3) return { level: 3, label: "Buena",   barColor: "bg-blue-500",    textColor: "text-blue-500" }
+    return             { level: 4, label: "Fuerte",  barColor: "bg-emerald-500", textColor: "text-emerald-500" }
+  }
+
+  const passwordStrength = getPasswordStrength(newPassword)
+  const passwordsMatch = confirmPassword.length > 0 && newPassword === confirmPassword
+  const passwordsMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword
 
   return (
     <div className="space-y-6">
@@ -233,43 +258,120 @@ export default function SettingsPage() {
                     </div>
                   )}
 
+                  {/* Contraseña actual */}
                   <div className="space-y-1">
                     <Label htmlFor="currentPassword">Contraseña actual</Label>
-                    <Input
-                      id="currentPassword"
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="••••••••"
-                      disabled={passwordLoading}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="currentPassword"
+                        type={showCurrentPassword ? "text" : "password"}
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder="••••••••"
+                        disabled={passwordLoading}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword((v) => !v)}
+                        disabled={passwordLoading}
+                        aria-label={showCurrentPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:pointer-events-none"
+                      >
+                        {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
 
+                  {/* Nueva contraseña + fortaleza */}
                   <div className="space-y-1">
                     <Label htmlFor="newPassword">Nueva contraseña</Label>
-                    <Input
-                      id="newPassword"
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="••••••••"
-                      disabled={passwordLoading}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="newPassword"
+                        type={showNewPassword ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="••••••••"
+                        disabled={passwordLoading}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword((v) => !v)}
+                        disabled={passwordLoading}
+                        aria-label={showNewPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:pointer-events-none"
+                      >
+                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {/* Barra de fortaleza */}
+                    {newPassword && (
+                      <div className="space-y-1 pt-1">
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4].map((i) => (
+                            <div
+                              key={i}
+                              className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
+                                passwordStrength.level >= i ? passwordStrength.barColor : "bg-muted"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <p className={`text-xs font-medium ${passwordStrength.textColor}`}>
+                          Fortaleza: {passwordStrength.label}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
+                  {/* Confirmar contraseña + indicador de coincidencia */}
                   <div className="space-y-1">
                     <Label htmlFor="confirmPassword">Confirmar nueva contraseña</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
-                      disabled={passwordLoading}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        disabled={passwordLoading}
+                        className={`pr-10 transition-colors ${
+                          passwordsMismatch ? "border-red-500 focus-visible:ring-red-500/30" :
+                          passwordsMatch   ? "border-emerald-500 focus-visible:ring-emerald-500/30" : ""
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((v) => !v)}
+                        disabled={passwordLoading}
+                        aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:pointer-events-none"
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {/* Indicador de coincidencia en tiempo real */}
+                    {passwordsMatch && (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-500 motion-enter-up">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Las contraseñas coinciden
+                      </div>
+                    )}
+                    {passwordsMismatch && (
+                      <div className="flex items-center gap-1.5 text-xs text-red-500 motion-enter-up">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        Las contraseñas no coinciden
+                      </div>
+                    )}
                   </div>
 
-                  <Button type="submit" disabled={passwordLoading} className="w-full">
+                  <Button
+                    type="submit"
+                    disabled={passwordLoading || passwordsMismatch}
+                    className="w-full"
+                  >
                     {passwordLoading ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
