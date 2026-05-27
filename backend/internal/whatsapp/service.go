@@ -191,6 +191,10 @@ func (s *Service) StopSession(accountID string) {
 
 func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 	defer func() {
+		runtime.cancel()
+		if runtime.client != nil {
+			runtime.client.Disconnect()
+		}
 		if runtime.storage != nil {
 			_ = runtime.storage.Close()
 		}
@@ -225,14 +229,22 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 	emitActive("Sesion en proceso de inicializacion", false, nil)
 
 	type disconnectEvent struct {
-		reason string
-		detail string
+		reason    string
+		detail    string
+		permanent bool
 	}
+	connectedCh := make(chan struct{}, 1)
 	disconnectCh := make(chan disconnectEvent, 1)
 	handlerID := runtime.client.AddEventHandler(func(evt interface{}) {
 		switch evt.(type) {
 		case *waEvents.Message, *waEvents.Receipt:
 			go s.handleWhatsAppEvent(accountID, evt)
+			return
+		case *waEvents.Connected:
+			select {
+			case connectedCh <- struct{}{}:
+			default:
+			}
 			return
 		}
 
@@ -242,13 +254,16 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 			disconnect.reason = "disconnect"
 		case *waEvents.StreamReplaced:
 			disconnect.reason = "stream_replaced"
+			disconnect.permanent = true
 		case *waEvents.LoggedOut:
 			disconnect.reason = "logged_out"
+			disconnect.permanent = true
 			if v.OnConnect {
 				disconnect.detail = v.Reason.String()
 			}
 		case *waEvents.TemporaryBan:
 			disconnect.reason = "temporary_ban"
+			disconnect.permanent = true
 			disconnect.detail = v.String()
 		case *waEvents.ConnectFailure:
 			disconnect.reason = "connect_failure"
@@ -262,6 +277,8 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 		}
 	})
 	defer runtime.client.RemoveEventHandler(handlerID)
+
+	const reconnectGracePeriod = 75 * time.Second
 
 	waitForDisconnect := func() {
 		for {
@@ -278,9 +295,56 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 				if disconnect.detail != "" {
 					extra["detail"] = disconnect.detail
 				}
-				s.markDisconnected(accountID, reason)
-				emitActive("Sesion desconectada", false, extra)
-				return
+				if disconnect.permanent {
+					s.markDisconnected(accountID, reason)
+					emitActive("Sesion desconectada", false, extra)
+					return
+				}
+				
+				// Desconexión temporal: whatsmeow lanza autoReconnect en paralelo.
+				// Primero, vaciar cualquier evento obsoleto del canal connectedCh para evitar bypass inmediato.
+				for len(connectedCh) > 0 {
+					<-connectedCh
+				}
+				
+				// Esperar a que confirme reconexión antes de declarar la sesión muerta o recibir desconexión permanente.
+				timer := time.NewTimer(reconnectGracePeriod)
+				reconnected := false
+				expired := false
+				
+				for !reconnected && !expired {
+					select {
+					case <-connectedCh:
+						timer.Stop()
+						s.markConnected(accountID)
+						emitActive("Sesion activa", true, nil)
+						reconnected = true
+					case d := <-disconnectCh:
+						if d.permanent {
+							timer.Stop()
+							s.markDisconnected(accountID, d.reason)
+							extraPermanent := map[string]any{"reason": d.reason, "requiresNewQR": true}
+							if d.detail != "" {
+								extraPermanent["detail"] = d.detail
+							}
+							emitActive("Sesion desconectada", false, extraPermanent)
+							return
+						}
+						// Si es otra desconexión temporal, actualizamos la razón/detalle pero seguimos esperando la reconexión.
+						reason = d.reason
+						if d.detail != "" {
+							extra["detail"] = d.detail
+						}
+					case <-timer.C:
+						s.markDisconnected(accountID, reason)
+						emitActive("Sesion desconectada", false, extra)
+						expired = true
+						return
+					case <-runtime.ctx.Done():
+						timer.Stop()
+						return
+					}
+				}
 			case <-runtime.ctx.Done():
 				return
 			}
@@ -301,7 +365,7 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 
 	if qrErr != nil {
 		logger.Infof("Device already logged in for %s, waiting for connection...", accountID)
-		if waitForConnection(runtime.client, 10*time.Second) {
+		if waitForConnection(runtime.client, 30*time.Second) {
 			s.markConnected(accountID)
 			emitActive("Sesion activa", true, nil)
 		} else if runtime.ctx.Err() == nil {
