@@ -33,15 +33,106 @@ type Service struct {
 
 	mu       sync.Mutex
 	runtimes map[string]*sessionRuntime
-	starting map[string]bool
 }
 
+// sessionRuntime representa UNA sola conexión WhatsApp (un cliente whatsmeow) que
+// puede ser observada por múltiples WebSockets simultáneamente vía fan-out. Los
+// eventos producidos por runSession se difunden a todos los suscriptores; nunca
+// se abre más de una conexión WhatsApp por accountID.
 type sessionRuntime struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	client  *whatsmeow.Client
 	storage *sqlstore.Container
-	events  chan SessionEvent
+	dbPath  string
+
+	mu          sync.Mutex
+	subscribers map[chan SessionEvent]struct{}
+	last        *SessionEvent
+	closed      bool
+	everActive  bool // true una vez que la sesión llegó a conectarse al menos una vez
+}
+
+// markEverActive marca que la sesión llegó a estar activa. Es sticky: una sesión
+// que ya se conectó debe sobrevivir aunque no queden observadores (cerrar la
+// pestaña del panel no debe desconectar el WhatsApp del cliente).
+func (rt *sessionRuntime) markEverActive() {
+	rt.mu.Lock()
+	rt.everActive = true
+	rt.mu.Unlock()
+}
+
+// subscribe registra un nuevo observador y devuelve su canal junto a una función
+// para darse de baja. Si ya hay un último evento conocido, se entrega de inmediato
+// como snapshot para que el observador vea el estado actual sin esperar.
+func (rt *sessionRuntime) subscribe() (<-chan SessionEvent, func()) {
+	ch := make(chan SessionEvent, 16)
+
+	rt.mu.Lock()
+	if rt.closed {
+		if rt.last != nil {
+			ch <- *rt.last
+		}
+		close(ch)
+		rt.mu.Unlock()
+		return ch, func() {}
+	}
+	if rt.subscribers == nil {
+		rt.subscribers = make(map[chan SessionEvent]struct{})
+	}
+	rt.subscribers[ch] = struct{}{}
+	if rt.last != nil {
+		select {
+		case ch <- *rt.last:
+		default:
+		}
+	}
+	rt.mu.Unlock()
+
+	var once sync.Once
+	return ch, func() {
+		once.Do(func() {
+			rt.mu.Lock()
+			if _, ok := rt.subscribers[ch]; ok {
+				delete(rt.subscribers, ch)
+				close(ch)
+			}
+			// Si se fue el último observador y la sesión nunca llegó a estar
+			// activa (QR abandonado), cancelamos el runtime para no dejar una
+			// sesión QR colgada. Las sesiones ya conectadas se mantienen vivas.
+			abandon := len(rt.subscribers) == 0 && !rt.everActive
+			rt.mu.Unlock()
+			if abandon && rt.cancel != nil {
+				rt.cancel()
+			}
+		})
+	}
+}
+
+// broadcast difunde un evento a todos los suscriptores de forma no bloqueante y
+// guarda el último estado para futuros suscriptores. Nunca bloquea al productor.
+func (rt *sessionRuntime) broadcast(evt SessionEvent) {
+	rt.mu.Lock()
+	rt.last = &evt
+	for ch := range rt.subscribers {
+		select {
+		case ch <- evt:
+		default:
+			// Observador lento: descartamos para no bloquear runSession.
+		}
+	}
+	rt.mu.Unlock()
+}
+
+// closeAll cierra todos los canales de suscriptores y marca el runtime terminado.
+func (rt *sessionRuntime) closeAll() {
+	rt.mu.Lock()
+	rt.closed = true
+	for ch := range rt.subscribers {
+		close(ch)
+	}
+	rt.subscribers = nil
+	rt.mu.Unlock()
 }
 
 func NewService(manager *Manager, sessionStore *storage.SessionStore, telefonoStore *storage.TelefonoStore, webhookStore *storage.WebhookStore, baseDir string) *Service {
@@ -54,7 +145,6 @@ func NewService(manager *Manager, sessionStore *storage.SessionStore, telefonoSt
 		webhookEmitter: NewWebhookEmitter(webhookStore, telefonoStore, WebhookEmitterConfig{}),
 		baseDir:        baseDir,
 		runtimes:       make(map[string]*sessionRuntime),
-		starting:       make(map[string]bool),
 	}
 	if manager != nil {
 		manager.attachService(s)
@@ -62,80 +152,49 @@ func NewService(manager *Manager, sessionStore *storage.SessionStore, telefonoSt
 	return s
 }
 
-func (s *Service) StartSession(accountID string) (<-chan SessionEvent, error) {
+// StartSession inicia (o se une a) la sesión WhatsApp de accountID y devuelve un
+// canal de eventos junto a una función de baja (unsubscribe). Es idempotente: si
+// ya existe un runtime para el accountID, el llamador se suscribe como observador
+// adicional al MISMO runtime — no se abre una segunda conexión WhatsApp. El canal
+// permanece vivo hasta que el runtime termina o el llamador llama a unsubscribe.
+func (s *Service) StartSession(accountID string) (<-chan SessionEvent, func(), error) {
 	accountID = NormalizeAccountID(accountID)
 	if accountID == "" {
-		return nil, ErrInvalidAccountID
+		return nil, nil, ErrInvalidAccountID
 	}
 
 	s.mu.Lock()
 	if existing, ok := s.runtimes[accountID]; ok {
-		ch := make(chan SessionEvent, 2)
-		if s.sessionStore != nil {
-			if state, ok := s.sessionStore.Get(accountID); ok {
-				ch <- s.eventFromState(accountID, state)
-			} else {
-				ch <- SessionEvent{
-					Event: "active-" + accountID,
-					Data: map[string]any{
-						"message":  "Sesion en proceso de inicializacion",
-						"isActive": false,
-					},
-				}
-			}
-		} else if existing.client != nil && existing.client.IsConnected() {
-			ch <- SessionEvent{
-				Event: "active-" + accountID,
-				Data: map[string]any{
-					"message":  "Sesion activa",
-					"isActive": true,
-				},
-			}
-		}
-		close(ch)
 		s.mu.Unlock()
-		return ch, nil
+		ch, unsub := existing.subscribe()
+		return ch, unsub, nil
 	}
-	if s.starting[accountID] {
-		ch := make(chan SessionEvent, 2)
-		if s.sessionStore != nil {
-			if state, ok := s.sessionStore.Get(accountID); ok {
-				ch <- s.eventFromState(accountID, state)
-			} else {
-				ch <- SessionEvent{
-					Event: "active-" + accountID,
-					Data: map[string]any{
-						"message":  "Sesion en proceso de inicializacion",
-						"isActive": false,
-					},
-				}
-			}
-		} else {
-			ch <- SessionEvent{
-				Event: "active-" + accountID,
-				Data: map[string]any{
-					"message":  "Sesion en proceso de inicializacion",
-					"isActive": false,
-				},
-			}
-		}
-		close(ch)
-		s.mu.Unlock()
-		return ch, nil
+
+	ctx, cancel := context.WithCancel(context.Background())
+	runtime := &sessionRuntime{
+		ctx:         ctx,
+		cancel:      cancel,
+		dbPath:      sqliteDBPath(s.baseDir, accountID),
+		subscribers: make(map[chan SessionEvent]struct{}),
 	}
-	s.starting[accountID] = true
+	s.runtimes[accountID] = runtime
 	s.mu.Unlock()
-	defer s.clearStarting(accountID)
+
+	if s.sessionStore != nil {
+		s.sessionStore.SetInitializing(accountID)
+	}
 
 	container, err := openSQLiteContainer(context.Background(), s.baseDir, accountID)
 	if err != nil {
-		return nil, err
+		s.abortRuntime(accountID, runtime)
+		return nil, nil, err
 	}
 
 	device, err := container.GetFirstDevice(context.Background())
 	if err != nil {
 		_ = container.Close()
-		return nil, fmt.Errorf("no se pudo cargar device whatsapp: %w", err)
+		s.abortRuntime(accountID, runtime)
+		return nil, nil, fmt.Errorf("no se pudo cargar device whatsapp: %w", err)
 	}
 	if device == nil {
 		device = container.NewDevice()
@@ -143,35 +202,31 @@ func (s *Service) StartSession(accountID string) (<-chan SessionEvent, error) {
 
 	clientLog := NewWhatsAppClientLogger(accountID)
 	client := whatsmeow.NewClient(device, clientLog)
-	ctx, cancel := context.WithCancel(context.Background())
-	ch := make(chan SessionEvent, 8)
-	runtime := &sessionRuntime{
-		ctx:     ctx,
-		cancel:  cancel,
-		client:  client,
-		events:  ch,
-		storage: container,
-	}
-
-	s.mu.Lock()
-	s.runtimes[accountID] = runtime
-	s.mu.Unlock()
+	runtime.client = client
+	runtime.storage = container
 
 	if s.manager != nil {
 		s.manager.registerClient(accountID, client)
 	}
-	if s.sessionStore != nil {
-		s.sessionStore.SetInitializing(accountID)
-	}
 
+	// Suscribir al llamador antes de arrancar runSession para no perder eventos.
+	ch, unsub := runtime.subscribe()
 	go s.runSession(accountID, runtime)
-	return ch, nil
+	return ch, unsub, nil
 }
 
-func (s *Service) clearStarting(accountID string) {
+// abortRuntime libera un runtime que falló durante su preparación (antes de
+// arrancar runSession): cancela el contexto, cierra a los suscriptores y lo
+// elimina del registro.
+func (s *Service) abortRuntime(accountID string, runtime *sessionRuntime) {
+	runtime.cancel()
+	runtime.closeAll()
+	if s.manager != nil {
+		s.manager.clearClient(accountID)
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.starting, accountID)
+	delete(s.runtimes, accountID)
+	s.mu.Unlock()
 }
 
 func (s *Service) StopSession(accountID string) {
@@ -190,6 +245,11 @@ func (s *Service) StopSession(accountID string) {
 }
 
 func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
+	// purgeStore se activa cuando WhatsApp revoca la sesión (logged_out). En ese
+	// caso las credenciales en SQLite quedan inservibles y deben eliminarse: de lo
+	// contrario el siguiente intento carga un device enrolado, GetQRChannel falla y
+	// la sesión entra en bucle sin poder mostrar un QR nuevo.
+	purgeStore := false
 	defer func() {
 		runtime.cancel()
 		if runtime.client != nil {
@@ -198,23 +258,30 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 		if runtime.storage != nil {
 			_ = runtime.storage.Close()
 		}
+		if purgeStore && runtime.dbPath != "" {
+			if err := removeSQLiteArtifacts(runtime.dbPath); err != nil {
+				logger.Warnf("no se pudo eliminar sqlite tras logout para %s: %v", accountID, err)
+			} else {
+				logger.Infof("sqlite eliminado tras logout para %s; el proximo inicio mostrara un QR nuevo", accountID)
+			}
+		}
 		if s.manager != nil {
 			s.manager.clearClient(accountID)
 		}
 		s.mu.Lock()
 		delete(s.runtimes, accountID)
 		s.mu.Unlock()
-		close(runtime.events)
+		runtime.closeAll()
 	}()
 
 	emit := func(event string, data map[string]any) {
-		select {
-		case runtime.events <- SessionEvent{Event: event, Data: data}:
-		case <-runtime.ctx.Done():
-		}
+		runtime.broadcast(SessionEvent{Event: event, Data: data})
 	}
 
 	emitActive := func(message string, isActive bool, extra map[string]any) {
+		if isActive {
+			runtime.markEverActive()
+		}
 		data := map[string]any{"message": message, "isActive": isActive}
 		for k, v := range extra {
 			data[k] = v
@@ -296,6 +363,9 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 					extra["detail"] = disconnect.detail
 				}
 				if disconnect.permanent {
+					if disconnect.reason == "logged_out" {
+						purgeStore = true
+					}
 					s.markDisconnected(accountID, reason)
 					emitActive("Sesion desconectada", false, extra)
 					return
@@ -321,6 +391,9 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 						reconnected = true
 					case d := <-disconnectCh:
 						if d.permanent {
+							if d.reason == "logged_out" {
+								purgeStore = true
+							}
 							timer.Stop()
 							s.markDisconnected(accountID, d.reason)
 							extraPermanent := map[string]any{"reason": d.reason, "requiresNewQR": true}
@@ -512,16 +585,5 @@ func (s *Service) handleWhatsAppEvent(accountID string, evt interface{}) {
 				logger.Warnf("webhook emit message.status_update failed for %s message=%s: %v", accountID, string(messageID), err)
 			}
 		}
-	}
-}
-
-func (s *Service) eventFromState(accountID string, state storage.SessionState) SessionEvent {
-	switch state.Status {
-	case "active":
-		return SessionEvent{Event: "active-" + accountID, Data: map[string]any{"message": "Sesion activa", "isActive": true}}
-	case "qr_pending":
-		return SessionEvent{Event: "qr-" + accountID, Data: map[string]any{"message": "Escanee el codigo QR para iniciar sesion.", "qrString": state.QRString}}
-	default:
-		return SessionEvent{Event: "active-" + accountID, Data: map[string]any{"message": "Sesion desconectada", "isActive": false, "reason": state.Reason}}
 	}
 }

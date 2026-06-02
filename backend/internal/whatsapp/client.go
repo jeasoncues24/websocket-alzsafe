@@ -9,15 +9,17 @@ import (
 
 var ErrInvalidAccountID = errors.New("invalid account id")
 
-// StartSession starts a WhatsApp session and returns the stream of session events.
-// When no service is attached, it falls back to a minimal in-memory QR event for compatibility.
-func StartSession(manager *Manager, accountID string) (<-chan SessionEvent, error) {
+// StartSession starts a WhatsApp session and returns the stream of session events
+// junto a una función de baja (unsubscribe) que el llamador debe invocar al cerrar
+// su observador. When no service is attached, it falls back to a minimal in-memory
+// QR event for compatibility.
+func StartSession(manager *Manager, accountID string) (<-chan SessionEvent, func(), error) {
 	if manager == nil {
-		return nil, errors.New("manager is required")
+		return nil, nil, errors.New("manager is required")
 	}
 
 	if NormalizeAccountID(accountID) == "" {
-		return nil, ErrInvalidAccountID
+		return nil, nil, ErrInvalidAccountID
 	}
 
 	service := manager.getService()
@@ -39,7 +41,10 @@ func StartSession(manager *Manager, accountID string) (<-chan SessionEvent, erro
 			},
 		}
 		close(events)
-		return events, nil
+		// La baja limpia el placeholder (cliente nil) registrado en el manager,
+		// de modo que una sesión QR abandonada no quede registrada.
+		unsub := func() { manager.clearClient(NormalizeAccountID(accountID)) }
+		return events, unsub, nil
 	}
 
 	return service.StartSession(accountID)

@@ -94,33 +94,26 @@ func (h *V1WSHandler) HandleWS(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("[INFO] V1 WS QR-link opened phone=%d account=%s\n", phone.ID, accountID)
 
+	events, unsubscribe, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
+	if err != nil {
+		_ = writeWSEvent(c, "error", map[string]string{"message": "error al iniciar sesión: " + err.Error()})
+		return
+	}
+
 	defer func() {
+		// Darse de baja como observador. El runtime WhatsApp sigue vivo para otros
+		// observadores y para que la sesión persista; si era una sesión en QR sin
+		// completar, whatsmeow la termina sola al expirar el QR.
+		unsubscribe()
 		fmt.Printf("[INFO] V1 WS QR-link closed phone=%d account=%s reason=%v\n", phone.ID, accountID, ctx.Err())
-		if h.sessionStore != nil && h.manager != nil {
-			// Auditar el cierre del WebSocket en el historial de eventos en memoria
+		if h.sessionStore != nil {
 			reasonStr := "normal"
 			if ctx.Err() != nil {
 				reasonStr = ctx.Err().Error()
 			}
 			h.sessionStore.AppendEvent(phone.NumeroCompleto, "ws_closed", "WS cliente V1 cerrado: "+reasonStr)
-
-			// Evitar carrera: si el cliente ya se conectó activamente en segundo plano, no borrarlo
-			if client, ok := h.manager.Get(accountID); ok && client != nil && client.IsConnected() {
-				return
-			}
-			if state, ok := h.sessionStore.Get(phone.NumeroCompleto); ok {
-				if state.Status == "initializing" || state.Status == "qr_pending" {
-					h.manager.Delete(accountID)
-				}
-			}
 		}
 	}()
-
-	events, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
-	if err != nil {
-		_ = writeWSEvent(c, "error", map[string]string{"message": "error al iniciar sesión: " + err.Error()})
-		return
-	}
 
 	ticker := time.NewTicker(25 * time.Second)
 	defer ticker.Stop()

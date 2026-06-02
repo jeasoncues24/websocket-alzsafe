@@ -22,6 +22,8 @@ export default function AdminPhoneConnectPage() {
 
   const wsRef = useRef<WebSocket | null>(null);
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [phone, setPhone] = useState<EmpresaTelefonoSessionData | null>(null);
   const [countdown, setCountdown] = useState(60);
@@ -34,6 +36,10 @@ export default function AdminPhoneConnectPage() {
   const [copied, setCopied] = useState(false);
 
   const closeSocket = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -127,6 +133,8 @@ export default function AdminPhoneConnectPage() {
           }
 
           if (type.startsWith("qr-")) {
+            // Llegó un QR: la sesión progresó, reiniciamos el backoff de reconexión.
+            reconnectAttemptsRef.current = 0;
             mergePhone({
               telefono_id: telefonoId,
               status: "qr_pending",
@@ -149,6 +157,7 @@ export default function AdminPhoneConnectPage() {
               qr_string: isActive ? undefined : "",
             });
             if (isActive) {
+              reconnectAttemptsRef.current = 0;
               setCountdown(0);
               setSuccess(String(data.message ?? "Teléfono conectado"));
               setError("");
@@ -158,11 +167,23 @@ export default function AdminPhoneConnectPage() {
               setError(String(data.message ?? "Conexión cerrada") + detail);
               setSuccess("");
               setStarting(false);
-              // If a new QR is needed, reopen the socket after a brief pause
+              // Si se necesita un QR nuevo, reabrir el socket con backoff exponencial
+              // y un tope de intentos para evitar el bucle abrir/cerrar continuo.
               if (requiresNewQR) {
-                setTimeout(() => {
-                  openSocket();
-                }, 2000);
+                const MAX_RECONNECTS = 5;
+                const attempt = reconnectAttemptsRef.current;
+                if (attempt >= MAX_RECONNECTS) {
+                  setError(
+                    "No se pudo establecer la sesión tras varios intentos. Pulsa «Reconectar» para reintentar.",
+                  );
+                } else {
+                  reconnectAttemptsRef.current = attempt + 1;
+                  const delay = Math.min(2000 * 2 ** attempt, 30000); // 2s,4s,8s,16s,30s
+                  if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+                  reconnectTimerRef.current = setTimeout(() => {
+                    openSocket();
+                  }, delay);
+                }
               }
             }
             return;
@@ -345,7 +366,13 @@ export default function AdminPhoneConnectPage() {
                   Cancelar
                 </Button>
               ) : (
-                <Button onClick={openSocket} disabled={starting}>
+                <Button
+                  onClick={() => {
+                    reconnectAttemptsRef.current = 0;
+                    openSocket();
+                  }}
+                  disabled={starting}
+                >
                   {starting
                     ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     : <RefreshCw className="mr-2 h-4 w-4" />}

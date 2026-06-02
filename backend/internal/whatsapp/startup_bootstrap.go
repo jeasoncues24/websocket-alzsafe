@@ -139,7 +139,7 @@ func (b *StartupBootstrapper) Run(ctx context.Context) StartupBootstrapSummary {
 				defer wg.Done()
 				defer func() { <-sem }()
 
-				events, attempts, err := b.startSessionWithRetry(ctx, c.accountID)
+				events, unsubscribe, attempts, err := b.startSessionWithRetry(ctx, c.accountID)
 				mu.Lock()
 				summary.IntentosStart += attempts
 				if err != nil {
@@ -159,7 +159,8 @@ func (b *StartupBootstrapper) Run(ctx context.Context) StartupBootstrapSummary {
 					return
 				}
 
-				go func(ch <-chan SessionEvent) {
+				go func(ch <-chan SessionEvent, unsub func()) {
+					defer unsub()
 					for {
 						select {
 						case <-ctx.Done():
@@ -170,7 +171,7 @@ func (b *StartupBootstrapper) Run(ctx context.Context) StartupBootstrapSummary {
 							}
 						}
 					}
-				}(events)
+				}(events, unsubscribe)
 			}(c)
 		}
 
@@ -186,7 +187,7 @@ func (b *StartupBootstrapper) Run(ctx context.Context) StartupBootstrapSummary {
 	return summary
 }
 
-func (b *StartupBootstrapper) startSessionWithRetry(ctx context.Context, accountID string) (<-chan SessionEvent, int, error) {
+func (b *StartupBootstrapper) startSessionWithRetry(ctx context.Context, accountID string) (<-chan SessionEvent, func(), int, error) {
 	var lastErr error
 	attempts := 0
 	for attempt := 0; attempt <= b.config.MaxRetries; attempt++ {
@@ -194,16 +195,16 @@ func (b *StartupBootstrapper) startSessionWithRetry(ctx context.Context, account
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():
-				return nil, attempts, ctx.Err()
+				return nil, nil, attempts, ctx.Err()
 			case <-time.After(b.config.RetryDelay):
 			}
 		}
 
-		events, err := StartSession(b.manager, accountID)
+		events, unsubscribe, err := StartSession(b.manager, accountID)
 		if err == nil {
-			return events, attempts, nil
+			return events, unsubscribe, attempts, nil
 		}
 		lastErr = err
 	}
-	return nil, attempts, lastErr
+	return nil, nil, attempts, lastErr
 }

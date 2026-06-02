@@ -1358,13 +1358,14 @@ func (h *AdminHandler) StartCompanyPhoneConnection(w http.ResponseWriter, r *htt
 		return
 	}
 
-	events, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
+	events, unsubscribe, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
 	if err != nil {
 		writeAdminError(w, http.StatusInternalServerError, "error al iniciar conexión: "+err.Error())
 		return
 	}
 
 	go func() {
+		defer unsubscribe()
 		for range events {
 		}
 	}()
@@ -1455,29 +1456,21 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 	ctx := r.Context()
 
 	// — Cleanup al cerrar el WS (por cualquier causa) —
-	// Si la sesión estaba en QR o initializing cuando el WS se cerró, cancelamos
-	// el runtime de la sesión para liberar el goroutine, SQLite y canal de eventos.
-	// Sesiones en estado "active" no se interrumpen — el cliente WhatsApp permanece conectado.
+	// El runtime WhatsApp es compartido entre todos los observadores WS; cerrar
+	// este WS solo da de baja a este observador, nunca cancela la sesión. Una
+	// sesión abandonada durante el QR la termina whatsmeow al expirar el código.
+	var unsubscribe func()
 	defer func() {
+		if unsubscribe != nil {
+			unsubscribe()
+		}
 		fmt.Printf("[INFO] WS connect closed telefono=%d account=%s reason=%v\n", phone.ID, accountID, ctx.Err())
-		if h.sessionStore != nil && h.manager != nil {
-			// Auditar el cierre del WebSocket en el historial de eventos en memoria
+		if h.sessionStore != nil {
 			reasonStr := "normal"
 			if ctx.Err() != nil {
 				reasonStr = ctx.Err().Error()
 			}
 			h.sessionStore.AppendEvent(phone.NumeroCompleto, "ws_closed", "WS admin cerrado: "+reasonStr)
-
-			// Evitar carrera: si el cliente ya se conectó activamente en segundo plano, no borrarlo
-			if client, ok := h.manager.Get(accountID); ok && client != nil && client.IsConnected() {
-				return
-			}
-			if state, ok := h.sessionStore.Get(phone.NumeroCompleto); ok {
-				if state.Status == "initializing" || state.Status == "qr_pending" {
-					// Sesión abandonada durante QR — cancelar runtime para evitar fuga de goroutine
-					h.manager.Delete(accountID)
-				}
-			}
 		}
 	}()
 
@@ -1498,13 +1491,15 @@ func (h *AdminHandler) ConnectCompanyPhoneWS(w http.ResponseWriter, r *http.Requ
 
 	// — Iniciar o unirse a sesión existente —
 	// StartSession es idempotente: si ya existe un runtime para este accountID,
-	// devuelve un canal sintético con el estado actual y no crea una segunda goroutine.
-	// Esto evita duplicar sesiones cuando el WS reconecta sobre una sesión viva.
-	events, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
+	// este WS se suscribe como observador adicional al MISMO cliente WhatsApp.
+	// No se abre una segunda conexión WhatsApp; el fan-out reenvía los eventos en
+	// vivo (QR, connected, disconnected) a todos los observadores simultáneos.
+	events, unsub, err := whatsapp.StartSession(h.manager, phone.NumeroCompleto)
 	if err != nil {
 		_ = handlers.WriteWSJSON(ctx, wsConn, outboundPayload{Event: "error", Data: map[string]any{"message": "error al iniciar conexión: " + err.Error()}})
 		return
 	}
+	unsubscribe = unsub
 
 	// — Keepalive: enviar ping cada 25s para evitar que proxies corten la conexión idle —
 	ticker := time.NewTicker(25 * time.Second)

@@ -25,10 +25,11 @@ func TestSanitizeSQLiteFilename(t *testing.T) {
 func TestStartSessionFallbackEmitsSnapshotEvents(t *testing.T) {
 	manager := NewManager()
 
-	events, err := StartSession(manager, " 20123456789 ")
+	events, unsubscribe, err := StartSession(manager, " 20123456789 ")
 	if err != nil {
 		t.Fatalf("StartSession returned error: %v", err)
 	}
+	defer unsubscribe()
 
 	var got []SessionEvent
 	for event := range events {

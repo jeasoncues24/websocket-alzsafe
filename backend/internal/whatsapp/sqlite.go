@@ -12,6 +12,15 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// sqliteDBPath calcula la ruta del archivo SQLite de un accountID, aplicando el
+// mismo baseDir por defecto y saneo de nombre que usa openSQLiteContainer.
+func sqliteDBPath(baseDir, accountID string) string {
+	if strings.TrimSpace(baseDir) == "" {
+		baseDir = "sessions/whatsappmeow"
+	}
+	return filepath.Join(baseDir, sanitizeSQLiteFilename(accountID)+".db")
+}
+
 func openSQLiteContainer(ctx context.Context, baseDir, accountID string) (*sqlstore.Container, error) {
 	if strings.TrimSpace(baseDir) == "" {
 		baseDir = "sessions/whatsappmeow"
@@ -20,7 +29,7 @@ func openSQLiteContainer(ctx context.Context, baseDir, accountID string) (*sqlst
 		return nil, fmt.Errorf("no se pudo crear el directorio sqlite: %w", err)
 	}
 
-	path := filepath.Join(baseDir, sanitizeSQLiteFilename(accountID)+".db")
+	path := sqliteDBPath(baseDir, accountID)
 	container, err := openSQLiteContainerAtPath(ctx, path, accountID)
 	if err == nil {
 		return container, nil
