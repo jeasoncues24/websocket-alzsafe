@@ -251,6 +251,7 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 	// la sesión entra en bucle sin poder mostrar un QR nuevo.
 	purgeStore := false
 	defer func() {
+		logger.Infof("[SESSION] %s terminó (purge_sqlite=%v)", accountID, purgeStore)
 		runtime.cancel()
 		if runtime.client != nil {
 			runtime.client.Disconnect()
@@ -289,6 +290,7 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 		emit("active-"+accountID, data)
 	}
 
+	logger.Infof("[SESSION] %s iniciando", accountID)
 	if s.sessionStore != nil {
 		s.sessionStore.SetInitializing(accountID)
 		s.sessionStore.AppendEvent(accountID, "initializing", "")
@@ -308,6 +310,7 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 			go s.handleWhatsAppEvent(accountID, evt)
 			return
 		case *waEvents.Connected:
+			logger.Infof("[SESSION] %s ← WA:Connected", accountID)
 			select {
 			case connectedCh <- struct{}{}:
 			default:
@@ -318,21 +321,26 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 		disconnect := disconnectEvent{}
 		switch v := evt.(type) {
 		case *waEvents.Disconnected:
+			logger.Warnf("[SESSION] %s ← WA:Disconnected", accountID)
 			disconnect.reason = "disconnect"
 		case *waEvents.StreamReplaced:
+			logger.Warnf("[SESSION] %s ← WA:StreamReplaced", accountID)
 			disconnect.reason = "stream_replaced"
 			disconnect.permanent = true
 		case *waEvents.LoggedOut:
+			logger.Warnf("[SESSION] %s ← WA:LoggedOut onConnect=%v reason=%s", accountID, v.OnConnect, v.Reason.String())
 			disconnect.reason = "logged_out"
 			disconnect.permanent = true
 			if v.OnConnect {
 				disconnect.detail = v.Reason.String()
 			}
 		case *waEvents.TemporaryBan:
+			logger.Warnf("[SESSION] %s ← WA:TemporaryBan %s", accountID, v.String())
 			disconnect.reason = "temporary_ban"
 			disconnect.permanent = true
 			disconnect.detail = v.String()
 		case *waEvents.ConnectFailure:
+			logger.Warnf("[SESSION] %s ← WA:ConnectFailure reason=%s", accountID, v.Reason.String())
 			disconnect.reason = "connect_failure"
 			disconnect.detail = v.Reason.String()
 		default:
@@ -346,6 +354,7 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 	defer runtime.client.RemoveEventHandler(handlerID)
 
 	const reconnectGracePeriod = 75 * time.Second
+	const maxReconnectAttempts = 5
 
 	waitForDisconnect := func() {
 		for {
@@ -370,22 +379,26 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 					emitActive("Sesion desconectada", false, extra)
 					return
 				}
-				
+
 				// Desconexión temporal: whatsmeow lanza autoReconnect en paralelo.
 				// Primero, vaciar cualquier evento obsoleto del canal connectedCh para evitar bypass inmediato.
 				for len(connectedCh) > 0 {
 					<-connectedCh
 				}
-				
-				// Esperar a que confirme reconexión antes de declarar la sesión muerta o recibir desconexión permanente.
+
+				// Esperar a que confirme reconexión. Si el timer expira, reintentamos hasta
+				// maxReconnectAttempts veces antes de declarar la sesión muerta. Esto cubre
+				// el caso donde whatsmeow usa backoff exponencial y su primer intento exitoso
+				// tarda más de reconnectGracePeriod.
+				reconnectAttempt := 0
 				timer := time.NewTimer(reconnectGracePeriod)
 				reconnected := false
-				expired := false
-				
-				for !reconnected && !expired {
+
+				for !reconnected {
 					select {
 					case <-connectedCh:
 						timer.Stop()
+						reconnectAttempt = 0
 						s.markConnected(accountID)
 						emitActive("Sesion activa", true, nil)
 						reconnected = true
@@ -403,16 +416,24 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 							emitActive("Sesion desconectada", false, extraPermanent)
 							return
 						}
-						// Si es otra desconexión temporal, actualizamos la razón/detalle pero seguimos esperando la reconexión.
 						reason = d.reason
 						if d.detail != "" {
 							extra["detail"] = d.detail
 						}
 					case <-timer.C:
-						s.markDisconnected(accountID, reason)
-						emitActive("Sesion desconectada", false, extra)
-						expired = true
-						return
+						reconnectAttempt++
+						if reconnectAttempt < maxReconnectAttempts {
+							logger.Warnf("reconexion intento %d/%d para %s, esperando...", reconnectAttempt, maxReconnectAttempts, accountID)
+							for len(connectedCh) > 0 {
+								<-connectedCh
+							}
+							timer = time.NewTimer(reconnectGracePeriod)
+						} else {
+							logger.Warnf("reconexion fallida tras %d intentos para %s", maxReconnectAttempts, accountID)
+							s.markDisconnected(accountID, reason)
+							emitActive("Sesion desconectada", false, extra)
+							return
+						}
 					case <-runtime.ctx.Done():
 						timer.Stop()
 						return
@@ -505,6 +526,7 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 }
 
 func (s *Service) markConnected(accountID string) {
+	logger.Infof("[SESSION] %s → CONECTADO", accountID)
 	if s.sessionStore != nil {
 		s.sessionStore.SetActive(accountID)
 		s.sessionStore.AppendEvent(accountID, "connected", "")
@@ -518,6 +540,7 @@ func (s *Service) markConnected(accountID string) {
 }
 
 func (s *Service) markDisconnected(accountID, reason string) {
+	logger.Warnf("[SESSION] %s → DESCONECTADO reason=%s", accountID, reason)
 	if s.sessionStore != nil {
 		s.sessionStore.SetDisconnected(accountID, reason)
 		s.sessionStore.AppendEvent(accountID, "disconnected", reason)
