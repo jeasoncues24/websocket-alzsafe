@@ -31,6 +31,7 @@ func RegisterAPIRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 
 	if c.V1WSHandler != nil {
 		mux.Handle("GET /api/service/v1/ws", http.HandlerFunc(c.V1WSHandler.HandleWS))
+		mux.Handle("GET /api/service/v1/ws/connect", http.HandlerFunc(c.V1WSHandler.HandleConnectWS))
 	}
 
 	if c.V1WebhooksHandler != nil {

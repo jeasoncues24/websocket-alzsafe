@@ -98,7 +98,7 @@ func NewContainer() *Container {
 	apiKeysHandler := handlers.NewApiKeysHandler(apiKeyStore, telefonoStore, empresaStore, manager)
 	v1MessagesHandler := handlers.NewV1MessagesHandler(msgRepo, telefonoStore, manager)
 	v1BroadcastsHandler := handlers.NewV1BroadcastsHandler(jobQueueRepo, telefonoStore, broadcastWorker)
-	v1WSHandler := handlers.NewV1WSHandler(manager, jwtCfg, telefonoStore, sessionStore)
+	v1WSHandler := handlers.NewV1WSHandler(manager, jwtCfg, telefonoStore, sessionStore, apiKeyStore)
 
 	var v1WebhooksHandler *handlers.V1WebhooksHandler
 	var webhookStartupTask func(context.Context)
