@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-31T21:34:49Z",
+  "title": "Design System: WSAPI Admin",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Verde Señal",
+        "canonical": "hsl(151.33 66.86% 66.86%)",
+        "darkCanonical": "hsl(154.9 100% 19.2%)",
+        "tonalRamp": [
+          "hsl(151 60% 12%)",
+          "hsl(151 62% 20%)",
+          "hsl(151 63% 30%)",
+          "hsl(151 64% 40%)",
+          "hsl(151 65% 50%)",
+          "hsl(151.33 66.86% 66.86%)",
+          "hsl(151 68% 80%)",
+          "hsl(151 70% 93%)"
+        ]
+      },
+      "primary-foreground": {
+        "role": "primary",
+        "displayName": "Verde Tinta",
+        "canonical": "hsl(153.33 13.04% 13.53%)"
+      },
+      "destructive": {
+        "role": "tertiary",
+        "displayName": "Rojo Alarma",
+        "canonical": "hsl(9.89 81.98% 43.53%)",
+        "darkCanonical": "hsl(6.67 60% 20.6%)",
+        "tonalRamp": [
+          "hsl(10 82% 14%)",
+          "hsl(10 82% 22%)",
+          "hsl(10 82% 30%)",
+          "hsl(10 82% 37%)",
+          "hsl(9.89 81.98% 43.53%)",
+          "hsl(10 82% 55%)",
+          "hsl(10 82% 72%)",
+          "hsl(10 82% 90%)"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Tinta",
+        "canonical": "hsl(0 0% 9.02%)",
+        "darkCanonical": "hsl(214.29 31.82% 91.37%)",
+        "tonalRamp": [
+          "hsl(0 0% 9%)",
+          "hsl(0 0% 20%)",
+          "hsl(0 0% 35%)",
+          "hsl(0 0% 50%)",
+          "hsl(0 0% 63%)",
+          "hsl(0 0% 80%)",
+          "hsl(0 0% 90%)",
+          "hsl(0 0% 97%)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Superficie Hundida",
+        "canonical": "hsl(0 0% 92.94%)",
+        "darkCanonical": "hsl(0 0% 12.16%)"
+      },
+      "muted-foreground": {
+        "role": "neutral",
+        "displayName": "Tinta Tenue",
+        "canonical": "hsl(0 0% 12.55%)",
+        "darkCanonical": "hsl(0 0% 63.53%)"
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Filo",
+        "canonical": "hsl(0 0% 87.45%)",
+        "darkCanonical": "hsl(0 0% 16.08%)"
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Lienzo",
+        "canonical": "hsl(0 0% 98.82%)",
+        "darkCanonical": "hsl(0 0% 7.06%)"
+      },
+      "status-active": {
+        "role": "primary",
+        "displayName": "Esmeralda Activa",
+        "canonical": "hsl(160 84% 39%)",
+        "note": "Familia emerald de Tailwind: emerald-500 punto, emerald-700 (claro) / emerald-300 (oscuro) texto. Único color permitido para estado 'active'/'online'."
+      },
+      "chart-2": { "role": "chart", "displayName": "Azul Serie", "canonical": "hsl(217.22 91.22% 59.8%)" },
+      "chart-3": { "role": "chart", "displayName": "Violeta Serie", "canonical": "hsl(258.31 89.53% 66.27%)" },
+      "chart-4": { "role": "chart", "displayName": "Ámbar Serie", "canonical": "hsl(37.69 92.13% 50.2%)" },
+      "chart-5": { "role": "chart", "displayName": "Teal Serie", "canonical": "hsl(160.12 84.08% 39.41%)" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Título de página / sección principal. Uno por vista." },
+      "headline": { "displayName": "Headline", "purpose": "Subsecciones dentro de una página." },
+      "title": { "displayName": "Title", "purpose": "Título de card y de diálogo (CardTitle)." },
+      "body": { "displayName": "Body", "purpose": "Texto de trabajo por defecto: tablas, formularios, párrafos. Tamaño base real." },
+      "label": { "displayName": "Label", "purpose": "Badges, metadatos, encabezados de tabla, texto de ayuda." },
+      "mono": { "displayName": "Mono", "purpose": "IDs de sesión, tokens de API, JSON y valores técnicos copiables." }
+    },
+    "shadows": [
+      { "name": "shadow-md", "value": "0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 2px 4px -1px hsl(0 0% 0% / 0.17)", "purpose": "Hover de fila o tarjeta accionable, junto a translateY(-2px) vía .motion-lift. No usar en reposo." },
+      { "name": "shadow-lg", "value": "0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 4px 6px -1px hsl(0 0% 0% / 0.17)", "purpose": "Overlays: dropdown-menu, popover, sheet." },
+      { "name": "shadow-xl", "value": "0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 8px 10px -1px hsl(0 0% 0% / 0.17)", "purpose": "Diálogos modales (dialog). Único uso de sombra en reposo, por estar flotando." }
+    ],
+    "motion": [
+      { "name": "duration-fast", "value": "150ms", "purpose": "Micro-cambios: color de hover, foco." },
+      { "name": "duration-base", "value": "220ms", "purpose": "Transición por defecto (.motion-transition, .motion-transform, .motion-panel)." },
+      { "name": "duration-slow", "value": "320ms", "purpose": "Entradas de panel y fades (.motion-enter-up, .motion-fade-in)." },
+      { "name": "ease-standard", "value": "cubic-bezier(0.2, 0, 0, 1)", "purpose": "Easing por defecto de cambios de estado." },
+      { "name": "ease-emphasized", "value": "cubic-bezier(0.2, 0.8, 0.2, 1)", "purpose": "Entradas con carácter (motion-enter-up)." },
+      { "name": "scale-press", "value": "0.98", "purpose": "Escala al pulsar controles (.motion-press)." },
+      { "name": "lift-y", "value": "-2px", "purpose": "Desplazamiento vertical en hover accionable (.motion-lift)." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1536px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción principal única por vista. La sola mancha de verde estable de la pantalla.",
+      "html": "<button class=\"ds-btn-primary\">Guardar cambios</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 2.5rem; padding: 0.5rem 1rem; border: none; border-radius: 0.375rem; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); font-family: var(--font-sans); font-size: 0.875rem; font-weight: 500; letter-spacing: 0.025em; cursor: pointer; transition: background-color 220ms cubic-bezier(0.2,0,0,1), transform 220ms cubic-bezier(0.2,0,0,1); } .ds-btn-primary:hover { background: color-mix(in srgb, hsl(var(--primary)) 90%, transparent); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring)); } .ds-btn-primary:active { transform: scale(0.98); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Acción secundaria. Gris, plano, borde de 1px.",
+      "html": "<button class=\"ds-btn-outline\">Cancelar</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 2.5rem; padding: 0.5rem 1rem; border: 1px solid hsl(var(--input)); border-radius: 0.375rem; background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: var(--font-sans); font-size: 0.875rem; font-weight: 500; letter-spacing: 0.025em; cursor: pointer; transition: background-color 220ms cubic-bezier(0.2,0,0,1), transform 220ms cubic-bezier(0.2,0,0,1); } .ds-btn-outline:hover { background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring)); } .ds-btn-outline:active { transform: scale(0.98); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo de formulario estándar. Foco por anillo, sin cambio de fondo.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Nombre de la sesión\" />",
+      "css": ".ds-input { display: flex; height: 2.5rem; width: 100%; padding: 0.5rem 0.75rem; border: 1px solid hsl(var(--input)); border-radius: 0.375rem; background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: var(--font-sans); font-size: 0.875rem; letter-spacing: 0.025em; transition: box-shadow 150ms cubic-bezier(0.2,0,0,1), border-color 150ms cubic-bezier(0.2,0,0,1); } .ds-input::placeholder { color: hsl(var(--muted-foreground)); } .ds-input:focus-visible { outline: none; box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring)); } .ds-input[aria-invalid=\"true\"] { border-color: hsl(var(--destructive)); box-shadow: 0 0 0 3px color-mix(in srgb, hsl(var(--destructive)) 20%, transparent); } .ds-input:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Contenedor de contenido. Plano en reposo: separación por ring de 1px, sin sombra.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">Sesiones activas</div><div class=\"ds-card-body\">12 de 15 conectadas</div></div>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 1rem; padding: 1rem; border-radius: 0.75rem; background: hsl(var(--card)); color: hsl(var(--card-foreground)); box-shadow: 0 0 0 1px color-mix(in srgb, hsl(var(--foreground)) 10%, transparent); overflow: hidden; } .ds-card-title { font-family: var(--font-sans); font-size: 1rem; font-weight: 500; line-height: 1.375; letter-spacing: 0.025em; } .ds-card-body { font-size: 0.875rem; color: hsl(var(--muted-foreground)); letter-spacing: 0.025em; }"
+    },
+    {
+      "name": "Session Status Badge — Activa",
+      "kind": "chip",
+      "refersTo": "badge-status-active",
+      "description": "Señal de sesión viva. Único badge con color; el resto de estados son grises con rótulo e icono.",
+      "html": "<span class=\"ds-badge-active\"><span class=\"ds-badge-dot\"></span>Activa</span>",
+      "css": ".ds-badge-active { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.125rem 0.5rem; border: 1px solid color-mix(in srgb, #059669 20%, transparent); border-radius: 9999px; background: color-mix(in srgb, #10b981 10%, transparent); color: #047857; font-family: var(--font-sans); font-size: 0.75rem; font-weight: 500; letter-spacing: 0.025em; } .ds-badge-dot { width: 0.375rem; height: 0.375rem; border-radius: 9999px; background: #10b981; animation: ds-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; } @keyframes ds-pulse { 50% { opacity: 0.5; } }"
+    },
+    {
+      "name": "Session Status Badge — Neutro",
+      "kind": "chip",
+      "refersTo": "badge-status-neutral",
+      "description": "Todos los estados que no son 'active': qr_pending, initializing, disconnected, client_outdated, inconsistente. Gris + rótulo + icono, sin color.",
+      "html": "<span class=\"ds-badge-neutral\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"6\"/><line x1=\"12\" y1=\"18\" x2=\"12\" y2=\"22\"/><line x1=\"4.93\" y1=\"4.93\" x2=\"7.76\" y2=\"7.76\"/><line x1=\"16.24\" y1=\"16.24\" x2=\"19.07\" y2=\"19.07\"/><line x1=\"2\" y1=\"12\" x2=\"6\" y2=\"12\"/><line x1=\"18\" y1=\"12\" x2=\"22\" y2=\"12\"/><line x1=\"4.93\" y1=\"19.07\" x2=\"7.76\" y2=\"16.24\"/><line x1=\"16.24\" y1=\"7.76\" x2=\"19.07\" y2=\"4.93\"/></svg>Conectando</span>",
+      "css": ".ds-badge-neutral { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.125rem 0.5rem; border: 1px solid hsl(var(--border)); border-radius: 9999px; background: color-mix(in srgb, hsl(var(--muted)) 60%, transparent); color: hsl(var(--muted-foreground)); font-family: var(--font-sans); font-size: 0.75rem; font-weight: 500; letter-spacing: 0.025em; } .ds-badge-neutral svg { animation: ds-spin 1s linear infinite; } @keyframes ds-spin { to { transform: rotate(360deg); } }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "refersTo": null,
+      "description": "Ítem de navegación del shell. Reposo gris, activo con acento de sidebar y fondo tenue.",
+      "html": "<a class=\"ds-nav-item ds-nav-item--active\" href=\"#\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\"/></svg>Sesiones</a>",
+      "css": ".ds-nav-item { display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.75rem; border-radius: 0.375rem; color: hsl(var(--sidebar-foreground)); font-family: var(--font-sans); font-size: 0.875rem; font-weight: 500; letter-spacing: 0.025em; text-decoration: none; transition: background-color 150ms cubic-bezier(0.2,0,0,1), color 150ms cubic-bezier(0.2,0,0,1); } .ds-nav-item:hover { background: hsl(var(--sidebar-accent)); color: hsl(var(--sidebar-accent-foreground)); } .ds-nav-item--active { background: hsl(var(--sidebar-accent)); color: hsl(var(--sidebar-primary)); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "La Sala de Control",
+    "overview": "WSAPI Admin es la sala de control de una flota de sesiones de WhatsApp. El operador entra para leer estado y actuar, no para contemplar. El lienzo es casi blanco (modo claro) o casi negro (modo oscuro), las superficies son de un solo tono con un filo de 1px, y el color se comporta como una luz de aviso: aparece solo donde hay significado —una sesión viva, una acción primaria, un error— y en ningún otro sitio. Cuando todo está en orden, la pantalla es tranquila y monocroma.\n\nEl sistema es plano pero con contraste: sin sombras en reposo, la profundidad se construye con tono y borde, y la jerarquía se lleva con peso tipográfico (Plus Jakarta Sans, 400 a 600) y con tracking ligeramente abierto (0.025em) que le da un aire de instrumento preciso. La densidad es media-alta: filas compactas, cards de 1rem de padding, controles de 2.5rem de alto. Cada vista del panel comparte exactamente los mismos tokens; no existe una paleta 'de dashboard' ni una 'de mensajería'.\n\nLa anti-referencia es explícita: nada de degradados, glassmorphism, blur ni sombras de color; nada de dashboards tipo plantilla de marketing con gráficas sobre-coloreadas; y los estados de sesión no se pintan con un semáforo de cuatro colores —'activa' es verde, todo lo demás es gris con rótulo e icono.",
+    "keyCharacteristics": [
+      "Lienzo neutro casi sin color; el acento es un evento, no un fondo.",
+      "Plano por defecto: profundidad por tono + borde de 1px, sombra solo en hover/focus/overlay.",
+      "Jerarquía por peso tipográfico y tracking de 0.025em, no por tamaño extremo.",
+      "Verde = 'vivo / OK'; el resto de estados son grises con rótulo e icono.",
+      "Un único set de tokens para todas las vistas; claro/oscuro paritarios."
+    ],
+    "rules": [
+      { "name": "The Warning-Light Rule", "body": "El verde señal ocupa ≤10% de píxeles de cualquier pantalla. Si aparece como fondo de una región grande, algo está mal.", "section": "colors" },
+      { "name": "The No-Rainbow Rule", "body": "Ninguna vista define color propio (gradiente, fondo tintado, ilustración de color). Todo color sale de un token de globals.css. Si un diseño necesita un color que no existe como token, primero se añade el token.", "section": "colors" },
+      { "name": "The Grey-State Rule", "body": "Los estados de sesión (qr_pending, initializing, disconnected, client_outdated, inconsistencia) se representan en grises + rótulo + icono. Solo active/online usan verde (familia emerald de Tailwind). Nunca amarillo/naranja/rojo/azul para diferenciar estados entre sí.", "section": "colors" },
+      { "name": "The Weight-Not-Size Rule", "body": "La jerarquía sube por peso (400 → 500 → 600) antes que por tamaño. Un título de card es 1rem/500, no 1.25rem.", "section": "typography" },
+      { "name": "The Spanish-First Rule", "body": "Todo texto de interfaz —rótulos, vacíos, errores— va en español, en tono operativo y directo.", "section": "typography" },
+      { "name": "The Flat-At-Rest Rule", "body": "Si un elemento tiene sombra sin estar en hover, en foco o flotando como overlay, está mal. Los degradados, el backdrop-filter y las sombras de color están prohibidos en todo el sistema.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do resolver todo componente de UI con la skill shadcn (proyecto shadcn/ui: frontend/components.json, estilo base-nova, iconos lucide, alias @/components/ui); vestir sobre frontend/components/ui/* con cn(), nunca copiar primitivas a mano. Usar migrate-radix-to-base solo ante una migración Radix→Base pedida de forma explícita.",
+      "Do sacar todo color de un token de frontend/app/globals.css; si falta el color, añadir el token antes de usarlo (The No-Rainbow Rule).",
+      "Do mantener el verde señal en ≤10% de la pantalla y reservado a acción primaria, foco, enlace y chart-1 (The Warning-Light Rule).",
+      "Do representar los estados de sesión en gris + rótulo + icono, con verde solo para active/online (The Grey-State Rule).",
+      "Do construir profundidad con tono + borde de 1px; introducir sombra únicamente en hover (.motion-lift), foco u overlays (The Flat-At-Rest Rule).",
+      "Do subir la jerarquía por peso (400 → 500 → 600) antes que por tamaño, con letter-spacing 0.025em (The Weight-Not-Size Rule).",
+      "Do usar las utilidades .motion-* y los tokens --motion-* para cualquier transición; nada de duraciones o easing sueltos.",
+      "Do escribir todo texto de interfaz en español, tono operativo.",
+      "Do usar la pila mono solo para IDs, tokens y valores técnicos copiables."
+    ],
+    "donts": [
+      "Don't usar degradados, backdrop-filter, glassmorphism ni sombras de color en ningún sitio.",
+      "Don't dar a una vista su propia paleta, fondo tintado o ilustración de color.",
+      "Don't pintar los estados con un semáforo (amarillo/naranja/rojo/azul) para diferenciarlos entre sí.",
+      "Don't usar los colores chart-* fuera de un gráfico de Recharts.",
+      "Don't usar peso 700+ ni tamaños de display por encima de ~1.5rem en el panel.",
+      "Don't poner sombra en card, fila o panel en reposo; ni bordes de 2px o de color (salvo destructive en campos inválidos y el filo emerald del badge 'activa').",
+      "Don't reintroducir la fuente Inter ni añadir una segunda familia de texto: Plus Jakarta Sans es la única."
+    ]
+  }
+}
