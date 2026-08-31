@@ -3,7 +3,7 @@
 # --- BUILD STAGE ---
 # Este Dockerfile solo compila y exporta el binario wsapi.
 # No levanta el runtime: ejecucion, puertos y BD son responsabilidad del host (PM2).
-FROM golang:1.25-bookworm AS builder
+FROM golang:1.26-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \

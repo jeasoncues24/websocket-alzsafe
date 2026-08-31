@@ -249,17 +249,38 @@ make test          # go test ./... del backend
 
 ## 8. Migraciones de base de datos
 
+El motor de migraciones es [goforge](https://github.com/MMaZX/goforge), integrado como
+librería. Los archivos SQL viven embebidos en el binario
+(`backend/internal/storage/migrations/NNNNNN_*.{up,down}.sql`) y el historial se
+registra en la tabla `goforge_migrations` (con checksum por migración).
+
 Si una release incluye migraciones, ejecútalas desde `backend/` para que el binario lea `backend/.env` correctamente:
 
 ```bash
 cd backend
 ../dist/wsapi migrate status
 ../dist/wsapi migrate up
+../dist/wsapi migrate down     # revierte la última migración
 ```
 
 Antes de correr `migrate up`, toma backup de la base de datos o confirma que existe un respaldo reciente y valida que la ventana de mantenimiento sea la correcta.
 
 Si no estás seguro de si la release trae migraciones, revísalo antes del restart.
+
+### Adopción única (BD que venía de golang-migrate)
+
+En una base de datos que todavía tiene la tabla `schema_migrations` de
+golang-migrate, ejecuta **una sola vez** antes del primer `migrate up`:
+
+```bash
+cd backend
+../dist/wsapi migrate adopt
+```
+
+`adopt` crea `goforge_migrations` y marca como aplicadas —con su checksum
+correcto— todas las migraciones cuya versión sea ≤ la registrada por
+golang-migrate. Es idempotente y deja `schema_migrations` intacta (puedes
+borrarla a mano cuando confirmes que todo funciona).
 
 ---
 

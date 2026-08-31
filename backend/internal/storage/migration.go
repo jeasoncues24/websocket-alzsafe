@@ -1,157 +1,225 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/fs"
 	"strings"
 
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/mysql"
-	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/MMaZX/goforge/database/mariadb"
+	"github.com/MMaZX/goforge/migration"
 )
 
-type MigrationRunner struct{}
-
-func NewMigrationRunner() *MigrationRunner {
-	return &MigrationRunner{}
+// MigrationRunner ejecuta las migraciones SQL embebidas usando el motor de
+// goforge (github.com/MMaZX/goforge) contra MySQL/MariaDB. Sustituye al runner
+// casero basado en golang-migrate.
+type MigrationRunner struct {
+	dsn string
 }
 
-func (r *MigrationRunner) RunMigrations(db *sql.DB) error {
-	if err := r.dropLegacySchemaMigrationsTable(db); err != nil {
-		return err
-	}
-
-	m, err := r.newMigrator(db)
-	if err != nil {
-		return fmt.Errorf("failed to create migrator: %w", err)
-	}
-	defer m.Close()
-
-	if err := m.Up(); err != nil {
-		if err == migrate.ErrNoChange {
-			return nil
-		}
-		return fmt.Errorf("migration failed: %w", err)
-	}
-
-	return nil
+// NewMigrationRunner crea un runner que se conecta con el DSN indicado
+// (formato go-sql-driver/mysql, p. ej. "user:pass@tcp(host:3306)/db?parseTime=true").
+func NewMigrationRunner(dsn string) *MigrationRunner {
+	return &MigrationRunner{dsn: dsn}
 }
 
-func (r *MigrationRunner) Rollback(db *sql.DB) error {
-	m, err := r.newMigrator(db)
-	if err != nil {
-		return fmt.Errorf("failed to create migrator: %w", err)
-	}
-	defer m.Close()
-
-	if err := m.Steps(-1); err != nil {
-		if err == migrate.ErrNoChange {
-			return nil
-		}
-		return fmt.Errorf("rollback failed: %w", err)
-	}
-
-	return nil
-}
-
-func (r *MigrationRunner) GetCurrentVersion(db *sql.DB) (int, error) {
-	m, err := r.newMigrator(db)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create migrator: %w", err)
-	}
-	defer m.Close()
-
-	version, dirty, err := m.Version()
-	if err != nil {
-		if err == migrate.ErrNilVersion || err == migrate.ErrNoChange {
-			return 0, nil
-		}
-		return 0, err
-	}
-
-	if dirty {
-		return int(version), fmt.Errorf("database is in a dirty state")
-	}
-
-	return int(version), nil
-}
-
-func (r *MigrationRunner) newMigrator(db *sql.DB) (*migrate.Migrate, error) {
+// migrationsSource devuelve el sub-FS con los archivos NNNNNN_*.{up,down}.sql.
+func migrationsSource() (fs.FS, error) {
 	sub, err := fs.Sub(migrationsFS, "migrations")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create migrations sub-fs: %w", err)
+		return nil, fmt.Errorf("no se pudo abrir el sub-FS de migraciones: %w", err)
 	}
-
-	srcDriver, err := iofs.New(sub, ".")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create iofs source: %w", err)
-	}
-
-	dbDriver, err := mysql.WithInstance(db, &mysql.Config{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create mysql driver: %w", err)
-	}
-
-	m, err := migrate.NewWithInstance("iofs", srcDriver, "mysql", dbDriver)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create migrator: %w", err)
-	}
-
-	return m, nil
+	return sub, nil
 }
 
-// dropLegacySchemaMigrationsTable drops the custom schema_migrations table that
-// pre-dated golang-migrate. It only drops the table when it has the legacy schema
-// (identified by the presence of the 'description' column). Once golang-migrate
-// takes over it creates its own schema_migrations with just version+dirty, so
-// subsequent calls are safe no-ops.
-func (r *MigrationRunner) dropLegacySchemaMigrationsTable(db *sql.DB) error {
-	var colName string
-	err := db.QueryRow(
-		"SELECT column_name FROM information_schema.columns " +
-			"WHERE table_schema = DATABASE() AND table_name = 'schema_migrations' " +
-			"AND column_name = 'description' LIMIT 1",
-	).Scan(&colName)
-	if err == sql.ErrNoRows {
-		// Table doesn't exist or already has the golang-migrate schema — nothing to do.
-		return nil
-	}
+// open construye el provider de MariaDB y el motor de goforge a partir de las
+// migraciones embebidas. El caller debe invocar provider.Close().
+func (r *MigrationRunner) open(ctx context.Context) (*migration.Engine, *mariadb.Provider, error) {
+	src, err := migrationsSource()
 	if err != nil {
-		return fmt.Errorf("failed to inspect schema_migrations: %w", err)
+		return nil, nil, err
 	}
-	_, err = db.Exec("DROP TABLE schema_migrations")
+	entries, err := migration.Load(src, nil)
 	if err != nil {
-		return fmt.Errorf("failed to drop legacy schema_migrations table: %w", err)
+		return nil, nil, fmt.Errorf("no se pudieron cargar las migraciones: %w", err)
+	}
+
+	provider, err := mariadb.Open(ctx, r.dsn)
+	if err != nil {
+		return nil, nil, fmt.Errorf("no se pudo conectar a la base de datos: %w", err)
+	}
+
+	engine, err := migration.NewEngine(provider.DB(), provider, entries)
+	if err != nil {
+		provider.Close()
+		return nil, nil, fmt.Errorf("no se pudo crear el motor de migraciones: %w", err)
+	}
+	return engine, provider, nil
+}
+
+// RunMigrations aplica todas las migraciones pendientes en orden ascendente.
+// Que no haya pendientes no se considera un error.
+func (r *MigrationRunner) RunMigrations(ctx context.Context) error {
+	engine, provider, err := r.open(ctx)
+	if err != nil {
+		return err
+	}
+	defer provider.Close()
+
+	if _, err := engine.Up(ctx, 0); err != nil {
+		if errors.Is(err, migration.ErrNoMigrations) {
+			return nil
+		}
+		return fmt.Errorf("fallo al aplicar migraciones: %w", err)
 	}
 	return nil
 }
 
-type Migration struct {
-	Version     int
-	Description string
-	AppliedAt   string
-	Checksum    string
+// Rollback revierte migraciones aplicadas. steps == 0 revierte el último batch;
+// steps > 0 revierte esas últimas N migraciones.
+func (r *MigrationRunner) Rollback(ctx context.Context, steps int) error {
+	engine, provider, err := r.open(ctx)
+	if err != nil {
+		return err
+	}
+	defer provider.Close()
+
+	if _, err := engine.Rollback(ctx, steps); err != nil {
+		if errors.Is(err, migration.ErrNoMigrations) {
+			return nil
+		}
+		return fmt.Errorf("fallo al revertir migración: %w", err)
+	}
+	return nil
 }
 
-func (r *MigrationRunner) GetAppliedMigrations(db *sql.DB) ([]Migration, error) {
-	rows, err := db.Query("SELECT version FROM schema_migrations WHERE dirty = 0 ORDER BY version")
+// Status devuelve el estado (aplicada / pendiente / dirty) de cada migración
+// conocida, ordenado por versión.
+func (r *MigrationRunner) Status(ctx context.Context) ([]migration.StatusEntry, error) {
+	engine, provider, err := r.open(ctx)
 	if err != nil {
-		// Treat "table doesn't exist" as no migrations applied.
-		if strings.Contains(err.Error(), "doesn't exist") || strings.Contains(err.Error(), "no such table") {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to query schema_migrations: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
+	defer provider.Close()
 
-	var migrations []Migration
-	for rows.Next() {
-		var m Migration
-		if err := rows.Scan(&m.Version); err != nil {
-			return nil, err
-		}
-		migrations = append(migrations, m)
+	return engine.Status(ctx)
+}
+
+// Adopt siembra la tabla de historial de goforge (goforge_migrations) a partir
+// de la tabla legacy schema_migrations que dejó golang-migrate: marca como
+// aplicadas, con su checksum correcto, todas las migraciones cuya versión sea
+// menor o igual a la versión registrada por golang-migrate. Es idempotente y no
+// modifica ni elimina la tabla legacy.
+func (r *MigrationRunner) Adopt(ctx context.Context) ([]uint64, error) {
+	src, err := migrationsSource()
+	if err != nil {
+		return nil, err
 	}
-	return migrations, rows.Err()
+	entries, err := migration.Load(src, nil)
+	if err != nil {
+		return nil, fmt.Errorf("no se pudieron cargar las migraciones: %w", err)
+	}
+
+	provider, err := mariadb.Open(ctx, r.dsn)
+	if err != nil {
+		return nil, fmt.Errorf("no se pudo conectar a la base de datos: %w", err)
+	}
+	defer provider.Close()
+
+	db := provider.DB()
+	hist := provider.History()
+
+	legacyVersion, hasLegacy, err := legacySchemaMigrationsVersion(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	if !hasLegacy {
+		return nil, errors.New("no se encontró la tabla schema_migrations (golang-migrate); no hay historial que adoptar")
+	}
+
+	if err := hist.EnsureTable(ctx, db); err != nil {
+		return nil, fmt.Errorf("no se pudo crear goforge_migrations: %w", err)
+	}
+	existing, err := hist.List(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("no se pudo leer goforge_migrations: %w", err)
+	}
+	already := make(map[uint64]struct{}, len(existing))
+	for _, rec := range existing {
+		already[rec.Version] = struct{}{}
+	}
+
+	var adopted []uint64
+	for _, e := range entries {
+		v := e.Version()
+		if v > legacyVersion {
+			continue
+		}
+		if _, ok := already[v]; ok {
+			continue
+		}
+		if err := hist.Begin(ctx, db, v, e.Name(), e.Checksum, 1); err != nil {
+			return adopted, fmt.Errorf("no se pudo registrar la migración %d: %w", v, err)
+		}
+		if err := hist.Complete(ctx, db, v, 0); err != nil {
+			return adopted, fmt.Errorf("no se pudo marcar como aplicada la migración %d: %w", v, err)
+		}
+		adopted = append(adopted, v)
+	}
+	return adopted, nil
+}
+
+// legacySchemaMigrationsVersion lee la versión actual de la tabla
+// schema_migrations dejada por golang-migrate. Devuelve (0, false, nil) si la
+// tabla no existe.
+func legacySchemaMigrationsVersion(ctx context.Context, db migration.DB) (uint64, bool, error) {
+	var version uint64
+	var dirty bool
+	err := db.QueryRowContext(ctx,
+		"SELECT version, dirty FROM schema_migrations ORDER BY version DESC LIMIT 1",
+	).Scan(&version, &dirty)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		if isTableMissing(err) {
+			return 0, false, nil
+		}
+		if isUnknownColumn(err) {
+			// Tabla legacy sin la columna dirty (esquema propio anterior a
+			// golang-migrate): tomamos solo la versión máxima.
+			var maxVersion sql.NullInt64
+			if err2 := db.QueryRowContext(ctx,
+				"SELECT MAX(version) FROM schema_migrations",
+			).Scan(&maxVersion); err2 != nil {
+				if isTableMissing(err2) {
+					return 0, false, nil
+				}
+				return 0, false, fmt.Errorf("no se pudo leer schema_migrations: %w", err2)
+			}
+			if !maxVersion.Valid {
+				return 0, false, nil
+			}
+			return uint64(maxVersion.Int64), true, nil
+		}
+		return 0, false, fmt.Errorf("no se pudo leer schema_migrations: %w", err)
+	}
+	if dirty {
+		return version, true, fmt.Errorf(
+			"schema_migrations legacy está en estado dirty (versión %d): resuélvelo antes de adoptar", version)
+	}
+	return version, true, nil
+}
+
+func isTableMissing(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "doesn't exist") ||
+		strings.Contains(msg, "Unknown table") ||
+		strings.Contains(msg, "no such table")
+}
+
+func isUnknownColumn(err error) bool {
+	return strings.Contains(err.Error(), "Unknown column")
 }

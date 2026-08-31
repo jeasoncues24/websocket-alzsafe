@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"fmt"
 	"net"
@@ -12,21 +11,19 @@ import (
 	"wsapi/internal/config"
 	apihttp "wsapi/internal/http"
 	"wsapi/internal/storage"
-
-	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
 	migrateCmd := flag.NewFlagSet("migrate", flag.ExitOnError)
 
-	verbose := flag.Bool("v", false, "verbose output")
 	flag.Usage = func() {
 		fmt.Println("Usage: wsapi [OPTIONS] COMMAND")
 		fmt.Println("")
 		fmt.Println("Commands:")
-		fmt.Println("  migrate status  Show applied migrations")
-		fmt.Println("  migrate up      Run pending migrations")
-		fmt.Println("  migrate down    Revert last migration")
+		fmt.Println("  migrate status  Muestra el estado de las migraciones")
+		fmt.Println("  migrate up      Aplica las migraciones pendientes")
+		fmt.Println("  migrate down    Revierte la última migración")
+		fmt.Println("  migrate adopt   Adopta el historial de golang-migrate en goforge")
 		fmt.Println("")
 		fmt.Println("Options:")
 		flag.PrintDefaults()
@@ -41,14 +38,14 @@ func main() {
 	}
 
 	if flag.Arg(0) == "migrate" || flag.Arg(0) == "migration" {
-		runMigrateCommand(migrateCmd, verbose)
+		runMigrateCommand(migrateCmd)
 		return
 	}
 
 	startServer()
 }
 
-func runMigrateCommand(migrateCmd *flag.FlagSet, verbose *bool) {
+func runMigrateCommand(migrateCmd *flag.FlagSet) {
 	args := flag.Args()[1:]
 
 	if len(args) < 1 {
@@ -62,100 +59,98 @@ func runMigrateCommand(migrateCmd *flag.FlagSet, verbose *bool) {
 		os.Exit(1)
 	}
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=America%%2FLima&multiStatements=true",
-		cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName))
-	if err != nil {
-		fmt.Printf("Error: Cannot connect to database: %v\n", err)
-		os.Exit(1)
-	}
-	defer db.Close()
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=America%%2FLima&multiStatements=true",
+		cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName)
 
-	if err := db.Ping(); err != nil {
-		fmt.Printf("Error: Cannot ping database: %v\n", err)
-		os.Exit(1)
-	}
-
-	runner := storage.NewMigrationRunner()
+	runner := storage.NewMigrationRunner(dsn)
+	ctx := context.Background()
 
 	switch args[0] {
 	case "status":
-		runStatus(runner, db, *verbose)
+		runStatus(ctx, runner)
 	case "up":
-		runUp(runner, db, cfg.DBName, *verbose)
+		runUp(ctx, runner)
 	case "down":
-		runDown(runner, db, *verbose)
+		runDown(ctx, runner)
+	case "adopt":
+		runAdopt(ctx, runner)
 	default:
 		fmt.Printf("Unknown command: %s\n", args[0])
 		migrateCmd.Usage()
 	}
 }
 
-func runStatus(runner *storage.MigrationRunner, db *sql.DB, verbose bool) {
-	migrations, err := runner.GetAppliedMigrations(db)
+func runStatus(ctx context.Context, runner *storage.MigrationRunner) {
+	entries, err := runner.Status(ctx)
 	if err != nil {
-		fmt.Printf("Error getting migrations: %v\n", err)
+		fmt.Printf("Error getting status: %v\n", err)
 		os.Exit(1)
 	}
 
-	version, err := runner.GetCurrentVersion(db)
-	if err != nil {
-		fmt.Printf("Error getting version: %v\n", err)
-		os.Exit(1)
+	applied := 0
+	for _, e := range entries {
+		if e.Applied {
+			applied++
+		}
 	}
 
-	fmt.Printf("Current version: %d\n", version)
-	fmt.Printf("Applied migrations: %d\n", len(migrations))
-	fmt.Println("")
+	fmt.Printf("Migraciones: %d totales, %d aplicadas, %d pendientes\n\n",
+		len(entries), applied, len(entries)-applied)
 
-	if len(migrations) == 0 {
-		fmt.Println("No migrations applied")
-		return
-	}
-
-	fmt.Println("Migrations:")
-	for _, m := range migrations {
-		fmt.Printf("  [%d] %s - %s\n", m.Version, m.Description, m.AppliedAt)
+	for _, e := range entries {
+		state := "pendiente"
+		if e.Applied {
+			state = "aplicada"
+			if e.Dirty {
+				state = "DIRTY"
+			}
+		}
+		fmt.Printf("  [%06d] %-45s %s\n", e.Version, e.Name, state)
 	}
 }
 
-func runUp(runner *storage.MigrationRunner, db *sql.DB, dbName string, verbose bool) {
-	fmt.Println("Running migrations...")
+func runUp(ctx context.Context, runner *storage.MigrationRunner) {
+	fmt.Println("Aplicando migraciones pendientes...")
 
-	// Force fresh connection settings
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-
-	// Set session variables
-	db.Exec("SET autocommit = 1")
-	db.Exec("SET unique_checks = 1")
-	db.Exec("SET foreign_key_checks = 1")
-
-	err := runner.RunMigrations(db)
-	if err != nil {
+	if err := runner.RunMigrations(ctx); err != nil {
 		fmt.Printf("Error running migrations: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Verify tables after
-	var count int
-	db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name != 'schema_migrations'", dbName).Scan(&count)
-	fmt.Printf("Tables created (excluding schema_migrations): %d\n", count)
-
-	version, _ := runner.GetCurrentVersion(db)
-	fmt.Printf("Migrations applied. Current version: %d\n", version)
+	fmt.Println("Migraciones aplicadas.")
+	fmt.Println("")
+	runStatus(ctx, runner)
 }
 
-func runDown(runner *storage.MigrationRunner, db *sql.DB, verbose bool) {
-	fmt.Println("Reverting last migration...")
+func runDown(ctx context.Context, runner *storage.MigrationRunner) {
+	fmt.Println("Revirtiendo la última migración...")
 
-	err := runner.Rollback(db)
-	if err != nil {
+	if err := runner.Rollback(ctx, 1); err != nil {
 		fmt.Printf("Error rolling back: %v\n", err)
 		os.Exit(1)
 	}
 
-	version, _ := runner.GetCurrentVersion(db)
-	fmt.Printf("Migration reverted. Current version: %d\n", version)
+	fmt.Println("Migración revertida.")
+	fmt.Println("")
+	runStatus(ctx, runner)
+}
+
+func runAdopt(ctx context.Context, runner *storage.MigrationRunner) {
+	fmt.Println("Adoptando el historial de golang-migrate (schema_migrations) en goforge_migrations...")
+
+	adopted, err := runner.Adopt(ctx)
+	if err != nil {
+		fmt.Printf("Error adopting migration history: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(adopted) == 0 {
+		fmt.Println("No había nada que adoptar (goforge_migrations ya estaba al día).")
+		return
+	}
+
+	fmt.Printf("Marcadas como aplicadas %d migraciones: %v\n", len(adopted), adopted)
+	fmt.Println("La tabla legacy schema_migrations se dejó intacta; elimínala manualmente cuando verifiques que todo funciona.")
 }
 
 func startServer() {
