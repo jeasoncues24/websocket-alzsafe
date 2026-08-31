@@ -350,6 +350,14 @@ export default function AdminPhoneConnectPage() {
                 Escanea el código con WhatsApp y espera a que cambie a activo.
               </p>
             </div>
+          ) : status === "client_outdated" ? (
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-6 text-center text-sm">
+              <p className="font-medium text-amber-600">Librería de WhatsApp desactualizada</p>
+              <p className="mt-1 text-muted-foreground">
+                WhatsApp rechazó la conexión (error 405). Hay que actualizar el servidor
+                (dependencia whatsmeow) y volver a desplegar. Reintentar no lo resuelve.
+              </p>
+            </div>
           ) : (
             <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
               {wsConnected ? "Esperando QR..." : "No hay conexión WS activa."}
@@ -357,7 +365,7 @@ export default function AdminPhoneConnectPage() {
           )}
 
           <div className="flex flex-col gap-2">
-            {status !== "active" && (
+            {status !== "active" && status !== "client_outdated" && (
               wsConnected ? (
                 <Button variant="outline" onClick={() => {
                   closeSocket();

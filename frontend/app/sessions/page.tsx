@@ -54,6 +54,8 @@ function StatusBadge({ status }: { status: string }) {
       return <Badge variant="secondary">Conectando</Badge>
     case "disconnected":
       return <Badge variant="destructive">Desconectada</Badge>
+    case "client_outdated":
+      return <Badge variant="destructive" className="bg-amber-600 hover:bg-amber-600">Librería desactualizada</Badge>
     default:
       return <Badge variant="outline">Inactiva</Badge>
   }
@@ -74,6 +76,7 @@ function EventTypeIcon({ type }: { type: string }) {
   switch (type) {
     case "connected": return <Wifi className="h-3 w-3 text-green-500 shrink-0" />
     case "disconnected": return <WifiOff className="h-3 w-3 text-red-400 shrink-0" />
+    case "client_outdated": return <WifiOff className="h-3 w-3 text-amber-500 shrink-0" />
     case "initializing": return <Loader2 className="h-3 w-3 text-gray-400 shrink-0" />
     default: return <QrCode className="h-3 w-3 text-blue-400 shrink-0" />
   }

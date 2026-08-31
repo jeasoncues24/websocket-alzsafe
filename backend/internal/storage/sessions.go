@@ -74,6 +74,20 @@ func (s *SessionStore) SetDisconnected(accountID, reason string) {
 	})
 }
 
+// SetClientOutdated marca la sesión como no conectable porque WhatsApp rechazó el
+// handshake con "client outdated" (405). No se resuelve reintentando ni con un QR
+// nuevo: hay que actualizar la librería whatsmeow y redesplegar el servidor.
+func (s *SessionStore) SetClientOutdated(accountID string) {
+	accountID = normalizeSessionAccountID(accountID)
+	s.set(SessionState{
+		AccountID: accountID,
+		Status:    "client_outdated",
+		IsActive:  false,
+		Reason:    "client_outdated",
+		UpdatedAt: time.Now(),
+	})
+}
+
 func (s *SessionStore) Get(accountID string) (SessionState, bool) {
 	accountID = normalizeSessionAccountID(accountID)
 	s.mu.RLock()

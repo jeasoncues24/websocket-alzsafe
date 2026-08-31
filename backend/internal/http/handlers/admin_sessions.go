@@ -35,12 +35,13 @@ type sessionInfoDTO struct {
 }
 
 type sessionSummaryDTO struct {
-	Total        int `json:"total"`
-	Active       int `json:"active"`
-	Disconnected int `json:"disconnected"`
-	Mismatch     int `json:"mismatch"`
-	QRPending    int `json:"qr_pending"`
-	Initializing int `json:"initializing"`
+	Total          int `json:"total"`
+	Active         int `json:"active"`
+	Disconnected   int `json:"disconnected"`
+	Mismatch       int `json:"mismatch"`
+	QRPending      int `json:"qr_pending"`
+	Initializing   int `json:"initializing"`
+	ClientOutdated int `json:"client_outdated"`
 }
 
 type AdminSessionsHandler struct {
@@ -207,6 +208,8 @@ func computeSessionSummary(sessions []sessionInfoDTO) sessionSummaryDTO {
 			s.QRPending++
 		case "initializing":
 			s.Initializing++
+		case "client_outdated":
+			s.ClientOutdated++
 		}
 		if sess.Mismatch && !sess.Reconnecting {
 			s.Mismatch++

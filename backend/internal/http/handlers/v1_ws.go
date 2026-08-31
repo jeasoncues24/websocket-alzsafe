@@ -285,6 +285,9 @@ func mapV1EventType(event string, data map[string]any) string {
 			if isActive, ok := data["isActive"].(bool); ok && isActive {
 				return "connected"
 			}
+			if reason, ok := data["reason"].(string); ok && reason == "client_outdated" {
+				return "client_outdated"
+			}
 		}
 		return "disconnected"
 	default:

@@ -483,6 +483,7 @@ export interface SessionSummary {
   mismatch: number;
   qr_pending: number;
   initializing: number;
+  client_outdated: number;
 }
 
 export interface SessionInfo {

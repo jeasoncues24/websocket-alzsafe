@@ -28,6 +28,8 @@ export function SessionStatusBadge({
         return <Badge variant="secondary">DB: Conectando</Badge>;
       case "disconnected":
         return <Badge variant="outline">DB: Desconectado</Badge>;
+      case "client_outdated":
+        return <Badge variant="destructive" className="bg-amber-600">DB: Librería desactualizada</Badge>;
       default:
         return <Badge variant="outline">DB: {statusDb}</Badge>;
     }
@@ -88,6 +90,9 @@ export function getConnectionStatusLabel(statusDb: string, runtimeConnected?: bo
   }
   if (statusDb === "disconnected" && runtimeConnected) {
     return "Sin registro DB pero conectado";
+  }
+  if (statusDb === "client_outdated") {
+    return "Librería de WhatsApp desactualizada";
   }
   return statusDb;
 }

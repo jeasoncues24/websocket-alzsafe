@@ -290,6 +290,32 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 		emit("active-"+accountID, data)
 	}
 
+	// finishPermanent registra un corte definitivo de la sesión (no se reintenta)
+	// y emite el evento final para los observadores. El caso client_outdated es
+	// especial: NO pide QR nuevo, porque el arreglo es actualizar el servidor.
+	finishPermanent := func(reason, detail string) {
+		if reason == "" {
+			reason = "disconnect"
+		}
+		if reason == "logged_out" {
+			purgeStore = true
+		}
+		message := "Sesion desconectada"
+		requiresNewQR := true
+		if reason == "client_outdated" {
+			message = "Libreria de WhatsApp desactualizada: actualiza el servidor para reconectar"
+			requiresNewQR = false
+			s.markClientOutdated(accountID)
+		} else {
+			s.markDisconnected(accountID, reason)
+		}
+		extra := map[string]any{"reason": reason, "requiresNewQR": requiresNewQR}
+		if detail != "" {
+			extra["detail"] = detail
+		}
+		emitActive(message, false, extra)
+	}
+
 	logger.Infof("[SESSION] %s iniciando", accountID)
 	if s.sessionStore != nil {
 		s.sessionStore.SetInitializing(accountID)
@@ -339,6 +365,10 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 			disconnect.reason = "temporary_ban"
 			disconnect.permanent = true
 			disconnect.detail = v.String()
+		case *waEvents.ClientOutdated:
+			logger.Errorf("[SESSION] %s ← WA:ClientOutdated (405): librería whatsmeow desactualizada", accountID)
+			disconnect.reason = "client_outdated"
+			disconnect.permanent = true
 		case *waEvents.ConnectFailure:
 			logger.Warnf("[SESSION] %s ← WA:ConnectFailure reason=%s", accountID, v.Reason.String())
 			disconnect.reason = "connect_failure"
@@ -372,11 +402,7 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 					extra["detail"] = disconnect.detail
 				}
 				if disconnect.permanent {
-					if disconnect.reason == "logged_out" {
-						purgeStore = true
-					}
-					s.markDisconnected(accountID, reason)
-					emitActive("Sesion desconectada", false, extra)
+					finishPermanent(disconnect.reason, disconnect.detail)
 					return
 				}
 
@@ -404,16 +430,8 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 						reconnected = true
 					case d := <-disconnectCh:
 						if d.permanent {
-							if d.reason == "logged_out" {
-								purgeStore = true
-							}
 							timer.Stop()
-							s.markDisconnected(accountID, d.reason)
-							extraPermanent := map[string]any{"reason": d.reason, "requiresNewQR": true}
-							if d.detail != "" {
-								extraPermanent["detail"] = d.detail
-							}
-							emitActive("Sesion desconectada", false, extraPermanent)
+							finishPermanent(d.reason, d.detail)
 							return
 						}
 						reason = d.reason
@@ -484,6 +502,10 @@ func (s *Service) runSession(accountID string, runtime *sessionRuntime) {
 					return
 				}
 				switch evt.Event {
+				case "err-client-outdated":
+					finishPermanent("client_outdated", "")
+					runtime.cancel()
+					return
 				case "code":
 					if s.sessionStore != nil {
 						s.sessionStore.SetQRPending(accountID, evt.Code)
@@ -549,6 +571,23 @@ func (s *Service) markDisconnected(accountID, reason string) {
 	if s.webhookEmitter != nil {
 		if err := s.webhookEmitter.EmitSessionDisconnectedByAccount(accountID, reason); err != nil {
 			logger.Warnf("webhook emit session.disconnected failed for %s: %v", accountID, err)
+		}
+	}
+}
+
+// markClientOutdated registra que WhatsApp rechazó la conexión con 405
+// (client-outdated). Es un estado terminal para el runtime: no se reintenta,
+// porque el único arreglo es actualizar go.mau.fi/whatsmeow y redesplegar.
+func (s *Service) markClientOutdated(accountID string) {
+	logger.Errorf("[SESSION] %s → LIBRERIA DESACTUALIZADA (WhatsApp 405 client-outdated); actualiza whatsmeow y redespliega", accountID)
+	if s.sessionStore != nil {
+		s.sessionStore.SetClientOutdated(accountID)
+		s.sessionStore.AppendEvent(accountID, "client_outdated", "WhatsApp rechazo la conexion: version de cliente obsoleta (405)")
+	}
+	s.syncTelefonoDisconnected(accountID)
+	if s.webhookEmitter != nil {
+		if err := s.webhookEmitter.EmitSessionDisconnectedByAccount(accountID, "client_outdated"); err != nil {
+			logger.Warnf("webhook emit session.disconnected(client_outdated) failed for %s: %v", accountID, err)
 		}
 	}
 }
