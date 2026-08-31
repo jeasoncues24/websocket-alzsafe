@@ -263,6 +263,11 @@ cd backend
 ../dist/wsapi migrate down     # revierte la última migración
 ```
 
+`status`, `up`, `down` y `adopt` también funcionan sin el prefijo `migrate`
+(`../dist/wsapi status`). Sin comando, el binario inicia el servidor HTTP; un
+comando no reconocido termina con error y código de salida 1 (no arranca el
+servidor).
+
 Antes de correr `migrate up`, toma backup de la base de datos o confirma que existe un respaldo reciente y valida que la ventana de mantenimiento sea la correcta.
 
 Si no estás seguro de si la release trae migraciones, revísalo antes del restart.

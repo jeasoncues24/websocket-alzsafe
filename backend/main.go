@@ -14,43 +14,50 @@ import (
 )
 
 func main() {
-	migrateCmd := flag.NewFlagSet("migrate", flag.ExitOnError)
-
 	flag.Usage = func() {
-		fmt.Println("Usage: wsapi [OPTIONS] COMMAND")
+		fmt.Println("Uso: wsapi [COMANDO]")
 		fmt.Println("")
-		fmt.Println("Commands:")
-		fmt.Println("  migrate status  Muestra el estado de las migraciones")
-		fmt.Println("  migrate up      Aplica las migraciones pendientes")
-		fmt.Println("  migrate down    Revierte la última migración")
-		fmt.Println("  migrate adopt   Adopta el historial de golang-migrate en goforge")
+		fmt.Println("Sin comando: inicia el servidor HTTP.")
 		fmt.Println("")
-		fmt.Println("Options:")
+		fmt.Println("Comandos:")
+		fmt.Println("  serve                     Inicia el servidor HTTP (igual que sin comando)")
+		fmt.Println("  migrate status | status   Muestra el estado de las migraciones")
+		fmt.Println("  migrate up     | up       Aplica las migraciones pendientes")
+		fmt.Println("  migrate down   | down     Revierte la última migración")
+		fmt.Println("  migrate adopt  | adopt    Adopta el historial de golang-migrate en goforge")
+		fmt.Println("")
+		fmt.Println("Opciones:")
 		flag.PrintDefaults()
 	}
 
 	flag.Parse()
 
 	if flag.NArg() < 1 {
-		flag.Usage()
 		startServer()
 		return
 	}
 
-	if flag.Arg(0) == "migrate" || flag.Arg(0) == "migration" {
-		runMigrateCommand(migrateCmd)
-		return
+	switch flag.Arg(0) {
+	case "serve", "server":
+		startServer()
+	case "migrate", "migration":
+		runMigrateCommand(flag.Args()[1:])
+	case "status", "up", "down", "adopt":
+		// Atajos: equivalen a "migrate <comando>".
+		runMigrateCommand(flag.Args())
+	default:
+		fmt.Printf("Comando desconocido: %q\n\n", flag.Arg(0))
+		flag.Usage()
+		os.Exit(1)
 	}
-
-	startServer()
 }
 
-func runMigrateCommand(migrateCmd *flag.FlagSet) {
-	args := flag.Args()[1:]
-
+func runMigrateCommand(args []string) {
 	if len(args) < 1 {
-		migrateCmd.Usage()
-		return
+		fmt.Println("Falta el subcomando de migración (status | up | down | adopt)")
+		fmt.Println("")
+		flag.Usage()
+		os.Exit(1)
 	}
 
 	cfg := config.Load()
@@ -75,8 +82,9 @@ func runMigrateCommand(migrateCmd *flag.FlagSet) {
 	case "adopt":
 		runAdopt(ctx, runner)
 	default:
-		fmt.Printf("Unknown command: %s\n", args[0])
-		migrateCmd.Usage()
+		fmt.Printf("Subcomando de migración desconocido: %q\n\n", args[0])
+		flag.Usage()
+		os.Exit(1)
 	}
 }
 
