@@ -38,3 +38,11 @@ Este archivo sirve como referencia de comandos y convenciones del proyecto para 
 * **Imports:** Rutas relativas comenzando siempre por `wsapi/internal/...`.
 * **Estructura:** Respetar la separación entre dominio (`internal/domain`), persistencia (`internal/storage`) y capa HTTP (`internal/http`).
 * **Seguridad:** Proteger campos sensibles (como secretos de webhook) etiquetándolos con `json:"-"` en las entidades de dominio para evitar fugas.
+
+### Frontend (Next.js / shadcn/ui)
+* **Sistema de diseño obligatorio:** Todo trabajo de UI parte de `DESIGN.md` y `PRODUCT.md` (raíz). Respetar las reglas *No-Rainbow*, *Grey-State*, *Warning-Light* y *Flat-At-Rest*: el color sale solo de tokens de `frontend/app/globals.css`, sin paletas por vista ni degradados/glassmorphism.
+* **Skill `impeccable` — invocar las skills necesarias:** Al ejecutar `/impeccable` (o encarar cualquier tarea de diseño o refinamiento de interfaz) el agente DEBE, además, invocar las skills que dejan el resultado funcional:
+  * **`shadcn`** — siempre que se agregue, modifique, depure o componga un componente de UI. El proyecto usa shadcn/ui (`frontend/components.json`, estilo `base-nova`, iconos `lucide`, alias `@/components/ui`). Resolver componentes con la skill, no copiarlos a mano.
+  * **`migrate-radix-to-base`** — solo cuando se pida explícitamente migrar primitivas de Radix UI a Base UI.
+* **Primitivas:** Vestir siempre sobre `frontend/components/ui/*` con `cn()` de `@/lib/utils`; no introducir una segunda librería de componentes ni una segunda familia tipográfica (Plus Jakarta Sans es la única).
+* **Verificar:** `cd frontend && npm run lint` y `npm run build` antes de cerrar un cambio de UI.
