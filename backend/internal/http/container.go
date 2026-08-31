@@ -159,7 +159,7 @@ func NewContainer() *Container {
 		EmpresaStore:          empresaStore,
 		TelefonoStore:         telefonoStore,
 		DB:                    db,
-		StartupTasks:          composeStartupTasks(buildStartupBootstrap(cfg, manager, sessionStore, telefonoStore), webhookStartupTask, buildJobQueueRecovery(jobQueueRepo, broadcastWorker, telefonoStore)),
+		StartupTasks:          composeStartupTasks(buildStartupBootstrap(cfg, manager, sessionStore, telefonoStore), webhookStartupTask, buildJobQueueRecovery(jobQueueRepo, broadcastWorker, telefonoStore), func(ctx context.Context) { adminSessionsHandler.StartStream(ctx) }),
 		AuthHandler:           authHandler,
 		CompaniesHandler:      companiesHandler,
 		ApiKeysHandler:        apiKeysHandler,

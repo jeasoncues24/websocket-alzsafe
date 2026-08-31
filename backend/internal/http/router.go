@@ -784,6 +784,7 @@ var registeredRoutes = map[string][]string{
 	"/api/admin/api-keys/{id}/audit":            {"GET"},
 	"/api/admin/api-keys/{id}/audit/stats":      {"GET"},
 	"/api/admin/sesiones":                       {"GET", "POST"},
+	"/api/admin/sesiones/stream":                {"GET"},
 	"/api/admin/sesiones/diagnostico":           {"GET"},
 	"/api/admin/mensajes":                       {"GET", "POST"},
 	"/api/admin/mensajes/{id}":                  {"POST"},

@@ -84,6 +84,7 @@ func RegisterAdminRoutes(mux *http.ServeMux, c *Container, k *Kernel) {
 	}
 	if c.AdminSessionsHandler != nil {
 		mux.Handle("GET /api/admin/sesiones", adminStack(http.HandlerFunc(c.AdminSessionsHandler.GetSessions)))
+		mux.Handle("GET /api/admin/sesiones/stream", adminStack(http.HandlerFunc(c.AdminSessionsHandler.StreamSessions)))
 		mux.Handle("POST /api/admin/sesiones", adminStack(http.HandlerFunc(c.AdminSessionsHandler.PostSession)))
 		mux.Handle("POST /api/admin/telefonos/{id}/qr-link", adminStack(http.HandlerFunc(c.AdminSessionsHandler.GenerateQRLink)))
 	}

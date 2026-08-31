@@ -127,6 +127,62 @@ func (s *TelefonoStore) ListAll() ([]domain.Telefono, error) {
 	return telefonos, nil
 }
 
+// TelefonoConEmpresa es un teléfono junto al nombre de su empresa, resuelto en la
+// misma query para evitar el patrón N+1 al construir el reporte de sesiones.
+type TelefonoConEmpresa struct {
+	domain.Telefono
+	EmpresaNombre string
+}
+
+// ListAllConEmpresa lista todos los teléfonos con el nombre de su empresa en una
+// sola consulta (LEFT JOIN). El nombre resuelve nombre_comercial y cae a nombre
+// cuando el comercial está vacío o es NULL, replicando el fallback histórico.
+// Portable entre MySQL/MariaDB y SQLite: solo LEFT JOIN + COALESCE + NULLIF.
+func (s *TelefonoStore) ListAllConEmpresa() ([]TelefonoConEmpresa, error) {
+	query := `SELECT t.id, t.empresa_id, t.codigo_pais, t.numero, t.numero_completo,
+			         t.status, t.session_data, t.qr_string, t.last_connected, t.created_at, t.updated_at,
+			         COALESCE(NULLIF(e.nombre_comercial, ''), e.nombre, '') AS empresa_nombre
+			  FROM telefonos t
+			  LEFT JOIN empresas e ON e.id = t.empresa_id
+			  ORDER BY t.empresa_id ASC, t.created_at ASC`
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("error al listar telefonos con empresa: %w", err)
+	}
+	defer rows.Close()
+
+	result := []TelefonoConEmpresa{}
+	for rows.Next() {
+		var t domain.Telefono
+		var qrString sql.NullString
+		var lastConnected sql.NullTime
+		var empresaNombre sql.NullString
+
+		if err := rows.Scan(
+			&t.ID, &t.EmpresaID, &t.CodigoPais, &t.Numero, &t.NumeroCompleto,
+			&t.Status, &t.SessionData, &qrString, &lastConnected,
+			&t.CreatedAt, &t.UpdatedAt, &empresaNombre,
+		); err != nil {
+			return nil, fmt.Errorf("error al escanear telefono con empresa: %w", err)
+		}
+
+		if qrString.Valid {
+			t.QRString = qrString.String
+		}
+		if lastConnected.Valid {
+			t.LastConnected = &lastConnected.Time
+		}
+		result = append(result, TelefonoConEmpresa{Telefono: t, EmpresaNombre: empresaNombre.String})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterando telefonos con empresa: %w", err)
+	}
+
+	return result, nil
+}
+
 // GetByNumeroCompleto busca un teléfono por numero_completo (ej. "51999888777")
 func (s *TelefonoStore) GetByNumeroCompleto(numeroCompleto string) (*domain.Telefono, error) {
 	query := `SELECT id, empresa_id, codigo_pais, numero, numero_completo, status, session_data, qr_string, last_connected, created_at, updated_at

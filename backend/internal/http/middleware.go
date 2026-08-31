@@ -123,6 +123,21 @@ func (w *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return hj.Hijack()
 }
 
+// Unwrap expone el ResponseWriter subyacente para que http.ResponseController
+// (usado por los handlers SSE/streaming) pueda alcanzar Flush, SetWriteDeadline,
+// etc. a través de este wrapper.
+func (w *statusRecorder) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+// Flush implementa http.Flusher para que el streaming (SSE) funcione a través del
+// logging middleware. Es no-op si el ResponseWriter subyacente no soporta flush.
+func (w *statusRecorder) Flush() {
+	if fl, ok := w.ResponseWriter.(http.Flusher); ok {
+		fl.Flush()
+	}
+}
+
 func GetCorrelationID(ctx context.Context) string {
 	if corrID, ok := ctx.Value(CorrelationIDKey).(string); ok {
 		return corrID

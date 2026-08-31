@@ -12,13 +12,11 @@ interface SessionQRDialogProps {
 }
 
 export function SessionQRDialog({ session, open, onOpenChange }: SessionQRDialogProps) {
-  if (!session) return null
-
-  const title = session.empresa_nombre || session.account_id
+  const title = session?.empresa_nombre || session?.account_id || ""
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <QrCode className="h-5 w-5 text-muted-foreground" />
@@ -29,7 +27,7 @@ export function SessionQRDialog({ session, open, onOpenChange }: SessionQRDialog
           </DialogDescription>
         </DialogHeader>
 
-        {session.qr_string ? (
+        {session && session.qr_string ? (
           <div className="flex flex-col items-center gap-4 py-4">
             {/* Fondo blanco fijo: requisito de contraste para que el QR sea escaneable. */}
             <div className="rounded-xl border border-border bg-white p-4">

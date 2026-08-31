@@ -26,10 +26,32 @@ type SessionState struct {
 type SessionStore struct {
 	mu    sync.RWMutex
 	state map[string]SessionState
+
+	cbMu     sync.RWMutex
+	onChange func()
 }
 
 func NewSessionStore() *SessionStore {
 	return &SessionStore{state: make(map[string]SessionState)}
+}
+
+// SetOnChange registra un callback que se invoca tras cada mutación del store
+// (set / AppendEvent), fuera del lock. Lo usa el stream SSE del reporte de sesiones
+// para recomputar el snapshot ante cualquier transición. El callback debe ser no
+// bloqueante: aquí solo se dispara una señal.
+func (s *SessionStore) SetOnChange(fn func()) {
+	s.cbMu.Lock()
+	s.onChange = fn
+	s.cbMu.Unlock()
+}
+
+func (s *SessionStore) fireOnChange() {
+	s.cbMu.RLock()
+	fn := s.onChange
+	s.cbMu.RUnlock()
+	if fn != nil {
+		fn()
+	}
 }
 
 func (s *SessionStore) SetInitializing(accountID string) {
@@ -97,6 +119,7 @@ func (s *SessionStore) Get(accountID string) (SessionState, bool) {
 }
 
 func (s *SessionStore) set(v SessionState) {
+	defer s.fireOnChange()
 	v.AccountID = normalizeSessionAccountID(v.AccountID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -107,6 +130,7 @@ func (s *SessionStore) set(v SessionState) {
 }
 
 func (s *SessionStore) AppendEvent(accountID, eventType, details string) {
+	defer s.fireOnChange()
 	accountID = normalizeSessionAccountID(accountID)
 	s.mu.Lock()
 	defer s.mu.Unlock()

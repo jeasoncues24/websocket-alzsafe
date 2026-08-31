@@ -510,6 +510,19 @@ export async function getAdminSessions(): Promise<SessionsResponse> {
   return fetchWithAuth(`${API_BASE}/api/admin/sesiones`);
 }
 
+// URL del stream SSE del reporte de sesiones. EventSource no admite cabeceras, así
+// que el token de admin viaja como query param (el middleware lo acepta como
+// fallback, igual que en los endpoints WebSocket).
+export function buildAdminSessionsStreamUrl(): string {
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+  const url = new URL(`${API_BASE}/api/admin/sesiones/stream`);
+  if (token) {
+    url.searchParams.set("token", token);
+  }
+  return url.toString();
+}
+
 export interface ReconnectSessionResponse {
   ok: boolean;
   status?: string;

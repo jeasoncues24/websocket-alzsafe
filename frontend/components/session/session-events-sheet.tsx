@@ -54,14 +54,15 @@ export function SessionEventsSheet({
   open,
   onOpenChange,
 }: SessionEventsSheetProps) {
-  if (!session) return null
-
-  const events = session.events ? [...session.events].reverse() : []
-  const title = session.empresa_nombre || session.account_id
+  const events = session?.events ? [...session.events].reverse() : []
+  const title = session?.empresa_nombre || session?.account_id || ""
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto flex flex-col">
+      <SheetContent
+        className="w-full sm:max-w-md overflow-y-auto flex flex-col"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
         <SheetHeader className="pb-4 border-b">
           <SheetTitle className="text-lg font-semibold flex items-center gap-2">
             <Clock className="h-5 w-5 text-muted-foreground" />
@@ -70,15 +71,17 @@ export function SessionEventsSheet({
           <SheetDescription asChild>
             <div className="text-left space-y-1 pt-1">
               <span className="font-medium text-foreground block">{title}</span>
-              <span className="font-mono text-xs text-muted-foreground block select-all">
-                {session.account_id}
-              </span>
+              {session?.account_id && (
+                <span className="font-mono text-xs text-muted-foreground block select-all">
+                  {session.account_id}
+                </span>
+              )}
             </div>
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 py-4">
-          {events.length === 0 ? (
+          {!session || events.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
               <Info className="h-8 w-8 mb-2 opacity-40" />
               <p className="text-sm">No hay eventos registrados recientemente.</p>

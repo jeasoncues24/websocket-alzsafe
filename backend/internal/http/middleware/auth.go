@@ -90,20 +90,29 @@ func (m *AuthMiddleware) ValidateToken(tokenString string) (*domain.AdminJWTClai
 func (m *AuthMiddleware) RequireAuth() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tokenString := ""
 			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
+			switch {
+			case authHeader != "":
+				// Extract token from "Bearer <token>"
+				parts := strings.Split(authHeader, " ")
+				if len(parts) != 2 || parts[0] != "Bearer" {
+					writeAuthError(w, http.StatusUnauthorized, "Formato de token inválido")
+					return
+				}
+				tokenString = parts[1]
+			default:
+				// Fallback para clientes que no pueden fijar cabeceras (EventSource/SSE):
+				// el token viaja como query param, igual que en los endpoints WebSocket.
+				tokenString = r.URL.Query().Get("token")
+			}
+
+			if tokenString == "" {
 				writeAuthError(w, http.StatusUnauthorized, "Token requerido")
 				return
 			}
 
-			// Extract token from "Bearer <token>"
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				writeAuthError(w, http.StatusUnauthorized, "Formato de token inválido")
-				return
-			}
-
-			claims, err := m.ValidateToken(parts[1])
+			claims, err := m.ValidateToken(tokenString)
 			if err != nil {
 				writeAuthError(w, http.StatusUnauthorized, "Token inválido")
 				return
