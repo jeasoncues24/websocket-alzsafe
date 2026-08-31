@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -160,7 +161,8 @@ func connectedWhatsAppClient(t *testing.T) *whatsmeow.Client {
 	t.Helper()
 	client := &whatsmeow.Client{}
 	fs := &socket.FrameSocket{}
-	setUnexportedField(t, fs, "conn", &websocket.Conn{})
+	// whatsmeow >= 2026-08 guarda FrameSocket.conn como atomic.Pointer[websocket.Conn].
+	setUnexportedAtomicPointer(t, fs, "conn", &websocket.Conn{})
 	noise := &socket.NoiseSocket{}
 	setUnexportedField(t, noise, "fs", fs)
 	setUnexportedField(t, client, "socket", noise)
@@ -174,4 +176,16 @@ func setUnexportedField(t *testing.T, target any, field string, value any) {
 		t.Fatalf("field %s not found", field)
 	}
 	reflect.NewAt(rv.Type(), unsafe.Pointer(rv.UnsafeAddr())).Elem().Set(reflect.ValueOf(value))
+}
+
+// setUnexportedAtomicPointer asigna value a un campo no exportado de tipo
+// atomic.Pointer[T] mediante su método Store.
+func setUnexportedAtomicPointer[T any](t *testing.T, target any, field string, value *T) {
+	t.Helper()
+	rv := reflect.ValueOf(target).Elem().FieldByName(field)
+	if !rv.IsValid() {
+		t.Fatalf("field %s not found", field)
+	}
+	ptr := reflect.NewAt(rv.Type(), unsafe.Pointer(rv.UnsafeAddr())).Interface().(*atomic.Pointer[T])
+	ptr.Store(value)
 }

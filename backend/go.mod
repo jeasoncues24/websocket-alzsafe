@@ -4,26 +4,26 @@ go 1.26.2
 
 require (
 	github.com/MMaZX/goforge v0.1.0
-	github.com/coder/websocket v1.8.14
+	github.com/coder/websocket v1.8.15
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
-	github.com/rs/zerolog v1.34.0
-	go.mau.fi/whatsmeow v0.0.0-20260410162419-b95d92207080
-	golang.org/x/crypto v0.54.0
+	github.com/rs/zerolog v1.35.1
+	go.mau.fi/whatsmeow v0.0.0-20260828224850-0fadda796019
+	golang.org/x/crypto v0.55.0
 	modernc.org/sqlite v1.18.1
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
-	github.com/petermattis/goid v0.0.0-20260113132338-7c7de50cc741 // indirect
+	github.com/petermattis/goid v0.0.0-20260816044145-ed329add6b1b // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
-	golang.org/x/exp v0.0.0-20260212183809-81e46e3db34a // indirect
-	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/exp v0.0.0-20260813180055-c1d0aacb2297 // indirect
+	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/tools v0.47.0 // indirect
+	golang.org/x/tools v0.49.0 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
 	modernc.org/cc/v3 v3.36.3 // indirect
 	modernc.org/ccgo/v3 v3.16.9 // indirect
@@ -43,10 +43,10 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.27 // indirect
-	go.mau.fi/libsignal v0.2.1 // indirect
-	go.mau.fi/util v0.9.6 // indirect
-	golang.org/x/net v0.56.0 // indirect
+	go.mau.fi/libsignal v0.2.2 // indirect
+	go.mau.fi/util v0.10.1-0.20260820140024-eb612d936fde // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
-	google.golang.org/protobuf v1.36.11
+	golang.org/x/text v0.41.0 // indirect
+	google.golang.org/protobuf v1.36.12
 )
