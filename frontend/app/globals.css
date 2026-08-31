@@ -36,8 +36,10 @@
     --sidebar-accent-foreground: 0 0% 12.549%;
     --sidebar-border: 0 0% 87.451%;
     --sidebar-ring: 151.3274 66.8639% 66.8627%;
-    --font-sans: Outfit, sans-serif;
+    --font-sans: "Plus Jakarta Sans", sans-serif;
     --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+
+
     --font-mono: monospace;
     --radius: 0.5rem;
     --shadow-2xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);
@@ -92,8 +94,10 @@
     --sidebar-accent-foreground: 0 0% 98.0392%;
     --sidebar-border: 0 0% 16.0784%;
     --sidebar-ring: 141.8919 69.1589% 58.0392%;
-    --font-sans: Outfit, sans-serif;
+    --font-sans: "Plus Jakarta Sans", sans-serif;
     --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+
+
     --font-mono: monospace;
     --radius: 0.5rem;
     --shadow-2xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.09);

@@ -1,13 +1,17 @@
 import type { Metadata } from "next";
-import { Outfit } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AdminAuthCheck } from "@/components/admin-auth-check";
 
-const fontSans = Outfit({
-  subsets: ["latin"],
+const fontSans = localFont({
+  src: "../public/fonts/PlusJakartaSans-Variable.woff2",
   variable: "--font-sans",
+  display: "swap",
+  weight: "200 800",
 });
+
+
 
 export const metadata: Metadata = {
   title: "WhatsApp API Admin",

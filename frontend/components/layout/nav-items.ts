@@ -8,20 +8,41 @@ import {
   Users,
   Shield,
   LayoutGrid,
+  LucideIcon,
 } from "lucide-react";
 
-export const navItems = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  { id: "companies", label: "Empresas", icon: Building2, href: "/empresas" },
-  { id: "messages", label: "Mensajes", icon: MessageSquare, href: "/messages" },
-  { id: "sessions", label: "Sesiones", icon: Wifi, href: "/sessions" },
-  { id: "broadcasts", label: "Broadcasts", icon: Send, href: "/broadcasts" },
-  { id: "users", label: "Usuario Admin", icon: Users, href: "/usuario_admin" },
-  { id: "roles", label: "Roles", icon: Shield, href: "/roles" },
-  { id: "modules", label: "Módulos", icon: LayoutGrid, href: "/modules" },
-  { id: "settings", label: "Settings", icon: Settings, href: "/settings" },
+export interface NavItem {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  href: string;
+  category: "general" | "messaging" | "admin" | "system";
+  badge?: string;
+}
+
+export const navSections = [
+  { id: "general", label: "GENERAL" },
+  { id: "messaging", label: "HERRAMIENTAS" },
+  { id: "admin", label: "ADMINISTRACIÓN" },
+  { id: "system", label: "SOPORTE" },
 ] as const;
+
+export const navItems: NavItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", category: "general" },
+  { id: "companies", label: "Empresas", icon: Building2, href: "/empresas", category: "general" },
+  { id: "sessions", label: "Sesiones", icon: Wifi, href: "/sessions", category: "general" },
+  
+  { id: "messages", label: "Mensajes", icon: MessageSquare, href: "/messages", category: "messaging" },
+  { id: "broadcasts", label: "Broadcasts", icon: Send, href: "/broadcasts", category: "messaging" },
+
+  { id: "users", label: "Usuario Admin", icon: Users, href: "/usuario_admin", category: "admin" },
+  { id: "roles", label: "Roles", icon: Shield, href: "/roles", category: "admin" },
+  { id: "modules", label: "Módulos", icon: LayoutGrid, href: "/modules", category: "admin" },
+
+  { id: "settings", label: "Settings", icon: Settings, href: "/settings", category: "system" },
+];
 
 export function getActiveNavItem(pathname: string) {
   return navItems.find((item) => pathname.startsWith(item.href)) ?? null;
 }
+

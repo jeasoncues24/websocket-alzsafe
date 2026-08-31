@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
+import { TopBar } from "@/components/layout/top-bar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { getAuthMe } from "@/lib/api";
 import { useAppStore } from "@/stores/useAppStore";
@@ -89,12 +90,13 @@ export function AdminAuthCheck({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <MobileNav />
-        <main className="flex-1 overflow-auto bg-background p-4 md:p-6">
-          <div key={pathname} className="motion-enter-up flex h-full flex-col">
+        <TopBar />
+        <main className="flex-1 overflow-auto bg-background/50 p-4 md:p-6 lg:p-8">
+          <div key={pathname} className="motion-enter-up mx-auto flex h-full max-w-7xl flex-col">
             {children}
           </div>
         </main>
@@ -102,3 +104,4 @@ export function AdminAuthCheck({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
