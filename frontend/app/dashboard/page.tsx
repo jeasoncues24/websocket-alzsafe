@@ -357,8 +357,8 @@ export default function DashboardPage() {
           </CardHeader>
 
           <CardContent className="pt-0">
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-64 w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                 <AreaChart
                   data={trafficChartData}
                   margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
@@ -436,8 +436,8 @@ export default function DashboardPage() {
           </CardHeader>
 
           <CardContent className="pt-0">
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-64 w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                 <BarChart data={weeklyData} margin={{ top: 20, right: 10, left: -25, bottom: 0 }}>
                   <XAxis
                     dataKey="dia"
@@ -499,8 +499,8 @@ export default function DashboardPage() {
           </CardHeader>
 
           <CardContent className="flex flex-col items-center justify-center pt-2">
-            <div className="relative flex h-52 w-full items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="relative flex h-52 w-full min-w-0 items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
                 <PieChart>
                   <Pie
                     data={distributionData}

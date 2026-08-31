@@ -1,99 +1,43 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { SessionQRDialog } from "@/components/session/session-qr-dialog"
+import { SessionDisconnectDialog } from "@/components/session/session-disconnect-dialog"
+import { SessionEventsSheet } from "@/components/session/session-events-sheet"
+import { DataTable } from "./data-table"
+import { DataCardList } from "./data-card-list"
+import { DataTableToolbar, type StatusTabFilter } from "./data-table-toolbar"
+import { getColumns } from "./columns"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
-import { Skeleton } from "@/components/ui/skeleton"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { QRRender } from "@/components/qr/qr-render"
-import {
-  QrCode, LogOut, RefreshCw, Wifi, WifiOff, Loader2,
-  Search, Building2, Hash, ClipboardList, AlertTriangle,
-} from "lucide-react"
-import {
-  getAdminSessions, postAdminSession, reconnectAdminSession,
-  type SessionInfo, type SessionSummary,
+  getAdminSessions,
+  postAdminSession,
+  reconnectAdminSession,
+  type SessionInfo,
+  type SessionSummary,
 } from "@/lib/api"
-
-function relativeTime(ts: string): string {
-  const diff = Date.now() - new Date(ts).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return "ahora"
-  if (m < 60) return `hace ${m}m`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `hace ${h}h`
-  return `hace ${Math.floor(h / 24)}d`
-}
-
-function formatLocalTime(ts: string): string {
-  return new Date(ts).toLocaleString("es-PE", {
-    day: "2-digit", month: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-    hour12: false,
-  })
-}
-
-function StatusBadge({ status }: { status: string }) {
-  switch (status) {
-    case "active":
-      return <Badge className="bg-green-500 hover:bg-green-500 text-white">Activa</Badge>
-    case "qr_pending":
-      return <Badge variant="secondary">QR Pendiente</Badge>
-    case "initializing":
-      return <Badge variant="secondary">Conectando</Badge>
-    case "disconnected":
-      return <Badge variant="destructive">Desconectada</Badge>
-    case "client_outdated":
-      return <Badge variant="destructive" className="bg-amber-600 hover:bg-amber-600">Librería desactualizada</Badge>
-    default:
-      return <Badge variant="outline">Inactiva</Badge>
-  }
-}
-
-function MetricsTile({ label, value, colorClass }: { label: string; value: number; colorClass: string }) {
-  return (
-    <Card>
-      <CardContent className="pt-4 pb-4">
-        <div className={`text-2xl font-bold ${colorClass}`}>{value}</div>
-        <div className="text-sm text-muted-foreground">{label}</div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function EventTypeIcon({ type }: { type: string }) {
-  switch (type) {
-    case "connected": return <Wifi className="h-3 w-3 text-green-500 shrink-0" />
-    case "disconnected": return <WifiOff className="h-3 w-3 text-red-400 shrink-0" />
-    case "client_outdated": return <WifiOff className="h-3 w-3 text-amber-500 shrink-0" />
-    case "initializing": return <Loader2 className="h-3 w-3 text-gray-400 shrink-0" />
-    default: return <QrCode className="h-3 w-3 text-blue-400 shrink-0" />
-  }
-}
+import { ShieldCheck, AlertTriangle } from "lucide-react"
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<SessionInfo[]>([])
   const [summary, setSummary] = useState<SessionSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
-  const [empresaFilter, setEmpresaFilter] = useState("")
-  const [numeroFilter, setNumeroFilter] = useState("")
+  // Filtros
+  const [globalFilter, setGlobalFilter] = useState("")
+  const [statusFilter, setStatusFilter] = useState<StatusTabFilter>("all")
 
-  const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null)
+  // Modales y Sheets
+  const [selectedQR, setSelectedQR] = useState<SessionInfo | null>(null)
   const [qrOpen, setQrOpen] = useState(false)
+
+  const [selectedDisconnect, setSelectedDisconnect] = useState<SessionInfo | null>(null)
   const [disconnectOpen, setDisconnectOpen] = useState(false)
-  const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [disconnectLoading, setDisconnectLoading] = useState(false)
+
   const [reconnectingId, setReconnectingId] = useState<number | null>(null)
   const [eventsSession, setEventsSession] = useState<SessionInfo | null>(null)
 
@@ -101,32 +45,46 @@ export default function SessionsPage() {
     setLoading(true)
     try {
       const data = await getAdminSessions()
-      setSessions(data.sessions)
+      setSessions(data.sessions || [])
       setSummary(data.summary ?? null)
-    } catch (error) {
-      console.error("Failed to load sessions:", error)
+      setError(null)
+      setLastUpdated(new Date())
+    } catch (err) {
+      // Se conserva el último dato bueno: una caída del backend no debe
+      // parecer una flota vacía.
+      console.error("Failed to load sessions:", err)
+      setError("No se pudo cargar el estado de las sesiones.")
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => { loadSessions() }, [loadSessions])
+  useEffect(() => {
+    loadSessions()
+  }, [loadSessions])
 
-  const openDisconnect = (accountId: string) => {
-    setDisconnectingId(accountId)
+  const handleOpenQR = (session: SessionInfo) => {
+    setSelectedQR(session)
+    setQrOpen(true)
+  }
+
+  const handleOpenDisconnect = (session: SessionInfo) => {
+    setSelectedDisconnect(session)
     setDisconnectOpen(true)
   }
 
-  const confirmDisconnect = async () => {
-    if (!disconnectingId) return
+  const handleConfirmDisconnect = async () => {
+    if (!selectedDisconnect) return
+    setDisconnectLoading(true)
     try {
-      await postAdminSession("disconnect", disconnectingId)
+      await postAdminSession("disconnect", selectedDisconnect.account_id)
       await loadSessions()
     } catch (error) {
-      console.error("Failed to disconnect:", error)
+      console.error("Failed to disconnect session:", error)
     } finally {
+      setDisconnectLoading(false)
       setDisconnectOpen(false)
-      setDisconnectingId(null)
+      setSelectedDisconnect(null)
     }
   }
 
@@ -142,309 +100,142 @@ export default function SessionsPage() {
     }
   }
 
-  const filteredSessions = sessions.filter((s) => {
-    const empresaOk = !empresaFilter ||
-      (s.empresa_nombre ?? s.account_id).toLowerCase().includes(empresaFilter.toLowerCase())
-    const numeroOk = !numeroFilter ||
-      s.account_id.includes(numeroFilter.replace(/\D/g, ""))
-    return empresaOk && numeroOk
-  })
+  const handleOpenEvents = (session: SessionInfo) => {
+    setEventsSession(session)
+  }
 
-  const disconnectingName = sessions.find(s => s.account_id === disconnectingId)?.empresa_nombre ?? disconnectingId
+  // Filtrado compuesto
+  const filteredSessions = useMemo(() => {
+    return sessions.filter((s) => {
+      // 1. Filtro por pestaña de estado
+      if (statusFilter === "active" && s.status !== "active") return false
+      if (statusFilter === "disconnected" && s.status !== "disconnected") return false
+      if (statusFilter === "qr_pending" && s.status !== "qr_pending") return false
+      if (statusFilter === "mismatch" && !s.mismatch) return false
+
+      // 2. Filtro global por texto
+      if (!globalFilter.trim()) return true
+      const query = globalFilter.toLowerCase().trim()
+      const empresa = (s.empresa_nombre ?? "").toLowerCase()
+      const account = (s.account_id ?? "").toLowerCase()
+      const status = (s.status ?? "").toLowerCase()
+      const empresaId = String(s.empresa_id || "")
+
+      return (
+        empresa.includes(query) ||
+        account.includes(query) ||
+        status.includes(query) ||
+        empresaId.includes(query)
+      )
+    })
+  }, [sessions, statusFilter, globalFilter])
+
+  // Columnas para TanStack Table
+  const columns = useMemo(
+    () =>
+      getColumns({
+        onOpenQR: handleOpenQR,
+        onOpenDisconnect: handleOpenDisconnect,
+        onReconnect: handleReconnect,
+        onOpenEvents: handleOpenEvents,
+        reconnectingId,
+      }),
+    [reconnectingId]
+  )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 pb-12">
       {/* Encabezado */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Sesiones WhatsApp</h1>
-          <p className="text-muted-foreground">Administra las conexiones de WhatsApp por empresa</p>
-        </div>
-        <Button variant="outline" onClick={loadSessions} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          Actualizar
-        </Button>
-      </div>
-
-      {/* Métricas */}
-      {summary && (
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          <MetricsTile label="Activas" value={summary.active} colorClass="text-green-600" />
-          <MetricsTile label="Desconectadas" value={summary.disconnected} colorClass="text-red-600" />
-          <MetricsTile label="Inconsistentes" value={summary.mismatch} colorClass="text-yellow-600" />
-          <MetricsTile label="QR Pendiente" value={summary.qr_pending} colorClass="text-blue-600" />
-        </div>
-      )}
-
-      {/* Buscadores */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Buscar por empresa..."
-            value={empresaFilter}
-            onChange={(e) => setEmpresaFilter(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="relative flex-1">
-          <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Buscar por número..."
-            value={numeroFilter}
-            onChange={(e) => setNumeroFilter(e.target.value)}
-            className="pl-9"
-            inputMode="tel"
-          />
-        </div>
-        {(empresaFilter || numeroFilter) && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => { setEmpresaFilter(""); setNumeroFilter("") }}
-            title="Limpiar filtros"
-          >
-            <Search className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
-      {/* Tabla */}
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[200px]">Empresa</TableHead>
-              <TableHead>Número</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-center">Runtime</TableHead>
-              <TableHead>Última Conexión</TableHead>
-              <TableHead className="text-right pr-4">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
-                    <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : filteredSessions.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                  {sessions.length === 0
-                    ? "No hay sesiones configuradas"
-                    : "Ninguna sesión coincide con los filtros"}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredSessions.map((session) => {
-                const isReconnecting = reconnectingId === session.telefono_id
-                const hasEvents = (session.events?.length ?? 0) > 0
-                return (
-                  <TableRow key={session.account_id}>
-                    {/* Empresa */}
-                    <TableCell className="font-medium max-w-[200px]">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="truncate" title={session.empresa_nombre ?? session.account_id}>
-                          {session.empresa_nombre ?? "—"}
-                        </span>
-                      </div>
-                    </TableCell>
-
-                    {/* Número */}
-                    <TableCell>
-                      <span className="font-mono text-xs text-muted-foreground select-all">
-                        {session.account_id}
-                      </span>
-                    </TableCell>
-
-                    {/* Estado */}
-                    <TableCell>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <StatusBadge status={session.status} />
-                        {session.reconnecting && (
-                          <Badge variant="outline" className="border-blue-400 text-blue-500 text-xs">
-                            Reconectando
-                          </Badge>
-                        )}
-                        {session.mismatch && !session.reconnecting && (
-                          <span title="Estado inconsistente">
-                            <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    {/* Runtime */}
-                    <TableCell className="text-center">
-                      {session.runtime_connected ? (
-                        <span className="inline-flex items-center justify-center" title="Runtime conectado">
-                          <span className="h-2.5 w-2.5 rounded-full bg-green-500 block" />
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center justify-center" title="Runtime desconectado">
-                          <span className="h-2.5 w-2.5 rounded-full bg-red-400 block" />
-                        </span>
-                      )}
-                    </TableCell>
-
-                    {/* Última conexión */}
-                    <TableCell className="text-sm text-muted-foreground">
-                      {session.last_connected ? (
-                        <span title={formatLocalTime(session.last_connected)}>
-                          {relativeTime(session.last_connected)}
-                          <span className="hidden md:inline text-xs ml-1 opacity-70">
-                            · {formatLocalTime(session.last_connected)}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="opacity-50">Nunca</span>
-                      )}
-                    </TableCell>
-
-                    {/* Acciones */}
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {session.status === "qr_pending" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => { setSelectedSession(session); setQrOpen(true) }}
-                          >
-                            <QrCode className="h-3.5 w-3.5 mr-1.5" />
-                            Ver QR
-                          </Button>
-                        )}
-                        {session.status === "active" && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openDisconnect(session.account_id)}
-                          >
-                            <LogOut className="h-3.5 w-3.5 mr-1.5" />
-                            Desconectar
-                          </Button>
-                        )}
-                        {session.status !== "active" && session.telefono_id != null && !session.reconnecting && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isReconnecting}
-                            onClick={() => handleReconnect(session.telefono_id!)}
-                          >
-                            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isReconnecting ? "animate-spin" : ""}`} />
-                            Reconectar
-                          </Button>
-                        )}
-                        {hasEvents && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEventsSession(session)}
-                            title="Ver historial de eventos"
-                          >
-                            <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
-                            Eventos
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              })
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-
-      {/* Conteo de resultados cuando hay filtro activo */}
-      {(empresaFilter || numeroFilter) && !loading && (
+      <div className="space-y-1">
+        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+          <span>Sesiones WhatsApp</span>
+        </h1>
         <p className="text-sm text-muted-foreground">
-          {filteredSessions.length} de {sessions.length} sesiones
+          Supervisa el estado y reconecta los canales de mensajería.
         </p>
+      </div>
+
+      {/* Barra de herramientas: filtro por estado + buscador + refresco */}
+      <DataTableToolbar
+        globalFilter={globalFilter}
+        onGlobalFilterChange={setGlobalFilter}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        summary={summary}
+        loading={loading}
+        onRefresh={loadSessions}
+        lastUpdated={lastUpdated}
+      />
+
+      {/* Estado de error: nunca dejar que un fallo parezca "flota vacía" */}
+      {error && (
+        <Alert variant="destructive">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <AlertTitle>No se pudo cargar el estado de las sesiones</AlertTitle>
+                <AlertDescription>
+                  {sessions.length > 0
+                    ? "Se muestran los últimos datos disponibles. Reintenta para actualizar."
+                    : "Revisa la conexión con el servidor y reintenta."}
+                </AlertDescription>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadSessions}
+              disabled={loading}
+              className="shrink-0 self-start"
+            >
+              Reintentar
+            </Button>
+          </div>
+        </Alert>
       )}
 
-      {/* Dialog: QR */}
-      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>QR — {selectedSession?.empresa_nombre ?? selectedSession?.account_id}</DialogTitle>
-            <DialogDescription>Escanea este código con WhatsApp en tu teléfono</DialogDescription>
-          </DialogHeader>
-          {selectedSession?.qr_string && (
-            <div className="flex flex-col items-center gap-4 p-4">
-              <QRRender value={selectedSession.qr_string} size={200} title={`QR ${selectedSession.account_id}`} />
-              <p className="text-xs text-muted-foreground text-center">
-                Válido por 60 segundos. Recarga la página si expira.
-              </p>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Escritorio: tabla densa. Móvil: lista de tarjetas accionables. */}
+      <div className="hidden md:flex md:flex-col">
+        <DataTable columns={columns} data={filteredSessions} loading={loading} />
+      </div>
+      <div className="md:hidden">
+        <DataCardList
+          data={filteredSessions}
+          loading={loading}
+          onOpenQR={handleOpenQR}
+          onOpenDisconnect={handleOpenDisconnect}
+          onReconnect={handleReconnect}
+          onOpenEvents={handleOpenEvents}
+          reconnectingId={reconnectingId}
+        />
+      </div>
 
-      {/* Dialog: Confirmar desconexión */}
-      <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar desconexión</DialogTitle>
-            <DialogDescription>
-              ¿Deseas desconectar la sesión de <strong>{disconnectingName}</strong>?
-              El dispositivo deberá escanear el código QR nuevamente para reconectar.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setDisconnectOpen(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmDisconnect}>Desconectar</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Diálogo de Código QR */}
+      <SessionQRDialog
+        session={selectedQR}
+        open={qrOpen}
+        onOpenChange={setQrOpen}
+      />
 
-      {/* Sheet: Historial de eventos */}
-      <Sheet open={!!eventsSession} onOpenChange={(open) => { if (!open) setEventsSession(null) }}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader className="mb-4">
-            <SheetTitle>Historial de eventos</SheetTitle>
-            <SheetDescription>
-              {eventsSession?.empresa_nombre ?? eventsSession?.account_id}
-              <span className="block font-mono text-xs mt-0.5 text-muted-foreground">
-                {eventsSession?.account_id}
-              </span>
-            </SheetDescription>
-          </SheetHeader>
-          <div className="space-y-1">
-            {eventsSession?.events && [...eventsSession.events].reverse().map((evt, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-2.5 py-2 border-b last:border-0 text-sm"
-              >
-                <span className="mt-0.5">
-                  {evt.type === "connected" && <Wifi className="h-3.5 w-3.5 text-green-500" />}
-                  {evt.type === "disconnected" && <WifiOff className="h-3.5 w-3.5 text-red-400" />}
-                  {evt.type === "initializing" && <Loader2 className="h-3.5 w-3.5 text-gray-400" />}
-                  {!["connected", "disconnected", "initializing"].includes(evt.type) && (
-                    <QrCode className="h-3.5 w-3.5 text-blue-400" />
-                  )}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <span className="capitalize font-medium">{evt.type}</span>
-                  {evt.details && (
-                    <span className="block text-xs text-muted-foreground truncate" title={evt.details}>
-                      {evt.details}
-                    </span>
-                  )}
-                </div>
-                <span className="font-mono text-xs text-muted-foreground shrink-0" title={formatLocalTime(evt.timestamp)}>
-                  {formatLocalTime(evt.timestamp)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </SheetContent>
-      </Sheet>
+      {/* Diálogo de Confirmación de Desconexión */}
+      <SessionDisconnectDialog
+        open={disconnectOpen}
+        onOpenChange={setDisconnectOpen}
+        onConfirm={handleConfirmDisconnect}
+        targetName={selectedDisconnect?.empresa_nombre || selectedDisconnect?.account_id || ""}
+        loading={disconnectLoading}
+      />
+
+      {/* Sheet de Historial de Eventos */}
+      <SessionEventsSheet
+        session={eventsSession}
+        open={!!eventsSession}
+        onOpenChange={(open) => {
+          if (!open) setEventsSession(null)
+        }}
+      />
     </div>
   )
 }
