@@ -90,3 +90,25 @@ func TestManagerConcurrentAccess(t *testing.T) {
 		t.Fatalf("expected at least one key after concurrent writes")
 	}
 }
+
+func TestManagerMarkPersistent(t *testing.T) {
+	m := NewManager()
+	// MarkPersistent con manager sin servicio o cuenta vacía no debe fallar
+	m.MarkPersistent("")
+	m.MarkPersistent("123456789")
+
+	svc := &Service{
+		runtimes: map[string]*sessionRuntime{
+			"123456789": {
+				subscribers: make(map[chan SessionEvent]struct{}),
+			},
+		},
+	}
+	m.attachService(svc)
+
+	m.MarkPersistent("+123456789")
+
+	if !svc.runtimes["123456789"].isPersistent {
+		t.Fatalf("expected runtime to be marked persistent")
+	}
+}

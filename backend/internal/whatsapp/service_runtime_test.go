@@ -148,3 +148,26 @@ func TestRuntimeAbandonKeepsAliveWhenEverActive(t *testing.T) {
 		// correcto: sigue vivo.
 	}
 }
+
+// TestRuntimeAbandonKeepsAliveWhenPersistent verifica que una sesión marcada como
+// persistente (ej. dispositivo enrolado en SQLite o reconexión de bootstrap) NO se
+// cancela aunque se vayan todos los observadores y nunca haya estado activa aún.
+func TestRuntimeAbandonKeepsAliveWhenPersistent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	rt := &sessionRuntime{
+		ctx:          ctx,
+		cancel:       cancel,
+		subscribers:  make(map[chan SessionEvent]struct{}),
+		isPersistent: true,
+	}
+
+	_, unsub := rt.subscribe()
+	unsub()
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("el runtime no debía cancelarse: la sesión es persistente")
+	case <-time.After(200 * time.Millisecond):
+		// correcto: sigue vivo.
+	}
+}

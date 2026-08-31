@@ -46,11 +46,12 @@ type sessionRuntime struct {
 	storage *sqlstore.Container
 	dbPath  string
 
-	mu          sync.Mutex
-	subscribers map[chan SessionEvent]struct{}
-	last        *SessionEvent
-	closed      bool
-	everActive  bool // true una vez que la sesión llegó a conectarse al menos una vez
+	mu           sync.Mutex
+	subscribers  map[chan SessionEvent]struct{}
+	last         *SessionEvent
+	closed       bool
+	everActive   bool // true una vez que la sesión llegó a conectarse al menos una vez
+	isPersistent bool // true si el dispositivo ya está enrolado en SQLite o fue iniciado como persistente
 }
 
 // markEverActive marca que la sesión llegó a estar activa. Es sticky: una sesión
@@ -97,10 +98,11 @@ func (rt *sessionRuntime) subscribe() (<-chan SessionEvent, func()) {
 				delete(rt.subscribers, ch)
 				close(ch)
 			}
-			// Si se fue el último observador y la sesión nunca llegó a estar
-			// activa (QR abandonado), cancelamos el runtime para no dejar una
-			// sesión QR colgada. Las sesiones ya conectadas se mantienen vivas.
-			abandon := len(rt.subscribers) == 0 && !rt.everActive
+			// Si se fue el último observador, la sesión nunca llegó a estar
+			// activa (QR abandonado) y NO es una sesión persistente (dispositivo enrolado),
+			// cancelamos el runtime para no dejar una sesión QR colgada. Las sesiones ya
+			// conectadas o persistentes se mantienen vivas.
+			abandon := len(rt.subscribers) == 0 && !rt.everActive && !rt.isPersistent
 			rt.mu.Unlock()
 			if abandon && rt.cancel != nil {
 				rt.cancel()
@@ -196,9 +198,13 @@ func (s *Service) StartSession(accountID string) (<-chan SessionEvent, func(), e
 		s.abortRuntime(accountID, runtime)
 		return nil, nil, fmt.Errorf("no se pudo cargar device whatsapp: %w", err)
 	}
+	isPersistent := false
 	if device == nil {
 		device = container.NewDevice()
+	} else if device.ID != nil {
+		isPersistent = true
 	}
+	runtime.isPersistent = isPersistent
 
 	clientLog := NewWhatsAppClientLogger(accountID)
 	client := whatsmeow.NewClient(device, clientLog)
@@ -213,6 +219,22 @@ func (s *Service) StartSession(accountID string) (<-chan SessionEvent, func(), e
 	ch, unsub := runtime.subscribe()
 	go s.runSession(accountID, runtime)
 	return ch, unsub, nil
+}
+
+// MarkPersistent marca una sesión runtime como persistente para que no sea cancelada
+// por la desuscripción de observadores temporales.
+func (s *Service) MarkPersistent(accountID string) {
+	accountID = NormalizeAccountID(accountID)
+	if accountID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if rt, ok := s.runtimes[accountID]; ok && rt != nil {
+		rt.mu.Lock()
+		rt.isPersistent = true
+		rt.mu.Unlock()
+	}
 }
 
 // abortRuntime libera un runtime que falló durante su preparación (antes de

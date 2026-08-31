@@ -139,7 +139,7 @@ func (b *StartupBootstrapper) Run(ctx context.Context) StartupBootstrapSummary {
 				defer wg.Done()
 				defer func() { <-sem }()
 
-				events, unsubscribe, attempts, err := b.startSessionWithRetry(ctx, c.accountID)
+				_, unsubscribe, attempts, err := b.startSessionWithRetry(ctx, c.accountID)
 				mu.Lock()
 				summary.IntentosStart += attempts
 				if err != nil {
@@ -159,19 +159,10 @@ func (b *StartupBootstrapper) Run(ctx context.Context) StartupBootstrapSummary {
 					return
 				}
 
-				go func(ch <-chan SessionEvent, unsub func()) {
-					defer unsub()
-					for {
-						select {
-						case <-ctx.Done():
-							return
-						case _, ok := <-ch:
-							if !ok {
-								return
-							}
-						}
-					}
-				}(events, unsubscribe)
+				b.manager.MarkPersistent(c.accountID)
+				if unsubscribe != nil {
+					unsubscribe()
+				}
 			}(c)
 		}
 

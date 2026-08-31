@@ -112,6 +112,19 @@ func (m *Manager) registerClient(accountID string, client *whatsmeow.Client) {
 	m.clients[accountID] = client
 }
 
+func (m *Manager) MarkPersistent(accountID string) {
+	accountID = NormalizeAccountID(accountID)
+	if accountID == "" {
+		return
+	}
+	m.mu.RLock()
+	service := m.service
+	m.mu.RUnlock()
+	if service != nil {
+		service.MarkPersistent(accountID)
+	}
+}
+
 func (m *Manager) getService() *Service {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
