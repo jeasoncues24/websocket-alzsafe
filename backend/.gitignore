@@ -75,7 +75,8 @@ _bmad/tea/
 # ============================================
 internal/http/static/
 dist/
-sessions/
+# Datos de runtime de whatsmeow (anclado a backend/dist/, no un `sessions/` suelto).
+/dist/sessions/
 debug_log/
 docker-compose.override.yml
 docker-compose.local.yml
