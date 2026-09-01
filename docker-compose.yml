@@ -6,10 +6,11 @@
 #
 # Runtime del backend: PM2 en el host. Ver docs/deploy-backend.md.
 #
-# Uso recomendado (con validación de .env):
+# Uso recomendado (rápido con BuildKit export directo y validación de .env):
 #   ./scripts/build-backend.sh
+#   o 'make build'
 #
-# Uso directo (sin validación de .env):
+# Uso directo alternativo:
 #   docker compose build backend-build
 #   docker compose run --rm backend-build
 
@@ -18,6 +19,7 @@ services:
     build:
       context: ./backend
       dockerfile: ../docker/go/Dockerfile
+      target: builder
       # network: host permite que `go mod download` acceda a internet durante el build
       # en entornos Linux donde la red del contenedor no tiene resolución DNS por defecto.
       network: host

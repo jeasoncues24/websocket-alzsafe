@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, ComposedChart, Line,
+  Tooltip, Legend, ComposedChart, Line,
 } from "recharts";
+import { ResponsiveChart } from "@/components/responsive-chart";
 import { AlertCircle, TrendingUp, TrendingDown, Minus, Clock, Calendar, Users, RotateCw, ShieldAlert, Activity, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -180,7 +181,7 @@ function UsageTimeSeriesChart({ data }: { data: TelemetryTimeSeriesPoint[] }) {
   if (!data.length) return <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">Sin datos en el período seleccionado</div>;
   return (
     <div className="h-72">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveChart initialDimension={{ width: 800, height: 288 }}>
         <ComposedChart data={data}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
@@ -192,7 +193,7 @@ function UsageTimeSeriesChart({ data }: { data: TelemetryTimeSeriesPoint[] }) {
           <Bar yAxisId="izq" dataKey="error_count" name="Errores" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
           <Line yAxisId="der" type="monotone" dataKey="error_rate" name="Tasa error %" stroke="hsl(var(--warning))" strokeWidth={2} dot={false} />
         </ComposedChart>
-      </ResponsiveContainer>
+      </ResponsiveChart>
     </div>
   );
 }
@@ -201,7 +202,7 @@ function LatencyChart({ data }: { data: TelemetryTimeSeriesPoint[] }) {
   if (!data.length) return <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">Sin datos de latencia</div>;
   return (
     <div className="h-48">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveChart initialDimension={{ width: 800, height: 192 }}>
         <AreaChart data={data}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
           <XAxis dataKey="bucket" tick={{ fontSize: 11 }} />
@@ -210,7 +211,7 @@ function LatencyChart({ data }: { data: TelemetryTimeSeriesPoint[] }) {
           <Legend />
           <Area type="monotone" dataKey="latency_avg_ms" name="Latencia promedio (ms)" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.15)" />
         </AreaChart>
-      </ResponsiveContainer>
+      </ResponsiveChart>
     </div>
   );
 }
@@ -357,7 +358,7 @@ export function AuditTabContent({ apiKeyId }: { apiKeyId: number | null }) {
           </CardHeader>
           <CardContent>
             <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveChart initialDimension={{ width: 800, height: 192 }}>
                 <BarChart data={actorData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis type="number" tick={{ fontSize: 11 }} />
@@ -365,7 +366,7 @@ export function AuditTabContent({ apiKeyId }: { apiKeyId: number | null }) {
                   <Tooltip contentStyle={{ fontSize: 12 }} />
                   <Bar dataKey="acciones" name="Acciones" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveChart>
             </div>
           </CardContent>
         </Card>

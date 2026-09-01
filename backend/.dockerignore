@@ -11,8 +11,41 @@ docs/
 *.test
 coverage.txt
 
+# Binarios y artefactos de compilación
+dist/
+wsapi
+wsapi.tmp
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Bases de datos y almacenamiento local
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+
+# Sesiones, logs y adjuntos de WhatsApp
+internal/whatsapp/debug_log/
+**/debug_log/
+debug_log/
+sessions/
+attachments/
+
 # Metadata de herramientas y temporales
+.git/
 .gitignore
 *.log
 *.swp
 *.swo
+.DS_Store
+.vscode/
+.idea/
+.cache/
+tmp/
+scratch/

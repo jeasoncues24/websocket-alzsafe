@@ -25,7 +25,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  ResponsiveContainer,
   BarChart,
   Bar,
   XAxis,
@@ -37,6 +36,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
+import { ResponsiveChart } from "@/components/responsive-chart";
 import {
   getMetrics,
   getAdminSessions,
@@ -358,7 +358,7 @@ export default function DashboardPage() {
 
           <CardContent className="pt-0">
             <div className="h-64 w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
+              <ResponsiveChart initialDimension={{ width: 800, height: 256 }}>
                 <AreaChart
                   data={trafficChartData}
                   margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
@@ -398,7 +398,7 @@ export default function DashboardPage() {
                     fill="url(#colorEnviados)"
                   />
                 </AreaChart>
-              </ResponsiveContainer>
+              </ResponsiveChart>
             </div>
 
             <div className="mt-4 flex items-center justify-center gap-6 text-xs text-muted-foreground border-t border-border/60 pt-3">
@@ -437,7 +437,7 @@ export default function DashboardPage() {
 
           <CardContent className="pt-0">
             <div className="h-64 w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
+              <ResponsiveChart initialDimension={{ width: 800, height: 256 }}>
                 <BarChart data={weeklyData} margin={{ top: 20, right: 10, left: -25, bottom: 0 }}>
                   <XAxis
                     dataKey="dia"
@@ -472,7 +472,7 @@ export default function DashboardPage() {
                     ))}
                   </Bar>
                 </BarChart>
-              </ResponsiveContainer>
+              </ResponsiveChart>
             </div>
 
             <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground border-t border-border/60 pt-3">
@@ -500,7 +500,7 @@ export default function DashboardPage() {
 
           <CardContent className="flex flex-col items-center justify-center pt-2">
             <div className="relative flex h-52 w-full min-w-0 items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
+              <ResponsiveChart initialDimension={{ width: 400, height: 208 }}>
                 <PieChart>
                   <Pie
                     data={distributionData}
@@ -524,7 +524,7 @@ export default function DashboardPage() {
                     }}
                   />
                 </PieChart>
-              </ResponsiveContainer>
+              </ResponsiveChart>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-xl font-black text-foreground">100%</span>
                 <span className="text-[11px] text-muted-foreground">Operativo</span>

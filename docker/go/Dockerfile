@@ -21,3 +21,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     mkdir -p /out && \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/wsapi .
+
+# --- EXPORT STAGE ---
+# Exporta únicamente el binario compilado al host sin desempaquetar capas pesadas en el daemon.
+FROM scratch AS export
+COPY --from=builder /out/wsapi /wsapi

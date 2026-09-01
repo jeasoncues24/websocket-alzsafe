@@ -31,9 +31,20 @@ fi
 mkdir -p "$DIST_DIR"
 
 cd "$REPO_ROOT"
-echo "Compilando wsapi... (contexto: ./backend)"
+echo "Compilando wsapi con BuildKit export directo... (contexto: ./backend)"
 # shellcheck disable=SC2086
-docker compose build $NO_CACHE backend-build
-docker compose run --rm backend-build
+DOCKER_BUILDKIT=1 docker build $NO_CACHE \
+  --network host \
+  --target export \
+  --output type=local,dest="$DIST_DIR" \
+  -f "$REPO_ROOT/docker/go/Dockerfile" \
+  "$REPO_ROOT/backend"
 
-echo "Binario disponible en $DIST_BIN"
+if [ -f "$DIST_BIN" ]; then
+  chmod +x "$DIST_BIN" 2>/dev/null || true
+  echo "Binario listo en ./dist/wsapi"
+  echo "Binario disponible en $DIST_BIN"
+else
+  echo "ERROR: La compilación no generó el binario en $DIST_BIN" >&2
+  exit 1
+fi
