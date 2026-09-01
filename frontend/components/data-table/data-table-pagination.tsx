@@ -13,14 +13,16 @@ import {
 interface DataTablePaginationProps<TData> {
   table: Table<TData>
   pageSizeOptions?: number[]
+  /** Sustantivo plural para el contador ("sesiones", "mensajes", "ítems", …). */
+  itemLabel?: string
 }
 
 export function DataTablePagination<TData>({
   table,
   pageSizeOptions = [10, 20, 30, 50],
+  itemLabel = "resultados",
 }: DataTablePaginationProps<TData>) {
-  const pageIndex = table.getState().pagination.pageIndex
-  const pageSize = table.getState().pagination.pageSize
+  const { pageIndex, pageSize } = table.getState().pagination
   const totalRows = table.getFilteredRowModel().rows.length
   const pageCount = table.getPageCount()
 
@@ -28,24 +30,22 @@ export function DataTablePagination<TData>({
   const endRow = Math.min((pageIndex + 1) * pageSize, totalRows)
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2 py-4 text-sm text-muted-foreground">
+    <div className="flex flex-col items-center justify-between gap-4 px-2 py-4 text-sm text-muted-foreground sm:flex-row">
       {/* Contador de filas visibles */}
-      <div className="flex-1 text-xs sm:text-sm text-center sm:text-left">
+      <div className="flex-1 text-center text-xs sm:text-left sm:text-sm">
         Mostrando <span className="font-medium text-foreground">{startRow}</span> a{" "}
         <span className="font-medium text-foreground">{endRow}</span> de{" "}
-        <span className="font-medium text-foreground">{totalRows}</span> sesiones
+        <span className="font-medium text-foreground">{totalRows}</span> {itemLabel}
       </div>
 
-      <div className="flex items-center gap-4 sm:gap-6 flex-wrap justify-center">
+      <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
         {/* Selector de tamaño de página */}
         <div className="flex items-center gap-2">
-          <span className="text-xs sm:text-sm font-medium">Filas por pág.</span>
+          <span className="text-xs font-medium sm:text-sm">Filas por pág.</span>
           <Select
             value={`${pageSize}`}
-            onChange={(e) => {
-              table.setPageSize(Number(e.target.value))
-            }}
-            className="h-8 w-[70px] text-xs"
+            onChange={(e) => table.setPageSize(Number(e.target.value))}
+            className="h-8 w-[78px] text-xs"
           >
             {pageSizeOptions.map((size) => (
               <option key={size} value={`${size}`}>
@@ -56,7 +56,7 @@ export function DataTablePagination<TData>({
         </div>
 
         {/* Indicador de página actual */}
-        <div className="text-xs sm:text-sm font-medium">
+        <div className="text-xs font-medium sm:text-sm">
           Pág. {pageCount === 0 ? 0 : pageIndex + 1} de {pageCount}
         </div>
 
@@ -65,7 +65,7 @@ export function DataTablePagination<TData>({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 hidden sm:flex"
+            className="hidden h-8 w-8 sm:flex"
             onClick={() => table.setPageIndex(0)}
             disabled={!table.getCanPreviousPage()}
             title="Primera página"
@@ -95,7 +95,7 @@ export function DataTablePagination<TData>({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 hidden sm:flex"
+            className="hidden h-8 w-8 sm:flex"
             onClick={() => table.setPageIndex(pageCount - 1)}
             disabled={!table.getCanNextPage()}
             title="Última página"
