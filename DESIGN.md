@@ -152,15 +152,17 @@ Paleta funcional de grises casi puros con un único acento verde y una reserva d
 El sistema tiene un solo acento. `secondary` es un gris casi idéntico al fondo (`hsl(0 0% 99.22%)`) para botones y chips de bajo énfasis; no es un segundo color de marca.
 
 ### Tertiary
-- **Rojo Alarma** (`hsl(9.89 81.98% 43.53%)`): exclusivamente destructivo —eliminar, desconectar, error de formulario (`aria-invalid`)—. Nunca decorativo, nunca para "malo" en un gráfico.
+- **Rojo Alarma** (`hsl(9.89 81.98% 43.53%)` claro / `hsl(0 72.2% 50.6%)` oscuro): exclusivamente destructivo —eliminar, desconectar, error de formulario (`aria-invalid`)—. Nunca decorativo, nunca para "malo" en un gráfico. En modo oscuro se usa un rojo señal más brillante para mantener el contraste sobre el lienzo negro; su texto (`destructive-foreground`) es blanco puro.
 
 ### Neutral
-- **Lienzo** (`hsl(0 0% 98.82%)` claro / `hsl(0 0% 7.06%)` oscuro): fondo de página y de `card`.
+- **Lienzo** (`hsl(0 0% 98.82%)` claro / `hsl(0 0% 0%)` oscuro, AMOLED): fondo de página (`background`) y de la barra lateral (`sidebar`).
 - **Tinta** (`hsl(0 0% 9.02%)` claro / `hsl(214 32% 91%)` oscuro): texto principal (`foreground`).
 - **Tinta Tenue** (`hsl(0 0% 12.55%)` claro / `hsl(0 0% 63.5%)` oscuro): texto secundario, descripciones, iconos inactivos (`muted-foreground`).
-- **Superficie Hundida** (`hsl(0 0% 92.94%)`): `muted` / `accent`, fondo de estados hover fantasma, pies de `card`, badges neutros.
-- **Filo** (`hsl(0 0% 87.45%)`): todos los bordes y divisores (`border`); en `card` se aplica como `ring` de 1px a `foreground/10`.
-- **Campo** (`hsl(0 0% 96.47%)`): relleno interno de inputs en reposo (`input`).
+- **Superficie Hundida** (`hsl(0 0% 92.94%)` claro / `muted` `hsl(0 0% 9%)`, `accent` `hsl(0 0% 13%)` oscuro): fondo de estados hover fantasma, pies de `card`, badges neutros.
+- **Filo** (`hsl(0 0% 87.45%)` claro / `hsl(0 0% 15%)` oscuro): todos los bordes y divisores (`border`); en `card` se aplica como `ring` de 1px a `foreground/10`.
+- **Campo** (`hsl(0 0% 96.47%)` claro / `hsl(0 0% 10%)` oscuro): relleno interno de inputs en reposo (`input`).
+
+**Rampa de superficies en modo oscuro (AMOLED):** el negro puro es el lienzo y el borde de 1px define la forma de cada superficie. La luz sube de forma monótona para que todo lo interactivo quede por encima del `card`, nunca por debajo: `background`/`sidebar` 0% → `card` 4% → `popover` 8% → `muted` 9% → `secondary`/`input` 10% → `accent` 13% → `border` 15%.
 
 ### Chart
 - **chart-1..5** (`hsl(151 67% 67%)` verde, `hsl(217 91% 60%)` azul, `hsl(258 90% 66%)` violeta, `hsl(38 92% 50%)` ámbar, `hsl(160 84% 39%)` teal): reservados para series de datos en Recharts, en este orden. Fuera de un gráfico no se usan.
