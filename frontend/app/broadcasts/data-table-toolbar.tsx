@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Select } from "@/components/ui/select"
+import { EmpresaCombobox } from "@/components/companies/empresa-combobox"
 import { cn } from "@/lib/utils"
 import {
   Search,
@@ -13,7 +13,6 @@ import {
   XCircle,
   Clock,
   Loader2,
-  Building2,
 } from "lucide-react"
 import { type Empresa } from "@/lib/api"
 
@@ -138,35 +137,12 @@ export function DataTableToolbar({
             )}
           </div>
 
-          {/* Filtro por empresa */}
-          <div className="flex items-center gap-1.5 w-full sm:w-auto">
-            <div className="relative w-full sm:w-[220px]">
-              <Building2 className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Select
-                value={companyFilter}
-                onChange={(e) => onCompanyFilterChange(e.target.value)}
-                className="h-9 pl-8 text-xs"
-              >
-                <option value="">Todas las empresas</option>
-                {companies.map((c) => (
-                  <option key={c.ruc} value={c.ruc}>
-                    {c.nombre ? `${c.nombre} (${c.ruc})` : c.ruc}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            {companyFilter && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={() => onCompanyFilterChange("")}
-                title="Limpiar filtro de empresa"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+          {/* Filtro por empresa Server-Side */}
+          <EmpresaCombobox
+            value={companyFilter}
+            onChange={(ruc) => onCompanyFilterChange(ruc)}
+            selectedEmpresaName={companies.find((c) => c.ruc === companyFilter)?.nombre}
+          />
         </div>
 
         {/* Botón de refresco */}

@@ -1,27 +1,13 @@
-"use client";
+"use client"
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
-import { Search, Building2, Plus, Pencil, Eye, Trash2, KeyRound, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
+import { DataTable } from "@/components/data-table"
+import { getColumns } from "./columns"
+import { DataTableToolbar, type EmpresaStatusFilter } from "./data-table-toolbar"
+import { DataCardList } from "./data-card-list"
+import { EmpresaFormModal } from "@/components/companies/empresa-form-modal"
+import { EmpresaDetailModal } from "@/components/companies/empresa-detail-modal"
 import {
   getEmpresas,
   createEmpresa,
@@ -30,310 +16,296 @@ import {
   restoreEmpresa,
   type Empresa,
   type EmpresaCreateRequest,
-} from "@/lib/api";
-import { EmpresaFormModal } from "@/components/companies/empresa-form-modal";
-import { EmpresaDetailModal } from "@/components/companies/empresa-detail-modal";
+} from "@/lib/api"
+import { Building2, AlertCircle, CheckCircle2 } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { PaginationState } from "@tanstack/react-table"
 
 export default function CompaniesPage() {
-  const router = useRouter();
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [estado, setEstado] = useState<string>("todos");
-  const [page, setPage] = useState(1);
-  const limit = 20;
+  const router = useRouter()
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<Empresa | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailTarget, setDetailTarget] = useState<Empresa | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [restoringId, setRestoringId] = useState<number | null>(null);
-  const [restoreError, setRestoreError] = useState("");
-  const [loadError, setLoadError] = useState("");
-  const [deleteError, setDeleteError] = useState("");
+  // Filtros y paginación de servidor
+  const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<EmpresaStatusFilter>("all")
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  })
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const resp = await getEmpresas({
-        page,
-        limit,
-        busqueda: search || undefined,
-        estado: estado !== "todos" ? estado : undefined,
-      });
-      setEmpresas(resp.empresas ?? []);
-      setTotal(resp.total);
-      setLoadError("");
-    } catch (err: unknown) {
-      setEmpresas([]);
-      setLoadError(
-        err instanceof Error ? err.message : "Error al cargar empresas",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search, estado]);
+  // Modales y estados de fila
+  const [formOpen, setFormOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<Empresa | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailTarget, setDetailTarget] = useState<Empresa | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [restoringId, setRestoringId] = useState<number | null>(null)
+
+  // Debounce del buscador de texto
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // Carga de empresas desde el servidor
+  const load = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) {
+        setRefreshing(true)
+      }
+      try {
+        const resp = await getEmpresas({
+          page: pagination.pageIndex + 1,
+          limit: pagination.pageSize,
+          busqueda: debouncedSearch.trim() || undefined,
+          estado: statusFilter !== "all" ? statusFilter : undefined,
+        })
+        setEmpresas(resp.empresas ?? [])
+        setTotal(resp.total ?? 0)
+        setErrorMessage(null)
+      } catch (err: unknown) {
+        console.error("Error cargando empresas:", err)
+        setErrorMessage(
+          err instanceof Error ? err.message : "Error al cargar el listado de empresas",
+        )
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [pagination.pageIndex, pagination.pageSize, debouncedSearch, statusFilter],
+  )
 
   useEffect(() => {
-    const timer = setTimeout(load, 300);
-    return () => clearTimeout(timer);
-  }, [load]);
+    load({ silent: !loading })
+  }, [load, loading])
 
-  async function handleSave(data: EmpresaCreateRequest) {
-    if (editTarget) {
-      await updateEmpresa(editTarget.id, data);
-    } else {
-      await createEmpresa(data);
+  // Conteo de empresas en la vista actual
+  const counts = useMemo(() => {
+    let active = 0
+    let inactive = 0
+    empresas.forEach((e) => {
+      if (e.activo) active++
+      else inactive++
+    })
+    return {
+      all: total,
+      active: statusFilter === "active" ? total : active,
+      inactive: statusFilter === "inactive" ? total : inactive,
     }
-    setPage(1);
-    await load();
-  }
+  }, [empresas, total, statusFilter])
 
-  async function handleDelete(empresa: Empresa) {
-    if (!confirm(`¿Eliminar la empresa "${empresa.nombre}"?`)) return;
-    setDeletingId(empresa.id);
-    setDeleteError("");
-    try {
-      await deleteEmpresa(empresa.id);
-      await load();
-    } catch (err: unknown) {
-      setDeleteError(
-        err instanceof Error ? err.message : "Error al eliminar empresa",
-      );
-    } finally {
-      setDeletingId(null);
-    }
-  }
+  // Handlers de modales y acciones
+  const handleOpenTelefonos = useCallback(
+    (empresa: Empresa) => {
+      router.push(`/empresas/${empresa.id}/telefonos`)
+    },
+    [router],
+  )
 
-  async function handleRestore(empresa: Empresa) {
-    if (!confirm(`¿Restaurar la empresa "${empresa.nombre}"?`)) return;
-    setRestoringId(empresa.id);
-    setRestoreError("");
-    try {
-      await restoreEmpresa(empresa.id);
-      await load();
-    } catch (err: unknown) {
-      setRestoreError(
-        err instanceof Error ? err.message : "Error al restaurar empresa",
-      );
-    } finally {
-      setRestoringId(null);
-    }
-  }
+  const handleOpenDetail = useCallback((empresa: Empresa) => {
+    setDetailTarget(empresa)
+    setDetailOpen(true)
+  }, [])
 
-  function openNew() {
-    setEditTarget(null);
-    setFormOpen(true);
-  }
+  const handleOpenEdit = useCallback((empresa: Empresa) => {
+    setEditTarget(empresa)
+    setFormOpen(true)
+  }, [])
 
-  function openEdit(empresa: Empresa) {
-    setEditTarget(empresa);
-    setFormOpen(true);
-  }
+  const handleOpenNew = useCallback(() => {
+    setEditTarget(null)
+    setFormOpen(true)
+  }, [])
 
-  function openDetail(empresa: Empresa) {
-    setDetailTarget(empresa);
-    setDetailOpen(true);
-  }
+  const handleSave = useCallback(
+    async (data: EmpresaCreateRequest) => {
+      try {
+        if (editTarget) {
+          await updateEmpresa(editTarget.id, data)
+          setActionMessage(`Empresa "${data.nombre}" actualizada con éxito.`)
+        } else {
+          await createEmpresa(data)
+          setActionMessage(`Empresa "${data.nombre}" creada con éxito.`)
+        }
+        await load({ silent: true })
+      } catch (err: unknown) {
+        throw err
+      }
+    },
+    [editTarget, load],
+  )
 
-  const totalPages = Math.ceil(total / limit);
+  const handleDelete = useCallback(
+    async (empresa: Empresa) => {
+      if (!confirm(`¿Estás seguro de inhabilitar la empresa "${empresa.nombre}"?`)) {
+        return
+      }
+      setDeletingId(empresa.id)
+      setActionMessage(null)
+      try {
+        await deleteEmpresa(empresa.id)
+        setActionMessage(`Empresa "${empresa.nombre}" inhabilitada con éxito.`)
+        await load({ silent: true })
+      } catch (err: unknown) {
+        setErrorMessage(
+          err instanceof Error ? err.message : "Error al inhabilitar la empresa",
+        )
+      } finally {
+        setDeletingId(null)
+      }
+    },
+    [load],
+  )
+
+  const handleRestore = useCallback(
+    async (empresa: Empresa) => {
+      if (!confirm(`¿Deseas restaurar la empresa "${empresa.nombre}"?`)) {
+        return
+      }
+      setRestoringId(empresa.id)
+      setActionMessage(null)
+      try {
+        await restoreEmpresa(empresa.id)
+        setActionMessage(`Empresa "${empresa.nombre}" restaurada con éxito.`)
+        await load({ silent: true })
+      } catch (err: unknown) {
+        setErrorMessage(
+          err instanceof Error ? err.message : "Error al restaurar la empresa",
+        )
+      } finally {
+        setRestoringId(null)
+      }
+    },
+    [load],
+  )
+
+  // Columnas para TanStack Table
+  const columns = useMemo(
+    () =>
+      getColumns({
+        onOpenTelefonos: handleOpenTelefonos,
+        onOpenDetail: handleOpenDetail,
+        onOpenEdit: handleOpenEdit,
+        onDelete: handleDelete,
+        onRestore: handleRestore,
+        deletingId,
+        restoringId,
+      }),
+    [
+      handleOpenTelefonos,
+      handleOpenDetail,
+      handleOpenEdit,
+      handleDelete,
+      handleRestore,
+      deletingId,
+      restoringId,
+    ],
+  )
+
+  const totalPages = Math.ceil(total / pagination.pageSize)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Empresas</h1>
-          <p className="text-muted-foreground">
-            Gestiona las empresas registradas en el sistema
-          </p>
-        </div>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva Empresa
-        </Button>
+    <div className="space-y-4 pb-12">
+      {/* Encabezado */}
+      <div className="space-y-1">
+        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          <Building2 className="h-5 w-5 text-muted-foreground" />
+          <span>Empresas</span>
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Gestiona las empresas registradas en el sistema, canales WhatsApp asociados y configuración.
+        </p>
       </div>
 
-      {loadError && <p className="text-sm text-destructive">{loadError}</p>}
-      {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
-      {restoreError && <p className="text-sm text-destructive">{restoreError}</p>}
-
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+      {/* Alertas de resultado / errores */}
+      {actionMessage && (
+        <Alert>
+          <div className="flex items-start gap-3">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-500 shrink-0" />
             <div>
-              <CardTitle>Lista de Empresas</CardTitle>
-              <CardDescription>{total} empresa(s) en total</CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <div className="relative w-52">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nombre o RUC"
-                  className="pl-8"
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                />
-              </div>
-              <Select
-                className="w-36"
-                value={estado}
-                onChange={(e) => {
-                  setEstado(e.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="todos">Todos</option>
-                <option value="activo">Activo</option>
-                <option value="inactivo">Inactivo</option>
-              </Select>
+              <AlertTitle>Operación completada</AlertTitle>
+              <AlertDescription>{actionMessage}</AlertDescription>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>RUC</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Nombre Comercial</TableHead>
-                <TableHead>Teléfono contacto</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    Cargando...
-                  </TableCell>
-                </TableRow>
-              ) : empresas.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    <Building2 className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                    No hay empresas registradas
-                  </TableCell>
-                </TableRow>
-              ) : (
-                empresas.map((empresa) => (
-                  <TableRow key={empresa.id}>
-                    <TableCell className="font-mono text-sm">
-                      {empresa.ruc}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {empresa.nombre}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {empresa.nombre_comercial ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {empresa.telefono_contacto ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={empresa.activo ? "default" : "secondary"}
-                        className={empresa.activo ? "bg-green-500" : ""}
-                      >
-                        {empresa.activo ? "Activa" : "Inactiva"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => router.push(`/empresas/${empresa.id}/telefonos`)}
-                          title="Ver teléfonos"
-                        >
-                          <KeyRound className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openDetail(empresa)}
-                          title="Ver detalle"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEdit(empresa)}
-                          title="Editar"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        {empresa.activo ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(empresa)}
-                            disabled={deletingId === empresa.id}
-                            title="Eliminar"
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => handleRestore(empresa)}
-                            disabled={restoringId === empresa.id}
-                            title="Restaurar"
-                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+        </Alert>
+      )}
 
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center mt-4 text-sm text-muted-foreground">
-              <span>
-                Página {page} de {totalPages}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page === 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page === totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Siguiente
-                </Button>
-              </div>
+      {errorMessage && (
+        <Alert variant="destructive">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{errorMessage}</AlertDescription>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </Alert>
+      )}
 
+      {/* Barra de herramientas */}
+      <DataTableToolbar
+        search={search}
+        onSearchChange={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilterChange={(st) => {
+          setStatusFilter(st)
+          setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+        }}
+        counts={counts}
+        onOpenNew={handleOpenNew}
+        onRefresh={() => load()}
+        refreshing={refreshing}
+      />
+
+      {/* Tabla Desktop (md+) con TanStack Table */}
+      <div className="hidden md:block">
+        <DataTable
+          columns={columns}
+          data={empresas}
+          loading={loading}
+          itemLabel="empresas"
+          pageSizeOptions={[10, 20, 30, 50]}
+          manualPagination={true}
+          pageCount={totalPages}
+          pagination={pagination}
+          onPaginationChange={setPagination}
+          totalRows={total}
+          emptyMessage="No se encontraron empresas con los filtros aplicados."
+        />
+      </div>
+
+      {/* Vista Móvil (< md) */}
+      <div className="md:hidden">
+        <DataCardList
+          data={empresas}
+          loading={loading}
+          onOpenTelefonos={handleOpenTelefonos}
+          onOpenDetail={handleOpenDetail}
+          onOpenEdit={handleOpenEdit}
+          onDelete={handleDelete}
+          onRestore={handleRestore}
+          deletingId={deletingId}
+          restoringId={restoringId}
+          page={pagination.pageIndex + 1}
+          totalPages={totalPages}
+          totalRows={total}
+          onPageChange={(newPage) =>
+            setPagination((prev) => ({ ...prev, pageIndex: newPage - 1 }))
+          }
+        />
+      </div>
+
+      {/* Modales */}
       <EmpresaFormModal
         open={formOpen}
         onClose={() => setFormOpen(false)}
@@ -347,5 +319,5 @@ export default function CompaniesPage() {
         empresa={detailTarget}
       />
     </div>
-  );
+  )
 }

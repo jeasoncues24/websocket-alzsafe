@@ -15,15 +15,18 @@ interface DataTablePaginationProps<TData> {
   pageSizeOptions?: number[]
   /** Sustantivo plural para el contador ("sesiones", "mensajes", "ítems", …). */
   itemLabel?: string
+  /** Total de filas (para paginación manual de servidor). */
+  totalRows?: number
 }
 
 export function DataTablePagination<TData>({
   table,
   pageSizeOptions = [10, 20, 30, 50],
   itemLabel = "resultados",
+  totalRows: customTotalRows,
 }: DataTablePaginationProps<TData>) {
   const { pageIndex, pageSize } = table.getState().pagination
-  const totalRows = table.getFilteredRowModel().rows.length
+  const totalRows = customTotalRows ?? table.getFilteredRowModel().rows.length
   const pageCount = table.getPageCount()
 
   const startRow = totalRows === 0 ? 0 : pageIndex * pageSize + 1

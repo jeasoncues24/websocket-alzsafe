@@ -207,10 +207,10 @@ export default function UsuarioAdminPage() {
       <div className="space-y-1">
         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
           <Users className="h-5 w-5 text-muted-foreground" />
-          <span>Usuarios Administrativos</span>
+          <span>Usuarios</span>
         </h1>
         <p className="text-sm text-muted-foreground">
-          Administra los usuarios con acceso al panel, asignación de roles y permisos modulares.
+          Administra las cuentas de usuario con acceso al panel, asignación de roles y permisos modulares.
         </p>
       </div>
 

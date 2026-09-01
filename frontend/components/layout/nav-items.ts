@@ -35,7 +35,7 @@ export const navItems: NavItem[] = [
   { id: "messages", label: "Mensajes", icon: MessageSquare, href: "/messages", category: "messaging" },
   { id: "broadcasts", label: "Broadcasts", icon: Send, href: "/broadcasts", category: "messaging" },
 
-  { id: "users", label: "Usuario Admin", icon: Users, href: "/usuario_admin", category: "admin" },
+  { id: "users", label: "Usuarios", icon: Users, href: "/usuario_admin", category: "admin" },
   { id: "roles", label: "Roles", icon: Shield, href: "/roles", category: "admin" },
   { id: "modules", label: "Módulos", icon: LayoutGrid, href: "/modules", category: "admin" },
 

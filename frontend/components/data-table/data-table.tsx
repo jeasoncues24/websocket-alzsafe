@@ -7,6 +7,8 @@ import {
   getCoreRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  OnChangeFn,
+  PaginationState,
   SortingState,
   useReactTable,
 } from "@tanstack/react-table"
@@ -36,6 +38,12 @@ interface DataTableProps<TData, TValue> {
   initialPageSize?: number
   /** Opciones de tamaño de página. Default: [10, 20, 30, 50]. */
   pageSizeOptions?: number[]
+  /** Paginación manual de servidor */
+  manualPagination?: boolean
+  pageCount?: number
+  pagination?: PaginationState
+  onPaginationChange?: OnChangeFn<PaginationState>
+  totalRows?: number
 }
 
 export function DataTable<TData, TValue>({
@@ -47,17 +55,33 @@ export function DataTable<TData, TValue>({
   itemLabel = "resultados",
   initialPageSize = 10,
   pageSizeOptions = [10, 20, 30, 50],
+  manualPagination = false,
+  pageCount,
+  pagination,
+  onPaginationChange,
+  totalRows,
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = useState<SortingState>([])
+  const [internalSorting, setInternalSorting] = useState<SortingState>([])
+  const [internalPagination, setInternalPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: initialPageSize,
+  })
 
   const table = useReactTable({
     data,
     columns,
-    state: { sorting },
-    onSortingChange: setSorting,
+    state: {
+      sorting: internalSorting,
+      pagination: manualPagination && pagination ? pagination : internalPagination,
+    },
+    onSortingChange: setInternalSorting,
+    onPaginationChange:
+      manualPagination && onPaginationChange ? onPaginationChange : setInternalPagination,
+    manualPagination,
+    pageCount: manualPagination ? (pageCount ?? -1) : undefined,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: manualPagination ? undefined : getSortedRowModel(),
+    getPaginationRowModel: manualPagination ? undefined : getPaginationRowModel(),
     initialState: { pagination: { pageSize: initialPageSize } },
   })
 
@@ -130,6 +154,7 @@ export function DataTable<TData, TValue>({
             table={table}
             itemLabel={itemLabel}
             pageSizeOptions={pageSizeOptions}
+            totalRows={totalRows}
           />
         </div>
       )}
